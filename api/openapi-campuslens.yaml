@@ -1,0 +1,305 @@
+openapi: 3.0.3
+info:
+  title: CampusLens API
+  version: 1.0.0
+  description: CampusLens（校园慧眼）校园地标智能检索与导览系统接口草案。
+servers:
+  - url: http://localhost:8080
+    description: Spring Boot backend
+paths:
+  /api/search/upload:
+    post:
+      summary: 上传图片并检索 Top-5 地标
+      tags: [Search]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: 检索成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "400":
+          description: 图片格式或参数错误
+        "502":
+          description: 算法服务不可用
+  /api/landmarks:
+    get:
+      summary: 获取地标列表
+      tags: [Landmark]
+      responses:
+        "200":
+          description: 地标列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LandmarkSummary"
+  /api/landmarks/{id}:
+    get:
+      summary: 获取地标详情
+      tags: [Landmark]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: 地标详情
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LandmarkDetail"
+        "404":
+          description: 地标不存在
+  /api/feedback:
+    post:
+      summary: 提交识别反馈
+      tags: [Feedback]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackRequest"
+      responses:
+        "200":
+          description: 反馈提交成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackResponse"
+  /api/admin/landmarks:
+    post:
+      summary: 新增地标
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LandmarkCreateRequest"
+      responses:
+        "200":
+          description: 新增成功
+  /api/admin/landmarks/{id}:
+    put:
+      summary: 修改地标
+      tags: [Admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LandmarkCreateRequest"
+      responses:
+        "200":
+          description: 修改成功
+  /api/admin/landmarks/{id}/images:
+    post:
+      summary: 上传地标样本图片
+      tags: [Admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                angle:
+                  type: string
+                lightCondition:
+                  type: string
+      responses:
+        "200":
+          description: 上传成功
+  /api/admin/index/rebuild:
+    post:
+      summary: 重建特征索引
+      tags: [Admin]
+      responses:
+        "200":
+          description: 已提交索引重建任务
+  /api/admin/feedback:
+    get:
+      summary: 查看反馈记录
+      tags: [Admin]
+      responses:
+        "200":
+          description: 反馈列表
+components:
+  schemas:
+    SearchResponse:
+      type: object
+      required: [searchRecordId, results]
+      properties:
+        searchRecordId:
+          type: integer
+          format: int64
+        uploadImageUrl:
+          type: string
+        lowConfidence:
+          type: boolean
+        message:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+    SearchResult:
+      type: object
+      required: [rank, landmarkId, landmarkCode, name, score]
+      properties:
+        rank:
+          type: integer
+          example: 1
+        landmarkId:
+          type: integer
+          format: int64
+        landmarkCode:
+          type: string
+          example: L01
+        name:
+          type: string
+          example: 图书馆
+        englishName:
+          type: string
+          example: Library
+        score:
+          type: number
+          format: double
+          example: 0.86
+        coverImageUrl:
+          type: string
+        summary:
+          type: string
+    LandmarkSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        code:
+          type: string
+        name:
+          type: string
+        englishName:
+          type: string
+        type:
+          type: string
+        summary:
+          type: string
+        coverImageUrl:
+          type: string
+    LandmarkDetail:
+      allOf:
+        - $ref: "#/components/schemas/LandmarkSummary"
+        - type: object
+          properties:
+            description:
+              type: string
+            locationText:
+              type: string
+            mapX:
+              type: number
+            mapY:
+              type: number
+            images:
+              type: array
+              items:
+                $ref: "#/components/schemas/LandmarkImage"
+    LandmarkImage:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        imageUrl:
+          type: string
+        angle:
+          type: string
+        lightCondition:
+          type: string
+        isCover:
+          type: boolean
+    FeedbackRequest:
+      type: object
+      required: [searchRecordId, feedbackType]
+      properties:
+        searchRecordId:
+          type: integer
+          format: int64
+        predictedLandmarkId:
+          type: integer
+          format: int64
+        confirmedLandmarkId:
+          type: integer
+          format: int64
+        feedbackType:
+          type: string
+          enum: [correct, wrong, uncertain]
+        comment:
+          type: string
+    FeedbackResponse:
+      type: object
+      properties:
+        feedbackId:
+          type: integer
+          format: int64
+        status:
+          type: string
+          example: pending
+    LandmarkCreateRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        englishName:
+          type: string
+        type:
+          type: string
+        summary:
+          type: string
+        description:
+          type: string
+        locationText:
+          type: string
+        mapX:
+          type: number
+        mapY:
+          type: number

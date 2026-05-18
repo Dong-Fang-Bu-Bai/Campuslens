@@ -1,0 +1,68 @@
+@backend = http://localhost:8080
+@algorithm = http://localhost:8000
+
+### 获取地标列表
+GET {{backend}}/api/landmarks
+
+### 获取地标详情
+GET {{backend}}/api/landmarks/1
+
+### 上传图片并检索 Top-5
+POST {{backend}}/api/search/upload
+Content-Type: multipart/form-data; boundary=CampusLensBoundary
+
+--CampusLensBoundary
+Content-Disposition: form-data; name="file"; filename="sample.jpg"
+Content-Type: image/jpeg
+
+< ./sample.jpg
+--CampusLensBoundary--
+
+### 提交识别反馈：正确
+POST {{backend}}/api/feedback
+Content-Type: application/json
+
+{
+  "searchRecordId": 1,
+  "predictedLandmarkId": 1,
+  "confirmedLandmarkId": 1,
+  "feedbackType": "correct",
+  "comment": "识别结果正确"
+}
+
+### 提交识别反馈：错误
+POST {{backend}}/api/feedback
+Content-Type: application/json
+
+{
+  "searchRecordId": 1,
+  "predictedLandmarkId": 1,
+  "confirmedLandmarkId": 2,
+  "feedbackType": "wrong",
+  "comment": "实际是学术大讲堂"
+}
+
+### 新增地标
+POST {{backend}}/api/admin/landmarks
+Content-Type: application/json
+
+{
+  "code": "L01",
+  "name": "图书馆",
+  "englishName": "Library",
+  "type": "建筑",
+  "summary": "校园核心学习空间，建筑体量大、外立面辨识度高。",
+  "locationText": "文雅广场附近"
+}
+
+### 重建索引
+POST {{backend}}/api/admin/index/rebuild
+
+### 算法服务检索接口
+POST {{algorithm}}/search
+Content-Type: application/json
+
+{
+  "imagePath": "uploads/search/sample.jpg",
+  "topK": 5
+}

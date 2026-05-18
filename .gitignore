@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Build outputs
+dist/
+build/
+target/
+out/
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local env
+.env
+.env.*
+application-local.yml
+application-local.properties
+
+# Runtime uploads and generated indexes
+uploads/
+runtime/
+*.npy
+*.faiss
+*.index
+
+# Large dataset images should be managed separately unless the team confirms otherwise
+datasets/**/*.jpg
+datasets/**/*.jpeg
+datasets/**/*.png
+!datasets/**/.gitkeep
+!datasets/**/README.md
