@@ -18,6 +18,7 @@ class Config:
     FEATURES_CACHE_DIR = Path(os.getenv("FEATURES_CACHE_DIR", BASE_DIR / "data" / "features"))
     
     DINO_MODEL_PATH = os.getenv("DINO_MODEL_PATH", str(BASE_DIR / "models" / "dinov2_model.pth"))
+    DEVICE = os.getenv("DEVICE", "auto")  # auto, cpu, or cuda
     IMAGE_SIZE = int(os.getenv("IMAGE_SIZE", "518"))  # DINOv2 默认 518x518
     BATCH_SIZE = int(os.getenv("BATCH_SIZE", "32"))
     

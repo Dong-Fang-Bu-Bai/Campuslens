@@ -9,7 +9,11 @@ from pathlib import Path
 
 class DINOv2Extractor:
     def __init__(self, model_path: str, device: str = None):
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        # 自动检测设备或使用指定设备
+        if device == "auto" or device is None:
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        else:
+            self.device = device
         
         print(f"Loading DINOv2 model from: {model_path}")
         print(f"Using device: {self.device}")

@@ -44,6 +44,8 @@ cd algorithm
 pip install -r requirements.txt
 ```
 
+**注意**：默认安装 CPU 版本。如需 GPU 加速，见下方「GPU 加速」章节。
+
 #### Step 2: 验证模型文件
 ```bash
 python verify_model.py ../models/dinov2_model.pth
@@ -64,6 +66,11 @@ DINOv2 离线模型验证工具
 ```bash
 cp .env.example .env
 ```
+
+编辑 `.env` 文件可配置：
+- `DEVICE`: 计算设备 (`auto`/`cpu`/`cuda`)，默认 `auto` 自动检测
+- `IMAGE_SIZE`: 输入图片尺寸，默认 `518`
+- `BATCH_SIZE`: 批处理大小，默认 `32`
 
 默认配置已指向正确的模型路径，通常无需修改。
 
@@ -210,9 +217,95 @@ GET /api/v1/index/stats
 
 - **FastAPI**: 高性能异步 Web 框架
 - **DINOv2**: Facebook 自监督视觉 Transformer（本地加载）
-- **FAISS**: Facebook 向量相似度搜索引擎（CPU 版本）
-- **PyTorch**: 深度学习推理引擎
+- **FAISS**: Facebook 向量相似度搜索引擎（CPU/GPU 版本）
+- **PyTorch**: 深度学习推理引擎（支持 CPU/GPU）
 - **Pillow**: 图像处理库
+
+## ⚡ GPU 加速
+
+本服务支持 **CPU 和 GPU 双模式**，可根据硬件配置灵活切换。
+
+### 默认：CPU 模式
+
+```bash
+# 安装 CPU 版本依赖
+pip install -r requirements.txt
+
+# 启动服务（自动使用 CPU）
+python app/main.py
+```
+
+### 启用 GPU 加速
+
+#### Windows
+
+```bash
+# 运行 GPU 安装脚本
+install_gpu.bat
+
+# 验证 GPU 是否可用
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+
+# 重启服务（自动检测并使用 GPU）
+python app/main.py
+```
+
+#### Linux/Mac
+
+```bash
+# 卸载 CPU 版本
+pip uninstall -y torch torchvision faiss-cpu
+
+# 安装 GPU 版本（CUDA 11.8）
+pip install torch==2.1.2+cu118 torchvision==0.16.2+cu118 --index-url https://download.pytorch.org/whl/cu118
+pip install faiss-gpu==1.7.4
+
+# 重启服务
+python app/main.py
+```
+
+#### 切换回 CPU
+
+```bash
+# Windows
+install_cpu.bat
+
+# Linux/Mac
+pip uninstall -y torch torchvision faiss-gpu
+pip install torch==2.1.2 torchvision==0.16.2 faiss-cpu==1.7.4
+```
+
+### 设备配置
+
+在 `.env` 文件中设置 `DEVICE` 参数：
+
+```bash
+# 自动检测（推荐）
+DEVICE=auto
+
+# 强制使用 CPU
+DEVICE=cpu
+
+# 强制使用 GPU
+DEVICE=cuda
+```
+
+### 性能对比
+
+| 操作 | CPU (i7) | GPU (RTX 3060) | 加速比 |
+|------|----------|----------------|--------|
+| 单图特征提取 | ~200ms | ~30ms | **6.7x** ⚡ |
+| Top-5 检索 | ~5ms | ~2ms | 2.5x |
+| 索引构建 (250张) | ~60s | ~15s | **4x** ⚡ |
+
+**建议**：如果有 NVIDIA GPU，强烈建议启用 GPU 加速！
+
+### 注意事项
+
+1. **GPU 要求**：NVIDIA GPU + CUDA 11.8+
+2. **显存需求**：至少 4GB 显存
+3. **驱动版本**：确保安装了最新的 NVIDIA 驱动
+4. **验证命令**：`nvidia-smi` 检查 GPU 状态
 
 ## 🔧 与 SpringBoot 集成
 
@@ -268,12 +361,25 @@ ai:
 
 ## 📊 性能指标
 
-| 指标 | CPU | GPU (RTX 3060) |
-|------|-----|----------------|
-| 单图特征提取 | ~200ms | ~30ms |
-| Top-5 检索 | <5ms | <2ms |
-| 内存占用 | ~2GB | ~3GB |
-| 索引构建 (250张图) | ~60s | ~15s |
+### CPU 模式
+
+| 指标 | 配置 |
+|------|------|
+| 单图特征提取 | ~200ms (Intel i7) |
+| Top-5 检索 | <5ms |
+| 内存占用 | ~2GB |
+| 索引构建 (250张图) | ~60s |
+
+### GPU 模式（RTX 3060）
+
+| 指标 | 配置 |
+|------|------|
+| 单图特征提取 | ~30ms |
+| Top-5 检索 | <2ms |
+| 显存占用 | ~1.5GB |
+| 索引构建 (250张图) | ~15s |
+
+**加速比**：GPU 比 CPU 快 **4-7 倍**！
 
 ## 🐛 故障排查
 
@@ -305,7 +411,25 @@ python verify_model.py ../models/dinov2_model.pth
 wget https://dl.fbaipublicfiles.com/dinov2/dinov2_vitb14/dinov2_vitb14_pretrain.pth
 ```
 
-### 问题 3: 内存不足
+### 问题 3: GPU 不可用
+```
+Using device: cpu
+```
+
+**解决方案**：
+```bash
+# 检查是否有 NVIDIA GPU
+nvidia-smi
+
+# 验证 CUDA 是否可用
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+
+# 如果返回 False，需要安装 GPU 版本
+# Windows: 运行 install_gpu.bat
+# Linux/Mac: 见上方「启用 GPU 加速」章节
+```
+
+### 问题 4: 内存不足
 ```
 RuntimeError: CUDA out of memory
 ```
@@ -316,10 +440,10 @@ RuntimeError: CUDA out of memory
 export BATCH_SIZE=16
 
 # 或强制使用 CPU
-# (代码会自动检测并降级)
+DEVICE=cpu
 ```
 
-### 问题 4: 索引为空
+### 问题 5: 索引为空
 ```
 ValueError: FAISS 索引为空，请先构建索引
 ```
@@ -340,6 +464,7 @@ ls -R ../datasets/landmarks/
 3. 📂 **数据集准备**: 索引构建前需准备好地标图片
 4. 💾 **索引持久化**: 索引自动保存到 `data/faiss_index/`
 5. 🔒 **生产部署**: 建议添加认证、限流和监控
+6. ⚡ **GPU 加速**: 如有 NVIDIA GPU，建议启用 GPU 模式（见上方章节）
 
 ## 📄 License
 
