@@ -1,0 +1,22 @@
+# FastAPI and web framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# PyTorch and vision
+torch==2.1.2
+torchvision==0.16.2
+
+# FAISS for vector search
+faiss-cpu==1.7.4
+
+# Image processing
+Pillow==10.2.0
+
+# Data processing
+numpy==1.26.3
+
+# Configuration and utilities
+pydantic==2.5.3
+python-dotenv==1.0.0
+requests==2.31.0
