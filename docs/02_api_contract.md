@@ -17,6 +17,7 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 
 | 接口 | 说明 | 负责人 |
 | --- | --- | --- |
+| `GET /api/health` | 后端健康检查 | M1 马启凡 |
 | `POST /api/search/upload` | 上传图片并返回 Top-5 地标结果 | M1 马启凡，依赖 M3 |
 | `GET /api/landmarks` | 获取地标列表 | M2 叶炳良 |
 | `GET /api/landmarks/{id}` | 获取地标详情 | M2 叶炳良，M4 洪传凯 |
@@ -56,9 +57,26 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 
 - 返回的是 Top-5 地标，不是 Top-5 图片。
 - 同一地标多张图片命中时，取最高相似度作为该地标得分。
-- 后端对外返回字段至少包含：`rank`、`landmarkId`、`landmarkCode`、`name`、`score`、`coverImageUrl`、`summary`。
+- 后端对外返回字段至少包含：`rank`、`landmarkId`、`landmarkCode`、`name`、`score`、`coverImageUrl`、`summary`、`locationText`、`mapX`、`mapY`。
 - 算法服务内部返回字段至少包含：`rank`、`landmarkCode`、`landmarkName`、`imagePath`、`imageFilename`、`score`，由 Spring Boot 后端补齐数据库中的 `landmarkId`、中文名称和简介等信息。
 - 如果最高相似度低于阈值，可以提示“未找到高置信度结果”，但仍展示候选 Top-5。
+
+## 图片上传规则
+
+- 第一周最小工程限制上传图片类型为 JPG、PNG、WebP。
+- 单张图片大小上限为 8MB。
+- 后端保存上传图后返回 `uploadImageUrl`，运行目录下的 `uploads/` 不提交到 Git。
+- 当前最小工程返回演示 Top-5 结果，第二周替换为调用算法服务并写入真实检索记录。
+
+## 反馈规则
+
+| feedbackType | 含义 | confirmedLandmarkId |
+| --- | --- | --- |
+| `correct` | 用户确认系统识别正确 | 可与 `predictedLandmarkId` 一致 |
+| `wrong` | 用户确认系统识别错误 | 必填，用于记录正确地标 |
+| `uncertain` | 用户无法判断或结果不明确 | 可为空 |
+
+反馈提交后默认状态为 `pending`，第四周可扩展为后台审核、采纳、忽略和统计。
 
 ## 错误码口径
 

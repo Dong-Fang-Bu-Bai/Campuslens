@@ -1,6 +1,9 @@
 @backend = http://localhost:8080
 @algorithm = http://localhost:8000
 
+### 后端健康检查
+GET {{backend}}/api/health
+
 ### 获取地标列表
 GET {{backend}}/api/landmarks
 
