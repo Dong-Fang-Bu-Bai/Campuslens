@@ -38,7 +38,7 @@
 | `id` | Long | 主键 |
 | `imageId` | Long | 样本图片 ID |
 | `landmarkId` | Long | 地标 ID |
-| `modelName` | String | 特征模型名称，第一周待定 |
+| `modelName` | String | 特征模型名称，当前算法服务采用 DINOv2 ViT-B/14 |
 | `modelVersion` | String | 模型版本 |
 | `dimension` | Integer | 向量维度 |
 | `featurePath` | String | 向量文件路径 |

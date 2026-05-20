@@ -59,10 +59,21 @@ Content-Type: application/json
 POST {{backend}}/api/admin/index/rebuild
 
 ### 算法服务检索接口
-POST {{algorithm}}/search
-Content-Type: application/json
+POST {{algorithm}}/api/v1/search
+Content-Type: multipart/form-data; boundary=CampusLensAlgorithmBoundary
 
-{
-  "imagePath": "uploads/search/sample.jpg",
-  "topK": 5
-}
+--CampusLensAlgorithmBoundary
+Content-Disposition: form-data; name="file"; filename="sample.jpg"
+Content-Type: image/jpeg
+
+< ./sample.jpg
+--CampusLensAlgorithmBoundary--
+
+### 算法服务重建索引
+POST {{algorithm}}/api/v1/index/rebuild
+
+### 算法服务索引状态
+GET {{algorithm}}/api/v1/index/stats
+
+### 算法服务健康检查
+GET {{algorithm}}/api/v1/health

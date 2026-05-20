@@ -31,7 +31,7 @@ python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
 ## ✅ 第二步：验证模型
 
 ```bash
-python verify_model.py ../models/dinov2_model.pth
+python verify_model.py ./models/dinov2_model.pth
 ```
 
 如果看到 "✅ 模型验证通过！"，说明模型文件正常。
@@ -47,7 +47,7 @@ python app/main.py
 ============================================================
 初始化 DINOv2 特征提取器（离线模式）
 ============================================================
-Loading DINOv2 model from: ..\models\dinov2_model.pth
+Loading DINOv2 model from: .\models\dinov2_model.pth
 Using device: cuda  ← 如果使用 GPU，这里会显示 cuda
 📦 模型文件大小: 330.33 MB
 ✅ 加载完整的 DINOv2 模型对象
@@ -112,7 +112,7 @@ docker-compose down
 ## ❓ 常见问题
 
 ### Q1: 提示模型文件不存在
-**A**: 确认模型文件在 `../models/dinov2_model.pth`，或设置环境变量：
+**A**: 确认模型文件在 `./models/dinov2_model.pth`，或设置环境变量：
 ```bash
 set DINO_MODEL_PATH=C:\your\path\to\model.pth
 ```

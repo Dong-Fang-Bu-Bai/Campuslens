@@ -8,7 +8,7 @@ services:
     volumes:
       - ../datasets:/app/datasets
       - ./data:/app/data
-      - ../models:/app/models
+      - ./models:/app/models
     environment:
       - HOST=0.0.0.0
       - PORT=8000

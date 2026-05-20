@@ -36,11 +36,14 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 
 ## 算法服务接口
 
+算法服务是后端内部调用的 FastAPI 服务，默认地址为 `http://localhost:8000`，统一使用 `/api/v1` 前缀。
+
 | 接口 | 说明 | 负责人 |
 | --- | --- | --- |
-| `POST /search` | 接收图片路径或图片文件，返回 Top-5 候选地标 | M3 周子栋 |
-| `POST /rebuild-index` | 根据样本库重建向量索引 | M3 周子栋 |
-| `POST /extract` | 可选，提取单张图片特征 | M3 周子栋 |
+| `POST /api/v1/search` | 接收上传图片文件，返回 Top-5 候选地标 | M3 周子栋 |
+| `POST /api/v1/index/rebuild` | 根据样本库重建 FAISS 向量索引 | M3 周子栋 |
+| `GET /api/v1/index/stats` | 查看当前索引状态、向量数量和维度 | M3 周子栋 |
+| `GET /api/v1/health` | 算法服务健康检查 | M3 周子栋 |
 
 ## 字段命名规则
 
@@ -52,8 +55,9 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 ## Top-5 返回规则
 
 - 返回的是 Top-5 地标，不是 Top-5 图片。
-- 同一地标多张图片命中时，V1 取最高相似度作为该地标得分。
-- 返回字段至少包含：`rank`、`landmarkId`、`landmarkCode`、`name`、`score`、`coverImageUrl`、`summary`。
+- 同一地标多张图片命中时，取最高相似度作为该地标得分。
+- 后端对外返回字段至少包含：`rank`、`landmarkId`、`landmarkCode`、`name`、`score`、`coverImageUrl`、`summary`。
+- 算法服务内部返回字段至少包含：`rank`、`landmarkCode`、`landmarkName`、`imagePath`、`imageFilename`、`score`，由 Spring Boot 后端补齐数据库中的 `landmarkId`、中文名称和简介等信息。
 - 如果最高相似度低于阈值，可以提示“未找到高置信度结果”，但仍展示候选 Top-5。
 
 ## 错误码口径
