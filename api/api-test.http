@@ -52,7 +52,7 @@ Content-Type: application/json
   "englishName": "Library",
   "type": "建筑",
   "summary": "校园核心学习空间，建筑体量大、外立面辨识度高。",
-  "locationText": "文雅广场附近"
+  "locationText": "文雍广场附近"
 }
 
 ### 重建索引
