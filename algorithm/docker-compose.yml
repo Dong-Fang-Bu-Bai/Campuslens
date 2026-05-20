@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  ai-search:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../datasets:/app/datasets
+      - ./data:/app/data
+      - ../models:/app/models
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DINO_MODEL_PATH=/app/models/dinov2_model.pth
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
