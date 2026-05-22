@@ -24,8 +24,32 @@ Campuslens/
 - 算法服务：Python FastAPI
 - 数据库：MySQL
 - 图片与向量：本地目录、向量文件或 FAISS index 文件
-- 检索策略：V1 直接遍历 + 余弦相似度；V2 视进度接入 FAISS
+- 检索策略：DINOv2 提取图像特征，FAISS 索引执行余弦相似度检索
 - 地图能力：基于校园平面图做静态标注，不做实时导航和室内导航
+
+## 本地演示启动
+
+Windows 下可以直接使用 `scripts/` 目录中的脚本启动和停止前后端：
+
+```powershell
+scripts\check-env.cmd
+scripts\start-dev.cmd
+```
+
+启动后访问：
+
+```text
+前端页面：http://localhost:5173
+后端健康检查：http://localhost:8080/api/health
+```
+
+停止由脚本启动的服务：
+
+```powershell
+scripts\stop-dev.cmd
+```
+
+`stop-dev.cmd` 只读取 `.run/` 中的 PID 文件并停止本项目脚本启动的窗口，不会扫描端口或强行结束其他 Java、Node 进程。若服务是手动通过 `mvn spring-boot:run` 或 `npm run dev` 启动的，请直接关闭对应命令行窗口。
 
 ## 分支模型
 
@@ -138,6 +162,9 @@ git push origin main --tags
 - [图片采集与数据集规范](docs/04_dataset_rules.md)
 - [模块归属与协作边界](docs/05_module_ownership.md)
 - [开发文档归档](docs/06_development_notes.md)
+- [初始阶段 M1/M2/M4/M5 完成记录](docs/07_initial_stage_m1_m2_m4_m5.md)
+- [前端界面原型说明](docs/08_frontend_prototype.md)
+- [接口联调说明](docs/09_interface_runbook.md)
 
 ## 接口契约
 

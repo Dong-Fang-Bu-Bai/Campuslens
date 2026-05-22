@@ -1,6 +1,9 @@
 @backend = http://localhost:8080
 @algorithm = http://localhost:8000
 
+### 后端健康检查
+GET {{backend}}/api/health
+
 ### 获取地标列表
 GET {{backend}}/api/landmarks
 
@@ -52,17 +55,28 @@ Content-Type: application/json
   "englishName": "Library",
   "type": "建筑",
   "summary": "校园核心学习空间，建筑体量大、外立面辨识度高。",
-  "locationText": "文雅广场附近"
+  "locationText": "文雍广场附近"
 }
 
 ### 重建索引
 POST {{backend}}/api/admin/index/rebuild
 
 ### 算法服务检索接口
-POST {{algorithm}}/search
-Content-Type: application/json
+POST {{algorithm}}/api/v1/search
+Content-Type: multipart/form-data; boundary=CampusLensAlgorithmBoundary
 
-{
-  "imagePath": "uploads/search/sample.jpg",
-  "topK": 5
-}
+--CampusLensAlgorithmBoundary
+Content-Disposition: form-data; name="file"; filename="sample.jpg"
+Content-Type: image/jpeg
+
+< ./sample.jpg
+--CampusLensAlgorithmBoundary--
+
+### 算法服务重建索引
+POST {{algorithm}}/api/v1/index/rebuild
+
+### 算法服务索引状态
+GET {{algorithm}}/api/v1/index/stats
+
+### 算法服务健康检查
+GET {{algorithm}}/api/v1/health

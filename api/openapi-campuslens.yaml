@@ -7,6 +7,17 @@ servers:
   - url: http://localhost:8080
     description: Spring Boot backend
 paths:
+  /api/health:
+    get:
+      summary: 后端健康检查
+      tags: [System]
+      responses:
+        "200":
+          description: 后端服务运行正常
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
   /api/search/upload:
     post:
       summary: 上传图片并检索 Top-5 地标
@@ -223,6 +234,12 @@ components:
           type: string
         coverImageUrl:
           type: string
+        locationText:
+          type: string
+        mapX:
+          type: number
+        mapY:
+          type: number
     LandmarkDetail:
       allOf:
         - $ref: "#/components/schemas/LandmarkSummary"
@@ -303,3 +320,11 @@ components:
           type: number
         mapY:
           type: number
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        message:
+          type: string
