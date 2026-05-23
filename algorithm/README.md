@@ -92,13 +92,12 @@ DINOv2 model loaded successfully. Feature dimension: 768
 
 #### Step 5: 构建索引
 ```bash
-curl -X POST http://localhost:8000/api/v1/index/rebuild
+curl.exe -X POST http://localhost:8000/api/v1/index/rebuild
 ```
 
 #### Step 6: 测试检索
 ```bash
-curl -X POST http://localhost:8000/api/v1/search \
-  -F "file=@test_image.jpg"
+curl.exe -X POST http://localhost:8000/api/v1/search -F "file=@C:\path\to\your\test_image.jpg" | python -m json.tool
 ```
 
 ### 方式二：Docker 运行
