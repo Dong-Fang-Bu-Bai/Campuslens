@@ -38,7 +38,7 @@
 | `id` | Long | 主键 |
 | `imageId` | Long | 样本图片 ID |
 | `landmarkId` | Long | 地标 ID |
-| `modelName` | String | 特征模型名称，第一周待定 |
+| `modelName` | String | 特征模型名称，当前算法服务采用 DINOv2 ViT-B/14 |
 | `modelVersion` | String | 模型版本 |
 | `dimension` | Integer | 向量维度 |
 | `featurePath` | String | 向量文件路径 |
@@ -69,6 +69,12 @@
 | `comment` | String | 用户说明 |
 | `status` | String | 待处理、已采纳、已忽略 |
 | `createdAt` | DateTime | 提交时间 |
+
+`feedbackType` 对外接口取值为 `correct`、`wrong`、`uncertain`。数据库可先保存同名字符串，后续如需要中文展示由前端或后台管理页面转换。
+
+## 地图坐标口径
+
+`mapX` 和 `mapY` 当前采用校园平面图百分比坐标，取值范围为 0-100。前端展示时以图片左上角为原点，`mapX` 表示横向百分比，`mapY` 表示纵向百分比。该口径适合初始阶段静态标注，后续若更换底图或接入 GIS 数据，需要同步修订地标元数据。
 
 ## AdminUser 管理员
 

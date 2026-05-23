@@ -4,7 +4,7 @@
 
 ## 调用关系
 
-用户端调用 Spring Boot 后端接口；后端负责鉴权、文件校验、业务记录和数据组装。图像特征提取与检索由后端调用 Python FastAPI 算法服务完成。
+用户端调用 Spring Boot 后端接口；后端负责文件校验、业务记录和数据组装。图像特征提取与检索由后端调用 Python FastAPI 算法服务完成。第一周最小工程暂不连接 MySQL，也不直接调用算法服务，当前以演示 Top-5 验证接口和原型衔接。
 
 ```text
 Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
@@ -17,6 +17,7 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 
 | 接口 | 说明 | 负责人 |
 | --- | --- | --- |
+| `GET /api/health` | 后端健康检查 | M1 马启凡 |
 | `POST /api/search/upload` | 上传图片并返回 Top-5 地标结果 | M1 马启凡，依赖 M3 |
 | `GET /api/landmarks` | 获取地标列表 | M2 叶炳良 |
 | `GET /api/landmarks/{id}` | 获取地标详情 | M2 叶炳良，M4 洪传凯 |
@@ -36,11 +37,14 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 
 ## 算法服务接口
 
+算法服务是后端内部调用的 FastAPI 服务，默认地址为 `http://localhost:8000`，统一使用 `/api/v1` 前缀。
+
 | 接口 | 说明 | 负责人 |
 | --- | --- | --- |
-| `POST /search` | 接收图片路径或图片文件，返回 Top-5 候选地标 | M3 周子栋 |
-| `POST /rebuild-index` | 根据样本库重建向量索引 | M3 周子栋 |
-| `POST /extract` | 可选，提取单张图片特征 | M3 周子栋 |
+| `POST /api/v1/search` | 接收上传图片文件，返回 Top-5 候选地标 | M3 周子栋 |
+| `POST /api/v1/index/rebuild` | 根据样本库重建 FAISS 向量索引 | M3 周子栋 |
+| `GET /api/v1/index/stats` | 查看当前索引状态、向量数量和维度 | M3 周子栋 |
+| `GET /api/v1/health` | 算法服务健康检查 | M3 周子栋 |
 
 ## 字段命名规则
 
@@ -52,9 +56,28 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 ## Top-5 返回规则
 
 - 返回的是 Top-5 地标，不是 Top-5 图片。
-- 同一地标多张图片命中时，V1 取最高相似度作为该地标得分。
-- 返回字段至少包含：`rank`、`landmarkId`、`landmarkCode`、`name`、`score`、`coverImageUrl`、`summary`。
+- 同一地标多张图片命中时，取最高相似度作为该地标得分。
+- 后端对外返回字段至少包含：`rank`、`landmarkId`、`landmarkCode`、`name`、`score`、`coverImageUrl`、`summary`、`locationText`、`mapX`、`mapY`。
+- 算法服务内部返回字段至少包含：`rank`、`landmarkCode`、`landmarkName`、`imagePath`、`imageFilename`、`score`，由 Spring Boot 后端补齐数据库中的 `landmarkId`、中文名称和简介等信息。
 - 如果最高相似度低于阈值，可以提示“未找到高置信度结果”，但仍展示候选 Top-5。
+
+## 图片上传规则
+
+- 第一周最小工程限制上传图片类型为 JPG、PNG、WebP。
+- 单张图片大小上限为 8MB。
+- 后端保存上传图后返回 `uploadImageUrl`，运行目录下的 `uploads/` 不提交到 Git。
+- 当前最小工程返回演示 Top-5 结果，第二周替换为调用算法服务并补齐真实检索记录口径。
+- 地标样本图片由成员手动采集、整理和上传到课程指定位置或本地数据目录，仓库只保留目录结构和采集规范。
+
+## 反馈规则
+
+| feedbackType | 含义 | confirmedLandmarkId |
+| --- | --- | --- |
+| `correct` | 用户确认系统识别正确 | 可与 `predictedLandmarkId` 一致 |
+| `wrong` | 用户确认系统识别错误 | 必填，用于记录正确地标 |
+| `uncertain` | 用户无法判断或结果不明确 | 可为空 |
+
+反馈提交后默认状态为 `pending`，第四周可扩展为后台审核、采纳、忽略和统计。
 
 ## 错误码口径
 

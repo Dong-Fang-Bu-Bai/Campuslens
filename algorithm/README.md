@@ -13,7 +13,7 @@
 - **模型名称**: DINOv2 ViT-B/14
 - **文件格式**: `.pth` (PyTorch)
 - **文件大小**: 约 330MB
-- **存放位置**: `../models/dinov2_model.pth`
+- **存放位置**: `./models/dinov2_model.pth`
 
 如未准备模型，可从以下途径获取：
 - [Facebook DINOv2 官方仓库](https://github.com/facebookresearch/dinov2)
@@ -48,7 +48,7 @@ pip install -r requirements.txt
 
 #### Step 2: 验证模型文件
 ```bash
-python verify_model.py ../models/dinov2_model.pth
+python verify_model.py ./models/dinov2_model.pth
 ```
 
 预期输出：
@@ -56,7 +56,7 @@ python verify_model.py ../models/dinov2_model.pth
 ============================================================
 DINOv2 离线模型验证工具
 ============================================================
-✅ 模型文件存在: ../models/dinov2_model.pth
+✅ 模型文件存在: ./models/dinov2_model.pth
 📦 文件大小: 330.33 MB
 ...
 ✅ 模型验证通过！
@@ -84,7 +84,7 @@ python app/main.py
 ============================================================
 初始化 DINOv2 特征提取器（离线模式）
 ============================================================
-Loading DINOv2 model from: ../models/dinov2_model.pth
+Loading DINOv2 model from: ./models/dinov2_model.pth
 📦 模型文件大小: 330.33 MB
 ✅ 加载完整的 DINOv2 模型对象
 DINOv2 model loaded successfully. Feature dimension: 768
@@ -313,12 +313,12 @@ SpringBoot 调用示例：
 ```java
 @Service
 public class AISearchClient {
-    
+
     @Value("${ai.service.url:http://localhost:8000}")
     private String aiServiceUrl;
-    
+
     private final RestTemplate restTemplate = new RestTemplate();
-    
+
     public SearchResponse searchLandmark(MultipartFile file) {
         try {
             MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
@@ -328,21 +328,21 @@ public class AISearchClient {
                     return file.getOriginalFilename();
                 }
             });
-            
+
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-            
-            HttpEntity<MultiValueMap<String, Object>> requestEntity = 
+
+            HttpEntity<MultiValueMap<String, Object>> requestEntity =
                 new HttpEntity<>(body, headers);
-            
+
             ResponseEntity<SearchResponse> response = restTemplate.postForEntity(
                 aiServiceUrl + "/api/v1/search",
                 requestEntity,
                 SearchResponse.class
             );
-            
+
             return response.getBody();
-            
+
         } catch (Exception e) {
             throw new ServiceException("AI 服务调用失败: " + e.getMessage());
         }
@@ -384,13 +384,13 @@ ai:
 
 ### 问题 1: 模型文件找不到
 ```
-❌ 模型文件不存在: ../models/dinov2_model.pth
+❌ 模型文件不存在: ./models/dinov2_model.pth
 ```
 
 **解决方案**：
 ```bash
 # 检查文件是否存在
-ls -lh ../models/dinov2_model.pth
+ls -lh ./models/dinov2_model.pth
 
 # 或设置自定义路径
 export DINO_MODEL_PATH=/path/to/your/model.pth
@@ -404,7 +404,7 @@ export DINO_MODEL_PATH=/path/to/your/model.pth
 **解决方案**：
 ```bash
 # 运行验证脚本查看详细错误
-python verify_model.py ../models/dinov2_model.pth
+python verify_model.py ./models/dinov2_model.pth
 
 # 重新下载官方模型
 wget https://dl.fbaipublicfiles.com/dinov2/dinov2_vitb14/dinov2_vitb14_pretrain.pth

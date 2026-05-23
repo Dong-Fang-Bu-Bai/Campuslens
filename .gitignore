@@ -2,37 +2,97 @@
 node_modules/
 .venv/
 venv/
+env/
+ENV/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.egg-info/
 
 # Build outputs
 dist/
 build/
 target/
 out/
+coverage/
+htmlcov/
 
 # IDE and OS files
 .idea/
 .vscode/
+*.iml
 .DS_Store
 Thumbs.db
 
 # Local env
 .env
 .env.*
+!.env.example
+!**/.env.example
 application-local.yml
 application-local.properties
 
-# Runtime uploads and generated indexes
+# Runtime uploads, logs, and generated indexes
 uploads/
 runtime/
+.run/
+logs/
+*.log
 *.npy
 *.faiss
 *.index
+*.pkl
+*.pickle
 
-# Large dataset images should be managed separately unless the team confirms otherwise
+# Python and test caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+.coverage
+
+# Frontend caches
+frontend/.vite/
+frontend/.nuxt/
+frontend/.output/
+
+# Java and Gradle local files
+.gradle/
+
+# Local databases and temp files
+*.db
+*.sqlite
+*.sqlite3
+*.tmp
+*.temp
+
+# Model weights and training artifacts
+/models/
+checkpoints/
+*.pt
+*.pth
+*.onnx
+*.ckpt
+*.safetensors
+algorithm/models/*
+!algorithm/models/.gitkeep
+algorithm/data/faiss_index/*
+!algorithm/data/faiss_index/.gitkeep
+algorithm/data/features/*
+!algorithm/data/features/.gitkeep
+
+# Large dataset images and archives should be managed separately unless the team confirms otherwise
 datasets/**/*.jpg
 datasets/**/*.jpeg
 datasets/**/*.png
+datasets/**/*.webp
+datasets/**/*.heic
+datasets/**/*.bmp
+datasets/**/*.tif
+datasets/**/*.tiff
+datasets/**/*.zip
+datasets/**/*.rar
+datasets/**/*.7z
 !datasets/**/.gitkeep
 !datasets/**/README.md

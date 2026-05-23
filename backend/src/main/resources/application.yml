@@ -1,0 +1,12 @@
+server:
+  port: 8080
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 8MB
+      max-request-size: 10MB
+
+campuslens:
+  algorithm:
+    base-url: http://localhost:8000
