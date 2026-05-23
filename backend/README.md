@@ -38,7 +38,7 @@ GET http://localhost:8080/api/health
 
 ## 当前实现边界
 
-当前版本服务于第一周初始阶段交付，采用内存地标数据和演示 Top-5 结果。`SearchService` 已保留算法服务集成边界，第二周可替换为调用 `http://localhost:8000/api/v1/search`，并将检索记录和反馈记录落库到 MySQL。
+当前版本服务于第一周初始阶段交付，采用内存地标数据和演示 Top-5 结果。`SearchService` 已保留算法服务集成边界，第二周可替换为调用 `http://localhost:8000/api/v1/search`。后端 MySQL 持久化暂不作为第一周实现内容，当前仅完成表结构、种子脚本和接口字段准备，检索记录与反馈记录后续再按迭代计划接入。
 
 上传图片会保存到 `uploads/yyyyMMdd/`，该目录已由 `.gitignore` 排除。
 

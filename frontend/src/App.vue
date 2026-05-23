@@ -77,9 +77,11 @@
             v-for="item in landmarks"
             :key="item.id"
             class="map-marker"
+            :class="{ active: item.id === selectedId }"
             :style="{ left: item.mapX + '%', top: item.mapY + '%' }"
             :title="item.name"
-            @click="selectLandmark(item.id)"
+            type="button"
+            @click.stop="selectMapLandmark(item.id)"
           >
             {{ item.code.slice(1) }}
           </button>
@@ -88,7 +90,13 @@
           <h3>静态地图标注</h3>
           <p>初始阶段采用校园平面图百分比坐标标注，后续可替换为更精确的 GIS 或室内导览数据。</p>
           <div class="legend-list">
-            <button v-for="item in landmarks" :key="item.code" @click="selectLandmark(item.id)">
+            <button
+              v-for="item in landmarks"
+              :key="item.code"
+              :class="{ active: item.id === selectedId }"
+              type="button"
+              @click="selectMapLandmark(item.id)"
+            >
               <span>{{ item.code }}</span>{{ item.name }}
             </button>
           </div>
@@ -132,16 +140,16 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 
 const demoLandmarks = [
-  { id: 1, code: 'L01', name: '图书馆', englishName: 'Library', type: '建筑', summary: '校园核心学习空间，建筑体量大、外立面辨识度高。', description: '图书馆位于文雍广场附近，是学生自习、借阅和课程资料检索的主要场所。', locationText: '文雍广场附近', mapX: 48.5, mapY: 38 },
-  { id: 2, code: 'L02', name: '学术大讲堂', englishName: 'Academic Auditorium', type: '建筑', summary: '大型报告与答辩活动场所，适合作为答辩演示样本。', description: '学术大讲堂靠近东门，常用于学术报告、会议与集中教学活动。', locationText: '东门附近', mapX: 69, mapY: 53 },
-  { id: 3, code: 'L03', name: '文雍广场', englishName: 'Wenyong Square', type: '广场', summary: '校园开放空间与人流汇聚点，便于地图静态标注。', description: '文雍广场位于图书馆前，是校园公共活动与通行的重要节点。', locationText: '图书馆前', mapX: 50.5, mapY: 46.5 },
-  { id: 4, code: 'L04', name: '博学桥', englishName: 'Boxue Bridge', type: '桥梁', summary: '连接湖区两侧的桥梁景观，适合作为地标景观样本。', description: '博学桥位于韵湖沿线，桥体、湖面和周边道路共同形成稳定的视觉特征。', locationText: '韵湖沿线', mapX: 57.5, mapY: 61 },
-  { id: 5, code: 'L05', name: '琴湖及湖心岛', englishName: 'Qin Lake / Huxin Island', type: '湖区', summary: '湖泊与岛屿组合景观，外观特征明显。', description: '琴湖及湖心岛位于文雍路东侧，水域、绿化和湖心岛轮廓适合进行地标图像检索。', locationText: '文雍路东侧', mapX: 54, mapY: 67 },
-  { id: 6, code: 'L06', name: '体育馆', englishName: 'Stadium', type: '场馆', summary: '体育活动场馆，建筑边界清晰。', description: '体育馆位于文雍路西侧，服务课程教学、赛事活动和学生日常锻炼。', locationText: '文雍路西侧', mapX: 35, mapY: 62 },
-  { id: 7, code: 'L07', name: '游泳馆', englishName: 'Natatorium', type: '场馆', summary: '运动场馆类地标，适合与体育馆形成区分样本。', description: '游泳馆位于体育馆北侧，是运动场馆类地标。', locationText: '体育馆北侧', mapX: 33, mapY: 55.5 },
-  { id: 8, code: 'L08', name: '第一饭堂', englishName: 'The First Dining Hall', type: '生活服务', summary: '生活服务类建筑，面向学生日常场景。', description: '第一饭堂位于尚学路西侧，属于学生高频到达地点。', locationText: '尚学路西侧', mapX: 41, mapY: 74 },
-  { id: 9, code: 'L09', name: '第二饭堂', englishName: 'The Second Dining Hall', type: '生活服务', summary: '生活服务类建筑，可与第一饭堂对比识别。', description: '第二饭堂位于东二门附近，与第一饭堂同属生活服务类建筑。', locationText: '东二门附近', mapX: 72, mapY: 70 },
-  { id: 10, code: 'L10', name: '中心酒店', englishName: 'Hotel', type: '建筑', summary: '校内接待建筑，靠近北门且地图标注清晰。', description: '中心酒店位于北门内侧，主要用于校内接待和住宿服务。', locationText: '北门内侧', mapX: 60, mapY: 24 }
+  { id: 1, code: 'L01', name: '图书馆', englishName: 'Library', type: '建筑', summary: '校园核心学习空间，建筑体量大、外立面辨识度高。', description: '图书馆位于文雍广场附近，是学生自习、借阅和课程资料检索的主要场所。', locationText: '文雍广场附近', mapX: 50.31, mapY: 59.33 },
+  { id: 2, code: 'L02', name: '学术大讲堂', englishName: 'Academic Auditorium', type: '建筑', summary: '大型报告与答辩活动场所，适合作为答辩演示样本。', description: '学术大讲堂靠近东门，常用于学术报告、会议与集中教学活动。', locationText: '东门附近', mapX: 62.16, mapY: 61.22 },
+  { id: 3, code: 'L03', name: '文雍广场', englishName: 'Wenyong Square', type: '广场', summary: '校园开放空间与人流汇聚点，便于地图静态标注。', description: '文雍广场位于图书馆前，是校园公共活动与通行的重要节点。', locationText: '图书馆前', mapX: 57.37, mapY: 63.56 },
+  { id: 4, code: 'L04', name: '博学桥', englishName: 'Boxue Bridge', type: '桥梁', summary: '连接湖区两侧的桥梁景观，适合作为地标景观样本。', description: '博学桥位于韵湖沿线，桥体、湖面和周边道路共同形成稳定的视觉特征。', locationText: '韵湖沿线', mapX: 57.75, mapY: 46.17 },
+  { id: 5, code: 'L05', name: '琴湖及湖心岛', englishName: 'Qin Lake / Huxin Island', type: '湖区', summary: '湖泊与岛屿组合景观，外观特征明显。', description: '琴湖及湖心岛位于文雍路东侧，水域、绿化和湖心岛轮廓适合进行地标图像检索。', locationText: '文雍路东侧', mapX: 67.32, mapY: 26.88 },
+  { id: 6, code: 'L06', name: '体育馆', englishName: 'Stadium', type: '场馆', summary: '体育活动场馆，建筑边界清晰。', description: '体育馆位于文雍路西侧，服务课程教学、赛事活动和学生日常锻炼。', locationText: '文雍路西侧', mapX: 43.88, mapY: 49.07 },
+  { id: 7, code: 'L07', name: '游泳馆', englishName: 'Natatorium', type: '场馆', summary: '运动场馆类地标，适合与体育馆形成区分样本。', description: '游泳馆位于体育馆北侧，是运动场馆类地标。', locationText: '体育馆北侧', mapX: 45.39, mapY: 41.25 },
+  { id: 8, code: 'L08', name: '第一饭堂', englishName: 'The First Dining Hall', type: '生活服务', summary: '生活服务类建筑，面向学生日常场景。', description: '第一饭堂位于尚学路西侧，属于学生高频到达地点。', locationText: '尚学路西侧', mapX: 33.8, mapY: 47.17 },
+  { id: 9, code: 'L09', name: '第二饭堂', englishName: 'The Second Dining Hall', type: '生活服务', summary: '生活服务类建筑，可与第一饭堂对比识别。', description: '第二饭堂位于东二门附近，与第一饭堂同属生活服务类建筑。', locationText: '东二门附近', mapX: 37.96, mapY: 21.84 },
+  { id: 10, code: 'L10', name: '中心酒店', englishName: 'Hotel', type: '建筑', summary: '校内接待建筑，靠近北门且地图标注清晰。', description: '中心酒店位于北门内侧，主要用于校内接待和住宿服务。', locationText: '北门内侧', mapX: 62.28, mapY: 10.12 }
 ]
 
 const landmarks = ref(demoLandmarks)
@@ -220,6 +228,10 @@ async function submitSearch() {
 function selectLandmark(id) {
   selectedId.value = id
   activeView.value = 'results'
+}
+
+function selectMapLandmark(id) {
+  selectedId.value = id
 }
 
 function openFeedback(item) {

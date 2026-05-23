@@ -321,6 +321,11 @@ h3 {
   box-shadow: 0 8px 20px rgba(36, 48, 43, 0.24);
 }
 
+.map-marker.active {
+  outline: 3px solid rgba(47, 128, 96, 0.4);
+  background: #2f8060;
+}
+
 .map-summary {
   padding: 20px;
   align-self: start;
@@ -337,6 +342,11 @@ h3 {
   gap: 8px;
   padding: 8px 10px;
   text-align: left;
+}
+
+.legend-list button.active {
+  border-color: #2f8060;
+  background: #edf7f3;
 }
 
 .legend-list span {
