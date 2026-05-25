@@ -201,46 +201,40 @@ class FAISSManager:
         query_norm = query_vector.copy().astype('float32')
         faiss.normalize_L2(query_norm.reshape(1, -1))
         
-        # 搜索 Top-K 地标（扩大范围以便后续过滤）
-        search_k = min(top_k * 2, self.index.ntotal)
-        scores, indices = self.index.search(query_norm.reshape(1, -1), search_k)
+        # FAISS 快速召回候选地标（基于余弦相似度）
+        # 扩大召回范围，确保不遗漏真正匹配的地标
+        search_k = min(max(top_k * 5, 30), self.index.ntotal)
+        _, indices = self.index.search(query_norm.reshape(1, -1), search_k)
         
+        # 对每个候选地标计算马氏距离评分（重排序）
         results = []
-        for idx, score in zip(indices[0], scores[0]):
+        for idx in indices[0]:
             if idx == -1:  # FAISS 返回 -1 表示无结果
                 continue
             
             landmark_code = self.landmark_codes[idx]
             stats = self.landmark_stats[landmark_code]
             
-            # 计算基于马氏距离的自适应置信度
-            adaptive_score = self._calculate_mahalanobis_score(query_vector, stats)
+            # 计算基于马氏距离的置信度评分
+            score = self._calculate_mahalanobis_score(query_vector, stats)
             
-            # 计算原始余弦相似度（用于对比）
-            raw_cosine = float(score)
+            # 计算马氏距离
+            mahalanobis_dist = self._compute_mahalanobis_distance(query_vector, stats)
             
             # 计算置信度等级
-            confidence_level = self._get_confidence_level(adaptive_score, stats)
+            confidence_level = self._get_confidence_level(score, stats)
             
             results.append({
                 "rank": 0,  # 稍后排序
                 "landmarkCode": landmark_code,
                 "landmarkName": stats["name"],
-                "rawScore": round(raw_cosine, 4),  # 原始余弦相似度
-                "adaptiveScore": round(float(adaptive_score), 4),  # 基于马氏距离的评分
-                "confidence": round(float(adaptive_score), 4),
+                "score": round(float(score), 4),
                 "confidenceLevel": confidence_level,
-                "imageCount": stats["count"],
-                "statistics": {
-                    "avgSimilarity": round(raw_cosine, 4),
-                    "mahalanobisDistance": round(float(self._compute_mahalanobis_distance(query_vector, stats)), 4),
-                    "stdDeviation": round(float(np.mean(stats["std"])), 4),
-                    "compactness": self._calculate_compactness(stats["std"]),
-                }
+                "mahalanobisDistance": round(float(mahalanobis_dist), 4)
             })
         
-        # 按自适应评分排序
-        results.sort(key=lambda x: x["adaptiveScore"], reverse=True)
+        # 按马氏距离评分排序（降序）
+        results.sort(key=lambda x: x["score"], reverse=True)
         
         # 取 Top-K 并更新排名
         top_results = results[:top_k]

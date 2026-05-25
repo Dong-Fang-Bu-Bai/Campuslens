@@ -45,20 +45,12 @@ def test_mahalanobis_search():
         print(f"{'='*60}")
         print(f"排名 #{i}: {landmark['landmarkName']} ({landmark['landmarkCode']})")
         print(f"{'='*60}")
-        print(f"  原始余弦相似度: {landmark['rawScore']:.4f}")
-        print(f"  马氏距离评分:   {landmark['adaptiveScore']:.4f}")
+        print(f"  置信度评分:     {landmark['score']:.4f}")
+        print(f"  马氏距离:       {landmark['mahalanobisDistance']:.4f}")
         print(f"  置信度等级:     {landmark['confidenceLevel']}")
-        print(f"  图片数量:       {landmark['imageCount']}")
-        
-        stats = landmark['statistics']
-        print(f"\n  统计信息:")
-        print(f"    - 平均相似度:     {stats['avgSimilarity']:.4f}")
-        print(f"    - 马氏距离:       {stats['mahalanobisDistance']:.4f}")
-        print(f"    - 标准差:         {stats['stdDeviation']:.4f}")
-        print(f"    - 紧凑程度:       {stats['compactness']}")
         
         # 分析马氏距离的意义
-        mah_dist = stats['mahalanobisDistance']
+        mah_dist = landmark['mahalanobisDistance']
         if mah_dist < 1.0:
             interpretation = "✓ 查询点在该地标分布的核心区域"
         elif mah_dist < 2.0:
@@ -75,14 +67,12 @@ def test_mahalanobis_search():
     print("对比分析:")
     print("=" * 80)
     
-    # 比较原始分数和马氏距离分数的差异
-    print("\n原始分数 vs 马氏距离评分:")
+    # 比较评分和马氏距离
+    print("\n评分与马氏距离对比:")
     for landmark in result['results']:
-        raw = landmark['rawScore']
-        adaptive = landmark['adaptiveScore']
-        diff = adaptive - raw
-        direction = "↑" if diff > 0 else "↓" if diff < 0 else "="
-        print(f"  {landmark['landmarkCode']:5s}: {raw:.4f} → {adaptive:.4f} ({direction}{abs(diff):.4f})")
+        score = landmark['score']
+        mah_dist = landmark['mahalanobisDistance']
+        print(f"  {landmark['landmarkCode']:5s}: score={score:.4f}, mahalanobis={mah_dist:.2f}")
     
     print("\n" + "=" * 80)
     print("关键改进说明:")
@@ -92,6 +82,7 @@ def test_mahalanobis_search():
 2. 不需要手动设置调整因子，完全基于数据统计特性
 3. 有严格的概率解释：马氏距离 < χ²临界值 表示在95%置信区间内
 4. 自动适应不同地标的分散程度，无需人工干预
+5. 精简的响应格式：只返回核心信息，减少冗余
     """)
 
 

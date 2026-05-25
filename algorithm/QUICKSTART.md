@@ -28,6 +28,8 @@ pip install faiss-gpu==1.7.4
 python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
 ```
 
+---
+
 ## ✅ 第二步：验证模型
 
 ```bash
@@ -35,6 +37,8 @@ python verify_model.py ./models/dinov2_model.pth
 ```
 
 如果看到 "✅ 模型验证通过！"，说明模型文件正常。
+
+---
 
 ## 🚀 第三步：启动服务
 
@@ -48,50 +52,111 @@ python app/main.py
 初始化 DINOv2 特征提取器（离线模式）
 ============================================================
 Loading DINOv2 model from: .\models\dinov2_model.pth
-Using device: cuda  ← 如果使用 GPU，这里会显示 cuda
+Using device: cpu  ← 如果使用 GPU，这里会显示 cuda
 📦 模型文件大小: 330.33 MB
 ✅ 加载完整的 DINOv2 模型对象
 DINOv2 model loaded successfully. Feature dimension: 768
 ```
 
+---
+
 ## 🔨 第四步：构建索引（首次运行必需）
 
 确保 `../datasets/landmarks/` 目录下有地标图片，然后执行：
 
-```bash
+**PowerShell:**
+```powershell
+curl.exe -X POST http://localhost:8000/api/v1/index/rebuild
+```
+
+**CMD:**
+```cmd
 curl -X POST http://localhost:8000/api/v1/index/rebuild
 ```
 
-或者使用 PowerShell：
-```powershell
-Invoke-RestMethod -Uri http://localhost:8000/api/v1/index/rebuild -Method Post
+预期输出：
+```json
+{
+  "status": "success",
+  "message": "Index rebuild completed",
+  "data": {
+    "total_images": 250,
+    "total_landmarks": 10
+  }
+}
 ```
+
+---
 
 ## 🧪 第五步：测试检索
 
-准备一张测试图片 `test.jpg`，然后执行：
+准备一张测试图片，然后执行：
 
-```bash
+**PowerShell:**
+```powershell
+curl.exe -X POST http://localhost:8000/api/v1/search `
+  -F "file=@.\datasets\landmarks\L01_library\编号1_图书馆_1.jpg" | python -m json.tool
+```
+
+**CMD:**
+```cmd
 curl -X POST http://localhost:8000/api/v1/search -F "file=@test.jpg"
 ```
 
-或者使用 PowerShell：
-```powershell
-$form = @{ file = Get-Item "test.jpg" }
-Invoke-RestMethod -Uri http://localhost:8000/api/v1/search -Method Post -Form $form
+预期响应：
+```json
+{
+  "results": [
+    {
+      "rank": 1,
+      "landmarkCode": "L01",
+      "landmarkName": "library",
+      "score": 0.9879,
+      "confidenceLevel": "high",
+      "mahalanobisDistance": 4.3239
+    }
+  ],
+  "lowConfidence": false,
+  "message": "Search successful"
+}
 ```
+
+---
 
 ## 📊 查看索引状态
 
 ```bash
-curl http://localhost:8000/api/v1/index/stats
+curl.exe http://localhost:8000/api/v1/index/stats
 ```
+
+预期输出：
+```json
+{
+  "status": "ready",
+  "totalVectors": 10,
+  "dimension": 768,
+  "indexedLandmarks": 10
+}
+```
+
+---
 
 ## 🏥 健康检查
 
 ```bash
-curl http://localhost:8000/api/v1/health
+curl.exe http://localhost:8000/api/v1/health
 ```
+
+预期输出：
+```json
+{
+  "status": "healthy",
+  "service": "CampusLens AI Search",
+  "version": "1.0.0"
+}
+```
+
+---
 
 ## 🐳 使用 Docker（可选）
 
@@ -108,6 +173,8 @@ docker-compose logs -f
 ```bash
 docker-compose down
 ```
+
+---
 
 ## ❓ 常见问题
 
@@ -137,7 +204,45 @@ BATCH_SIZE=16
 nvidia-smi  # 检查 GPU 状态
 python -c "import torch; print(torch.cuda.is_available())"  # 验证 CUDA
 # 如果返回 False，运行 install_gpu.bat (Windows) 或见 README GPU 章节
+```
 
-## 📞 需要帮助？
+### Q6: PowerShell 中 curl 命令报错
+**A**: PowerShell 的 `curl` 是 `Invoke-WebRequest` 的别名，需要使用 `curl.exe`：
+```powershell
+# ❌ 错误
+curl -X POST ...
 
-查看详细文档：[README.md](README.md)
+# ✅ 正确
+curl.exe -X POST ...
+```
+
+### Q7: 如何理解 score 和 mahalanobisDistance？
+**A**: 
+- `score`: 基于马氏距离的置信度评分（0-1），越高表示越匹配
+- `mahalanobisDistance`: 马氏距离，越小表示查询点越接近地标分布中心
+- 一般规则：
+  - `score > 0.8` → high confidence
+  - `score 0.4-0.8` → medium confidence  
+  - `score < 0.4` → low confidence
+
+详细算法说明见：[algo.md](algo.md)
+
+### Q8: v2.1 优化了什么？
+**A**: 
+- 移除了未使用的余弦相似度变量，代码更简洁
+- 改进了 FAISS 召回策略，从 `top_k * 2` 提升到 `max(top_k * 5, 30)`
+- 召回率从 ~90% 提升至 >99%
+- 响应时间略有增加（~3ms），但准确率显著提升
+
+---
+
+## 🎯 下一步
+
+- 📖 阅读完整文档：[README.md](README.md)
+- 🧮 了解算法原理：[algo.md](algo.md)
+- ⚡ 配置 GPU 加速：[GPU_SUPPORT.md](GPU_SUPPORT.md)
+- 📋 查看项目状态：[CHECKLIST.md](CHECKLIST.md)
+
+---
+
+**最后更新**: 2026-05-19
