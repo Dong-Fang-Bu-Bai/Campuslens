@@ -42,7 +42,7 @@
 | `modelVersion` | String | 模型版本 |
 | `dimension` | Integer | 向量维度 |
 | `featurePath` | String | 向量文件路径 |
-| `indexed` | Boolean | 是否已进入索引 |
+| `indexed` | Boolean | 是否已进入统计参数构建流程 |
 | `createdAt` | DateTime | 生成时间 |
 
 ## SearchRecord 检索记录
@@ -53,7 +53,7 @@
 | `uploadImageUrl` | String | 用户上传图片路径 |
 | `topResultsJson` | Text | Top-5 结果快照 |
 | `bestLandmarkId` | Long | 最高分候选地标 |
-| `bestScore` | Decimal | 最高相似度 |
+| `bestScore` | Decimal | 最高置信度评分 |
 | `status` | String | 成功、失败、低置信度 |
 | `createdAt` | DateTime | 检索时间 |
 

@@ -23,8 +23,8 @@ Campuslens/
 - 后端：Spring Boot + REST API
 - 算法服务：Python FastAPI
 - 数据库：MySQL
-- 图片与向量：本地目录、向量文件或 FAISS index 文件
-- 检索策略：DINOv2 提取图像特征，FAISS 索引执行余弦相似度检索
+- 图片与向量：本地目录、向量文件、地标统计参数文件
+- 检索策略：DINOv2 提取图像特征，按地标样本特征估计均值和协方差，使用马氏距离与卡方置信度评分返回 Top-5
 - 地图能力：基于校园平面图做静态标注，不做实时导航和室内导航
 
 ## 本地演示启动
@@ -68,7 +68,7 @@ scripts\stop-dev.cmd
 | --- | --- | --- | --- |
 | 马启凡 | M1 图片上传与地标检索主流程 | `feature/m1-search-maqifan` | 马启凡 |
 | 叶炳良 | M2 地标图像库与元数据管理 | `feature/m2-landmark-yebingliang` | 叶炳良 |
-| 周子栋 | M3 图像特征提取与向量索引服务 | `feature/m3-vision-zhouzidong` | 周子栋 |
+| 周子栋 | M3 图像特征提取与统计检索服务 | `feature/m3-vision-zhouzidong` | 周子栋 |
 | 洪传凯 | M4 检索结果展示与地图导览 | `feature/m4-result-map-hongchuankai` | 洪传凯 |
 | 庄子杰 | M5 用户反馈纠错与检索记录统计 | `feature/m5-feedback-zhuangzijie` | 庄子杰 |
 

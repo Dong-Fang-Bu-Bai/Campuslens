@@ -15,7 +15,7 @@
 - [x] `app/api/routes.py` - API 路由定义
 - [x] `app/utils/__init__.py` - 工具包初始化
 - [x] `app/utils/image_processor.py` - 图片处理工具
-- [x] `app/utils/faiss_manager.py` - FAISS 索引管理
+- [x] `app/utils/faiss_manager.py` - 早期 FAISS 索引管理；第二周算法口径已调整为马氏距离统计参数管理，后续需按新算法重构
 - [x] `app/schemas/__init__.py` - 模型包初始化
 - [x] `app/schemas/response.py` - API 响应模型
 
@@ -39,7 +39,7 @@
 - [x] `check_service.py` - 服务健康检查（77 行）
 
 ### 目录结构
-- [x] `data/faiss_index/.gitkeep` - FAISS 索引目录
+- [x] `data/faiss_index/.gitkeep` - 早期索引目录；后续可复用为统计参数缓存目录或调整命名
 - [x] `data/features/.gitkeep` - 特征缓存目录
 - [x] `tests/.gitkeep` - 测试目录
 
@@ -58,16 +58,16 @@
 ### 核心功能
 - ✅ DINOv2 离线模型加载
 - ✅ 特征向量提取（单图/批量）
-- ✅ FAISS 向量索引构建
-- ✅ 余弦相似度检索
+- ✅ DINOv2 特征向量提取
+- 🔄 马氏距离统计检索：需按新算法补充均值、协方差、协方差逆矩阵和卡方置信度评分
 - ✅ Top-K 结果返回
-- ✅ 索引持久化存储
+- 🔄 统计参数持久化存储
 
 ### API 接口
 - ✅ 健康检查接口
 - ✅ 地标检索接口
-- ✅ 索引重建接口
-- ✅ 索引统计接口
+- 🔄 统计参数重建接口
+- 🔄 统计参数状态接口
 
 ### 工程化
 - ✅ 配置管理
@@ -94,7 +94,7 @@
 ### 性能优化
 - ✅ CPU/GPU 自动适配
 - ✅ 批量特征提取
-- ✅ FAISS 高效检索
+- 🔄 马氏距离统计检索
 - ✅ L2 归一化
 
 ### 易用性
@@ -143,8 +143,8 @@ docker-compose up -d
 |------|------|------|------|
 | `/api/v1/health` | GET | 健康检查 | ✅ |
 | `/api/v1/search` | POST | 地标检索 | ✅ |
-| `/api/v1/index/rebuild` | POST | 重建索引 | ✅ |
-| `/api/v1/index/stats` | GET | 索引统计 | ✅ |
+| `/api/v1/index/rebuild` | POST | 重建统计参数 | 🔄 |
+| `/api/v1/index/stats` | GET | 统计参数状态 | 🔄 |
 
 ## ✨ 特色功能
 
@@ -161,7 +161,7 @@ docker-compose up -d
 通过本项目可以学习：
 - FastAPI 微服务开发
 - DINOv2 视觉模型应用
-- FAISS 向量检索引擎
+- 马氏距离、协方差矩阵和卡方置信度评分
 - PyTorch 模型离线加载
 - Docker 容器化部署
 - RESTful API 设计
@@ -171,7 +171,7 @@ docker-compose up -d
 
 - [ ] 添加单元测试
 - [ ] 添加性能监控
-- [ ] 支持 GPU 加速（faiss-gpu）
+- [ ] 优化马氏距离统计参数构建性能
 - [ ] 添加 Redis 缓存
 - [ ] 添加认证授权
 - [ ] 添加限流机制
@@ -185,4 +185,4 @@ docker-compose up -d
 **项目状态**: ✅ 完成  
 **完成时间**: 2026-05-19  
 **实现模式**: 纯离线  
-**核心技术**: DINOv2 + FAISS + FastAPI
+**核心技术**: DINOv2 + 马氏距离统计检索 + FastAPI
