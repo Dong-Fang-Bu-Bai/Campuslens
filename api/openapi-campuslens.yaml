@@ -213,10 +213,26 @@ components:
           format: double
           description: 基于马氏距离和卡方分布换算得到的归一化置信度评分
           example: 0.86
+        confidenceLevel:
+          type: string
+          description: 算法服务给出的置信度等级，对接算法服务后可透传
+          enum: [high, medium, low]
+          example: high
+        mahalanobisDistance:
+          type: number
+          format: double
+          description: 查询图到候选地标特征分布的马氏距离，数值越小表示越接近
+          example: 4.3239
         coverImageUrl:
           type: string
         summary:
           type: string
+        locationText:
+          type: string
+        mapX:
+          type: number
+        mapY:
+          type: number
     LandmarkSummary:
       type: object
       properties:

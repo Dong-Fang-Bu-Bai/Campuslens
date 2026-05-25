@@ -58,8 +58,8 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 - 返回的是 Top-5 地标，不是 Top-5 图片。
 - 每个地标根据样本特征估计均值向量和协方差矩阵，查询时计算马氏距离并换算为置信度评分。
 - Top-5 按置信度从高到低排序；置信度越高，表示查询图越接近该地标特征分布。
-- 后端对外返回字段至少包含：`rank`、`landmarkId`、`landmarkCode`、`name`、`score`、`coverImageUrl`、`summary`、`locationText`、`mapX`、`mapY`。
-- 算法服务内部返回字段至少包含：`rank`、`landmarkCode`、`landmarkName`、`imagePath`、`imageFilename`、`score`，由 Spring Boot 后端补齐数据库中的 `landmarkId`、中文名称和简介等信息。
+- 后端对外返回字段至少包含：`rank`、`landmarkId`、`landmarkCode`、`name`、`score`、`coverImageUrl`、`summary`、`locationText`、`mapX`、`mapY`；对接算法服务后可透传 `confidenceLevel`、`mahalanobisDistance` 作为辅助展示字段。
+- 算法服务内部返回字段至少包含：`rank`、`landmarkCode`、`landmarkName`、`score`、`confidenceLevel`、`mahalanobisDistance`，由 Spring Boot 后端根据 `landmarkCode` 补齐数据库中的 `landmarkId`、中文名称、简介、代表图和地图坐标等信息。
 - 如果最高置信度低于阈值，可以提示“未找到高置信度结果”，但仍展示候选 Top-5。
 
 ## 图片上传规则

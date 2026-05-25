@@ -71,13 +71,13 @@
 - ✅ FAISS 向量索引构建（地标中心）
 - ✅ Top-K 地标检索
 - ✅ 自适应评判标准（无需手动调参）
-- ✅ 索引持久化存储
+- ✅ 统计参数与索引持久化存储
 
 ### API 接口
 - ✅ 健康检查接口 (`GET /api/v1/health`)
 - ✅ 地标检索接口 (`POST /api/v1/search`)
-- ✅ 索引重建接口 (`POST /api/v1/index/rebuild`)
-- ✅ 索引统计接口 (`GET /api/v1/index/stats`)
+- ✅ 统计参数重建接口 (`POST /api/v1/index/rebuild`)
+- ✅ 统计参数状态接口 (`GET /api/v1/index/stats`)
 
 ### 工程化
 - ✅ 配置管理
@@ -173,8 +173,8 @@ docker-compose up -d
 |------|------|------|------|
 | `/api/v1/health` | GET | 健康检查 | ✅ |
 | `/api/v1/search` | POST | 地标检索（马氏距离） | ✅ |
-| `/api/v1/index/rebuild` | POST | 重建索引 | ✅ |
-| `/api/v1/index/stats` | GET | 索引统计 | ✅ |
+| `/api/v1/index/rebuild` | POST | 重建统计参数 | ✅ |
+| `/api/v1/index/stats` | GET | 统计参数状态 | ✅ |
 
 ---
 
@@ -266,7 +266,7 @@ docker-compose up -d
 
 | 操作 | v1.0 | v2.0 | v2.1 | 变化 |
 |------|------|------|------|------|
-| 索引构建时间 | ~50s | ~60s | ~60s | +20% (计算协方差) |
+| 统计参数构建时间 | ~50s | ~60s | ~60s | +20% (计算协方差) |
 | 单次检索时间 | <5ms | <5ms | <10ms | +100% (提高召回率) |
 | 内存占用 | ~2GB | ~2.5GB | ~2.5GB | +25% (存储协方差矩阵) |
 | 准确率 | 中等 | 优秀 | **优秀** | **显著提升** |

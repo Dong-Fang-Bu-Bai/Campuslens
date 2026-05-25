@@ -60,7 +60,7 @@ DINOv2 model loaded successfully. Feature dimension: 768
 
 ---
 
-## 🔨 第四步：构建索引（首次运行必需）
+## 🔨 第四步：构建统计参数（首次运行必需）
 
 确保 `../datasets/landmarks/` 目录下有地标图片，然后执行：
 
@@ -78,7 +78,7 @@ curl -X POST http://localhost:8000/api/v1/index/rebuild
 ```json
 {
   "status": "success",
-  "message": "Index rebuild completed",
+  "message": "统计参数重建完成",
   "data": {
     "total_images": 250,
     "total_landmarks": 10
@@ -123,7 +123,7 @@ curl -X POST http://localhost:8000/api/v1/search -F "file=@test.jpg"
 
 ---
 
-## 📊 查看索引状态
+## 📊 查看统计参数状态
 
 ```bash
 curl.exe http://localhost:8000/api/v1/index/stats
@@ -184,7 +184,7 @@ docker-compose down
 set DINO_MODEL_PATH=C:\your\path\to\model.pth
 ```
 
-### Q2: 索引重建失败
+### Q2: 统计参数重建失败
 **A**: 检查 `../datasets/landmarks/` 目录是否有图片文件，每个地标文件夹至少要有几张图片。
 
 ### Q3: 端口被占用
