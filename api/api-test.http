@@ -58,7 +58,7 @@ Content-Type: application/json
   "locationText": "文雍广场附近"
 }
 
-### 重建索引
+### 重建统计参数
 POST {{backend}}/api/admin/index/rebuild
 
 ### 算法服务检索接口
@@ -72,10 +72,10 @@ Content-Type: image/jpeg
 < ./sample.jpg
 --CampusLensAlgorithmBoundary--
 
-### 算法服务重建索引
+### 算法服务重建统计参数
 POST {{algorithm}}/api/v1/index/rebuild
 
-### 算法服务索引状态
+### 算法服务统计参数状态
 GET {{algorithm}}/api/v1/index/stats
 
 ### 算法服务健康检查

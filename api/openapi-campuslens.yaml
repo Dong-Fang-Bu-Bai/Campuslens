@@ -158,11 +158,11 @@ paths:
           description: 上传成功
   /api/admin/index/rebuild:
     post:
-      summary: 重建特征索引
+      summary: 重建地标统计参数
       tags: [Admin]
       responses:
         "200":
-          description: 已提交索引重建任务
+          description: 已提交统计参数重建任务
   /api/admin/feedback:
     get:
       summary: 查看反馈记录
@@ -211,6 +211,7 @@ components:
         score:
           type: number
           format: double
+          description: 基于马氏距离和卡方分布换算得到的归一化置信度评分
           example: 0.86
         coverImageUrl:
           type: string

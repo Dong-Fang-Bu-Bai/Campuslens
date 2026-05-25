@@ -1,6 +1,6 @@
 # CampusLens AI 图像检索服务
 
-基于 **DINOv2 + FAISS + 马氏距离**的校园地标智能检索微服务（**纯离线模式**）。
+基于 DINOv2 特征提取 + 马氏距离统计检索的校园地标智能检索微服务（**纯离线模式**）。
 
 ## ⚠️ 重要说明
 
@@ -101,7 +101,7 @@ Using device: cpu (或 cuda 如果有 GPU)
 DINOv2 model loaded successfully. Feature dimension: 768
 ```
 
-#### Step 5: 构建索引
+#### Step 5: 构建统计参数
 ```bash
 curl.exe -X POST http://localhost:8000/api/v1/index/rebuild
 ```
@@ -169,7 +169,7 @@ file: <image_file>
 - `confidenceLevel`: 置信度等级（high/medium/low）
 - `mahalanobisDistance`: 马氏距离，越小表示查询点越接近地标分布中心
 
-### 3. 重建索引
+### 3. 重建统计参数
 ```bash
 POST /api/v1/index/rebuild
 ```
@@ -178,7 +178,7 @@ POST /api/v1/index/rebuild
 ```json
 {
   "status": "success",
-  "message": "Index rebuild completed",
+  "message": "统计参数重建完成",
   "data": {
     "total_images": 250,
     "total_landmarks": 10
@@ -186,7 +186,7 @@ POST /api/v1/index/rebuild
 }
 ```
 
-### 4. 索引统计
+### 4. 统计参数状态
 ```bash
 GET /api/v1/index/stats
 ```
@@ -277,7 +277,7 @@ score = exp(-d² / (2 · χ²₀.₉₅(768)))
 
 - **FastAPI**: 高性能异步 Web 框架
 - **DINOv2**: Facebook 自监督视觉 Transformer（本地加载）
-- **FAISS**: Facebook 向量相似度搜索引擎（CPU/GPU 版本）
+- **马氏距离统计检索**: 为每个地标估计均值向量、正则化协方差矩阵和协方差逆矩阵，按卡方置信度评分返回 Top-5
 - **PyTorch**: 深度学习推理引擎（支持 CPU/GPU）
 - **NumPy + SciPy**: 数值计算和统计分析
 - **Pillow**: 图像处理库
@@ -333,7 +333,7 @@ python app/main.py
 |------|----------|----------------|--------|
 | 单图特征提取 | ~200ms | ~30ms | **6.7x** ⚡ |
 | Top-5 检索 | ~5ms | ~2ms | 2.5x |
-| 索引构建 (250张) | ~60s | ~15s | **4x** ⚡ |
+| 统计参数构建 (250张) | ~60s | ~15s | **4x** ⚡ |
 
 **建议**：如果有 NVIDIA GPU，强烈建议启用 GPU 加速！
 
@@ -413,7 +413,7 @@ ai:
 | 单图特征提取 | ~30ms |
 | Top-5 检索 | <5ms |
 | 显存占用 | ~1.5GB |
-| 索引构建 (250张图) | ~15s |
+| 统计参数构建 (250张图) | ~15s |
 
 **加速比**：GPU 比 CPU 快 **4-7 倍**！
 
@@ -483,15 +483,15 @@ export BATCH_SIZE=16
 DEVICE=cpu
 ```
 
-### 问题 5: 索引为空
+### 问题 5: 统计参数为空
 ```
-ValueError: FAISS index is empty, please rebuild index first
+ValueError: 统计参数为空，请先构建地标统计参数
 ```
 
 **解决方案**：
 ```bash
-# 重建索引
-curl.exe -X POST http://localhost:8000/api/v1/index/rebuild
+# 重建统计参数
+curl -X POST http://localhost:8000/api/v1/index/rebuild
 
 # 检查数据集目录
 ls -R ../datasets/landmarks/
@@ -503,8 +503,8 @@ ls -R ../datasets/landmarks/
 
 1. ✅ **纯离线运行**: 无需网络连接，所有资源本地加载
 2. ⚠️ **模型路径**: 启动前必须确保模型文件存在
-3. 📂 **数据集准备**: 索引构建前需准备好地标图片
-4. 💾 **索引持久化**: 索引自动保存到 `data/faiss_index/`
+3. 📂 **数据集准备**: 统计参数构建前需准备好地标图片
+4. 💾 **参数持久化**: 地标统计参数自动保存到算法数据目录
 5. 🔒 **生产部署**: 建议添加认证、限流和监控
 6. ⚡ **GPU 加速**: 如有 NVIDIA GPU，建议启用 GPU 模式
 7. 📊 **统计信息**: 每次重建索引会计算协方差矩阵，需要一定时间
