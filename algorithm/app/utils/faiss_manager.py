@@ -206,7 +206,7 @@ class FAISSManager:
         search_k = min(max(top_k * 5, 30), self.index.ntotal)
         _, indices = self.index.search(query_norm.reshape(1, -1), search_k)
         
-        # 对每个候选地标计算马氏距离评分（重排序）
+        # 对每个候选地标计算马氏距离和绝对评分
         results = []
         for idx in indices[0]:
             if idx == -1:  # FAISS 返回 -1 表示无结果
@@ -215,11 +215,11 @@ class FAISSManager:
             landmark_code = self.landmark_codes[idx]
             stats = self.landmark_stats[landmark_code]
             
-            # 计算基于马氏距离的置信度评分
-            score = self._calculate_mahalanobis_score(query_vector, stats)
-            
             # 计算马氏距离
             mahalanobis_dist = self._compute_mahalanobis_distance(query_vector, stats)
+            
+            # 计算基于马氏距离的置信度评分
+            score = self._calculate_mahalanobis_score(query_vector, stats)
             
             # 计算置信度等级
             confidence_level = self._get_confidence_level(score, stats)
@@ -233,7 +233,7 @@ class FAISSManager:
                 "mahalanobisDistance": round(float(mahalanobis_dist), 4)
             })
         
-        # 按马氏距离评分排序（降序）
+        # 按分数降序排序
         results.sort(key=lambda x: x["score"], reverse=True)
         
         # 取 Top-K 并更新排名
@@ -256,33 +256,35 @@ class FAISSManager:
     
     def _calculate_mahalanobis_score(self, query_vector: np.ndarray, stats: dict) -> float:
         """
-        基于马氏距离计算自适应评分
+        基于马氏距离计算置信度评分（Sigmoid 归一化）
         
         核心思想：
-        - 马氏距离小 → 查询点在该地标分布内 → 高置信度
-        - 马氏距离大 → 查询点偏离地标分布 → 低置信度
+        - 观察到同类地标马氏距离 < 900，不同类 > 900
+        - 使用对数变换压缩范围，再用 Sigmoid 映射到 [0, 1]
+        - score 接近 1.0 → 很可能是同类地标
+        - score 接近 0.0 → 很可能不是同类地标
         
-        将马氏距离转换为 [0, 1] 范围的分数：
-        score = exp(-d² / (2 * χ²临界值))
-        
-        其中 χ²临界值 对应于卡方分布的置信区间
+        优势：
+        - 区分度好：在900附近有陡峭的过渡
+        - 平滑过渡：没有突然的跳变
+        - 可调节：通过 slope 参数控制区分度
+        - 不受绝对距离影响：即使距离很大也有非零分数
         """
         mahalanobis_dist = self._compute_mahalanobis_distance(query_vector, stats)
         
-        # 自由度为特征维度数（768维）
-        degrees_of_freedom = len(query_vector)
+        # 对数变换：压缩大范围
+        log_dist = np.log(mahalanobis_dist + 1)  # +1 避免 log(0)
         
-        # 使用卡方分布的95%分位数作为参考
-        if HAS_SCIPY:
-            chi2_critical = scipy_stats.chi2.ppf(0.95, df=degrees_of_freedom)
-        else:
-            # 近似值：对于大自由度，χ²(df) ≈ df
-            chi2_critical = degrees_of_freedom
+        # Sigmoid 中心点（以900为分界线）
+        center = np.log(900 + 1)  # ≈ 6.8
         
-        # 将马氏距离的平方转换为概率分数
-        # 使用指数衰减函数：score = exp(-d² / (2 * χ²临界值))
-        squared_distance = mahalanobis_dist ** 2
-        score = np.exp(-squared_distance / (2.0 * chi2_critical))
+        # 斜率参数（控制过渡的陡峭程度）
+        # 由于同类和不同类的分界在900附近，需要较陡的过渡
+        # slope 越大 → 过渡越陡峭，区分度越高
+        slope = 3.0
+        
+        # Sigmoid 映射（反向，因为距离越小分数越高）
+        score = 1.0 / (1.0 + np.exp(slope * (log_dist - center)))
         
         return float(score)
     
@@ -333,24 +335,16 @@ class FAISSManager:
     
     def _get_confidence_level(self, score: float, stats: dict) -> str:
         """
-        根据自适应评分和地标特征确定置信度等级
+        根据 Sigmoid 归一化评分确定置信度等级
+        
+        基于观察到的马氏距离分布：
+        - score >= 0.80: 马氏距离 < 900，很可能是同类（高置信度）
+        - score >= 0.40: 马氏距离在中间区域（中等置信度）
+        - score < 0.40: 马氏距离 > 5000，很可能不是同类（低置信度）
         """
-        compactness = self._calculate_compactness(stats["std"])
-        
-        # 不同紧凑程度使用不同的阈值
-        thresholds = {
-            "very_compact": 0.90,   # 非常紧凑：需要很高分数
-            "compact": 0.85,        # 紧凑：高分数
-            "moderate": 0.80,       # 中等：中等分数
-            "dispersed": 0.75,      # 分散：较低分数
-            "very_dispersed": 0.70  # 非常分散：更低分数
-        }
-        
-        threshold = thresholds.get(compactness, 0.80)
-        
-        if score >= threshold:
+        if score >= 0.80:
             return "high"
-        elif score >= threshold - 0.1:
+        elif score >= 0.40:
             return "medium"
         else:
             return "low"

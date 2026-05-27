@@ -61,21 +61,31 @@ class Mlp(nn.Module):
         return x
 
 
+class LayerScale(nn.Module):
+    """LayerScale 模块（匹配官方权重结构）"""
+    def __init__(self, dim):
+        super().__init__()
+        self.gamma = nn.Parameter(torch.ones(dim))
+    
+    def forward(self, x):
+        return x * self.gamma
+
+
 class BlockWithLS(nn.Module):
     """带 LayerScale 的 Transformer Block（DINOv2 特色）"""
     def __init__(self, dim, num_heads=12, mlp_ratio=4.0, qkv_bias=False):
         super().__init__()
         self.norm1 = nn.LayerNorm(dim)
         self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias)
-        self.ls1 = nn.Parameter(torch.ones(dim))  # LayerScale
+        self.ls1 = LayerScale(dim)  # LayerScale 作为子模块
         
         self.norm2 = nn.LayerNorm(dim)
         self.mlp = Mlp(in_features=dim, hidden_features=int(dim * mlp_ratio))
-        self.ls2 = nn.Parameter(torch.ones(dim))  # LayerScale
+        self.ls2 = LayerScale(dim)  # LayerScale 作为子模块
     
     def forward(self, x):
-        x = x + self.ls1 * self.attn(self.norm1(x))
-        x = x + self.ls2 * self.mlp(self.norm2(x))
+        x = x + self.ls1(self.attn(self.norm1(x)))
+        x = x + self.ls2(self.mlp(self.norm2(x)))
         return x
 
 
@@ -97,7 +107,7 @@ class DinoV2ViT(nn.Module):
         
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, self.num_patches + 1, embed_dim))
-        self.mask_token = nn.Parameter(torch.zeros(1, embed_dim))
+        self.mask_token = nn.Parameter(torch.zeros(1, embed_dim))  # 保留以匹配官方权重结构
         
         self.blocks = nn.ModuleList([
             BlockWithLS(embed_dim, num_heads=num_heads, mlp_ratio=4.0, qkv_bias=True)
