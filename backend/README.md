@@ -1,6 +1,6 @@
 # CampusLens Backend
 
-Spring Boot 后端最小工程，用于初始阶段 M1/M2/M5 的接口联调和第二周主流程开发准备。
+Spring Boot 后端工程，用于第二周 M1 上传检索主流程、M2 地标信息补齐和 M5 反馈入口联调。
 
 ## 技术栈
 
@@ -33,12 +33,14 @@ GET http://localhost:8080/api/health
 | `GET /api/health` | 后端健康检查 |
 | `GET /api/landmarks` | 获取首批 L01-L10 地标列表 |
 | `GET /api/landmarks/{id}` | 获取地标详情与地图坐标 |
-| `POST /api/search/upload` | 上传图片并返回 Top-5 演示检索结果 |
+| `POST /api/search/upload` | 上传图片，调用算法服务并返回 Top-5 地标结果 |
 | `POST /api/feedback` | 提交正确、错误或不确定反馈 |
 
 ## 当前实现边界
 
-当前版本服务于第一周初始阶段交付，采用内存地标数据和演示 Top-5 结果。`SearchService` 已保留算法服务集成边界，第二周可替换为调用 `http://localhost:8000/api/v1/search`。后端 MySQL 持久化暂不作为第一周实现内容，当前仅完成表结构、种子脚本和接口字段准备，检索记录与反馈记录后续再按迭代计划接入。
+当前版本服务于第二周细化阶段 V1 主流程联调。`SearchService` 会优先调用 `campuslens.algorithm.base-url` 配置的算法服务，默认地址为 `http://localhost:8000/api/v1/search`，再按 `landmarkCode` 补齐后端地标名称、简介、代表图和地图坐标。若算法服务暂不可用，接口返回低置信度本地候选结果，并在 `message` 中说明原因，便于前端保持可演示状态。
+
+后端 MySQL 持久化暂不作为第二周重点，当前仍以内存数据完成地标补齐、检索记录编号和反馈 pending 响应。`POST /api/feedback` 已固定 `correct`、`wrong`、`uncertain` 三类反馈口径，其中 `correct` 和 `wrong` 需要提供 `predictedLandmarkId`，`wrong` 还需要提供 `confirmedLandmarkId`。
 
 上传图片会保存到 `uploads/yyyyMMdd/`，该目录已由 `.gitignore` 排除。
 

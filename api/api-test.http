@@ -45,6 +45,17 @@ Content-Type: application/json
   "comment": "实际是学术大讲堂"
 }
 
+### 提交识别反馈：不确定
+POST {{backend}}/api/feedback
+Content-Type: application/json
+
+{
+  "searchRecordId": 1,
+  "predictedLandmarkId": 1,
+  "feedbackType": "uncertain",
+  "comment": "照片角度较偏，无法确认候选地标"
+}
+
 ### 新增地标
 POST {{backend}}/api/admin/landmarks
 Content-Type: application/json

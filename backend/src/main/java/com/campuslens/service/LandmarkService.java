@@ -60,6 +60,10 @@ public class LandmarkService {
     return landmarks.stream().filter(item -> item.id().equals(id)).findFirst();
   }
 
+  public Optional<LandmarkDetail> findByCode(String code) {
+    return landmarks.stream().filter(item -> item.code().equalsIgnoreCase(code)).findFirst();
+  }
+
   public List<LandmarkDetail> topCandidates() {
     return landmarks.stream()
         .sorted(Comparator.comparing(LandmarkDetail::code))

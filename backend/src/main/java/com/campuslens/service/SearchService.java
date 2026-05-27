@@ -3,6 +3,8 @@ package com.campuslens.service;
 import com.campuslens.model.LandmarkDetail;
 import com.campuslens.model.SearchResponse;
 import com.campuslens.model.SearchResult;
+import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResponse;
+import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResult;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -22,22 +24,33 @@ public class SearchService {
   private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
   private static final long MAX_FILE_SIZE = 8L * 1024 * 1024;
   private final LandmarkService landmarkService;
+  private final AlgorithmSearchClient algorithmSearchClient;
   private final AtomicLong searchRecordId = new AtomicLong(1);
 
-  public SearchService(LandmarkService landmarkService) {
+  public SearchService(LandmarkService landmarkService, AlgorithmSearchClient algorithmSearchClient) {
     this.landmarkService = landmarkService;
+    this.algorithmSearchClient = algorithmSearchClient;
   }
 
   public SearchResponse search(MultipartFile file) {
     validate(file);
     String uploadUrl = save(file);
-    List<SearchResult> results = buildDemoResults();
-    return new SearchResponse(
-        searchRecordId.getAndIncrement(),
-        uploadUrl,
-        false,
-        "当前为初始阶段演示结果，第二周接入 DINOv2 + FAISS 算法服务。",
-        results);
+    long currentSearchRecordId = searchRecordId.getAndIncrement();
+    try {
+      AlgorithmSearchResponse algorithmResponse = algorithmSearchClient.search(file);
+      List<SearchResult> results = buildAlgorithmResults(algorithmResponse);
+      if (results.isEmpty()) {
+        return fallbackResponse(currentSearchRecordId, uploadUrl, "算法服务未返回可匹配的 L01-L10 地标，已返回本地候选结果用于页面联调。");
+      }
+      return new SearchResponse(
+          currentSearchRecordId,
+          uploadUrl,
+          algorithmResponse.lowConfidence(),
+          normalizeMessage(algorithmResponse.message()),
+          results);
+    } catch (AlgorithmSearchException ex) {
+      return fallbackResponse(currentSearchRecordId, uploadUrl, "算法服务暂不可用，已返回本地候选结果用于页面联调。原因：" + ex.getMessage());
+    }
   }
 
   private void validate(MultipartFile file) {
@@ -85,9 +98,46 @@ public class SearchService {
     return "image/png".equals(contentType) ? ".png" : "image/webp".equals(contentType) ? ".webp" : ".jpg";
   }
 
-  private List<SearchResult> buildDemoResults() {
+  private List<SearchResult> buildAlgorithmResults(AlgorithmSearchResponse response) {
+    if (response.results() == null) {
+      return List.of();
+    }
+    return response.results().stream()
+        .map(this::toSearchResult)
+        .flatMap(java.util.Optional::stream)
+        .toList();
+  }
+
+  private java.util.Optional<SearchResult> toSearchResult(AlgorithmSearchResult result) {
+    return landmarkService.findByCode(result.landmarkCode())
+        .map(item -> new SearchResult(
+            result.rank(),
+            item.id(),
+            item.code(),
+            item.name(),
+            item.englishName(),
+            clampScore(result.score()),
+            normalizeConfidence(result.confidenceLevel()),
+            result.mahalanobisDistance(),
+            item.coverImageUrl(),
+            item.summary(),
+            item.locationText(),
+            item.mapX(),
+            item.mapY()));
+  }
+
+  private SearchResponse fallbackResponse(long currentSearchRecordId, String uploadUrl, String message) {
+    return new SearchResponse(
+        currentSearchRecordId,
+        uploadUrl,
+        true,
+        message,
+        buildFallbackResults());
+  }
+
+  private List<SearchResult> buildFallbackResults() {
     List<LandmarkDetail> candidates = landmarkService.topCandidates();
-    double[] scores = {0.92, 0.87, 0.81, 0.76, 0.71};
+    double[] scores = {0.45, 0.40, 0.35, 0.30, 0.25};
     return java.util.stream.IntStream.range(0, candidates.size())
         .mapToObj(i -> {
           LandmarkDetail item = candidates.get(i);
@@ -98,6 +148,8 @@ public class SearchService {
               item.name(),
               item.englishName(),
               scores[i],
+              "low",
+              null,
               item.coverImageUrl(),
               item.summary(),
               item.locationText(),
@@ -105,5 +157,35 @@ public class SearchService {
               item.mapY());
         })
         .toList();
+  }
+
+  private double clampScore(double score) {
+    if (score < 0) {
+      return 0;
+    }
+    if (score > 1) {
+      return 1;
+    }
+    return score;
+  }
+
+  private String normalizeConfidence(String confidenceLevel) {
+    return switch (confidenceLevel == null ? "" : confidenceLevel.toLowerCase()) {
+      case "high", "medium", "low" -> confidenceLevel.toLowerCase();
+      default -> "low";
+    };
+  }
+
+  private String normalizeMessage(String message) {
+    if (message == null || message.isBlank()) {
+      return "算法服务检索成功";
+    }
+    if ("Search successful".equalsIgnoreCase(message)) {
+      return "算法服务检索成功";
+    }
+    if ("Low confidence, manual verification recommended".equalsIgnoreCase(message)) {
+      return "算法置信度较低，建议人工核验";
+    }
+    return message;
   }
 }

@@ -7,6 +7,8 @@ public record SearchResult(
     String name,
     String englishName,
     double score,
+    String confidenceLevel,
+    Double mahalanobisDistance,
     String coverImageUrl,
     String summary,
     String locationText,
