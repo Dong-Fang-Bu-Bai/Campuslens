@@ -2,6 +2,8 @@
 
 ## Landmark 地标
 
+第二周 V1 已真实使用该表，通过 Spring JDBC 为 `GET /api/landmarks`、`GET /api/landmarks/{id}` 和上传检索结果补齐提供基础地标数据。
+
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` | Long | 主键 |
@@ -20,6 +22,8 @@
 
 ## LandmarkImage 地标样本图
 
+第二周 V1 已建表预留，但当前样本图片仍主要通过本地 `datasets/landmarks/` 目录和 `sample_inventory.md` 管理，尚未批量写入该表。
+
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` | Long | 主键 |
@@ -32,6 +36,8 @@
 | `createdAt` | DateTime | 上传时间 |
 
 ## ImageFeature 图片特征
+
+第二周 V1 已建表预留，实际特征缓存和统计参数仍由算法服务本地文件管理。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -47,6 +53,8 @@
 
 ## SearchRecord 检索记录
 
+第二周 V1 已建表预留，当前运行时 `searchRecordId` 仍由后端临时生成；持久化计划放到后续迭代。
+
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` | Long | 主键 |
@@ -58,6 +66,8 @@
 | `createdAt` | DateTime | 检索时间 |
 
 ## Feedback 用户反馈
+
+第二周 V1 已建表预留，当前运行时 `feedbackId` 仍由后端临时生成，接口返回 `pending` 状态；审核、采纳和统计计划放到后续迭代。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |

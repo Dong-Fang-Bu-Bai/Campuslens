@@ -40,7 +40,7 @@ public class SearchService {
       AlgorithmSearchResponse algorithmResponse = algorithmSearchClient.search(file);
       List<SearchResult> results = buildAlgorithmResults(algorithmResponse);
       if (results.isEmpty()) {
-        return fallbackResponse(currentSearchRecordId, uploadUrl, "算法服务未返回可匹配的 L01-L10 地标，已返回本地候选结果用于页面联调。");
+        return unavailableResponse(currentSearchRecordId, uploadUrl, "算法服务未返回可匹配的 L01-L10 地标，请检查样本索引和 landmarkCode 映射。");
       }
       return new SearchResponse(
           currentSearchRecordId,
@@ -49,7 +49,7 @@ public class SearchService {
           normalizeMessage(algorithmResponse.message()),
           results);
     } catch (AlgorithmSearchException ex) {
-      return fallbackResponse(currentSearchRecordId, uploadUrl, "算法服务暂不可用，已返回本地候选结果用于页面联调。原因：" + ex.getMessage());
+      return unavailableResponse(currentSearchRecordId, uploadUrl, "算法服务暂不可用，未生成候选地标。原因：" + ex.getMessage());
     }
   }
 
@@ -126,37 +126,13 @@ public class SearchService {
             item.mapY()));
   }
 
-  private SearchResponse fallbackResponse(long currentSearchRecordId, String uploadUrl, String message) {
+  private SearchResponse unavailableResponse(long currentSearchRecordId, String uploadUrl, String message) {
     return new SearchResponse(
         currentSearchRecordId,
         uploadUrl,
         true,
         message,
-        buildFallbackResults());
-  }
-
-  private List<SearchResult> buildFallbackResults() {
-    List<LandmarkDetail> candidates = landmarkService.topCandidates();
-    double[] scores = {0.45, 0.40, 0.35, 0.30, 0.25};
-    return java.util.stream.IntStream.range(0, candidates.size())
-        .mapToObj(i -> {
-          LandmarkDetail item = candidates.get(i);
-          return new SearchResult(
-              i + 1,
-              item.id(),
-              item.code(),
-              item.name(),
-              item.englishName(),
-              scores[i],
-              "low",
-              null,
-              item.coverImageUrl(),
-              item.summary(),
-              item.locationText(),
-              item.mapX(),
-              item.mapY());
-        })
-        .toList();
+        List.of());
   }
 
   private double clampScore(double score) {

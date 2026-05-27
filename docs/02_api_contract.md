@@ -4,7 +4,7 @@
 
 ## 调用关系
 
-用户端调用 Spring Boot 后端接口；后端负责文件校验、业务记录和数据组装。图像特征提取与检索由后端调用 Python FastAPI 算法服务完成。第二周 V1 主流程已将上传接口接到算法服务，暂不连接 MySQL，地标补齐仍使用后端内存中的 L01-L10 基础数据。
+用户端调用 Spring Boot 后端接口；后端负责文件校验、业务记录和数据组装。图像特征提取与检索由后端调用 Python FastAPI 算法服务完成。第二周 V1 主流程已将上传接口接到算法服务，并通过 MySQL `landmark` 表读取 L01-L10 基础地标数据。
 
 ```text
 Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
@@ -60,7 +60,7 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 - Top-5 按置信度从高到低排序；置信度越高，表示查询图越接近该地标特征分布。
 - 后端对外返回字段至少包含：`rank`、`landmarkId`、`landmarkCode`、`name`、`score`、`confidenceLevel`、`mahalanobisDistance`、`coverImageUrl`、`summary`、`locationText`、`mapX`、`mapY`。
 - 算法服务内部返回字段至少包含：`rank`、`landmarkCode`、`landmarkName`、`score`、`confidenceLevel`、`mahalanobisDistance`，由 Spring Boot 后端根据 `landmarkCode` 补齐数据库中的 `landmarkId`、中文名称、简介、代表图和地图坐标等信息。
-- 如果算法返回低置信度结果，后端保留 `lowConfidence=true` 并由前端提示需要人工核验；如果算法服务暂不可用，后端返回低置信度本地候选结果，并在 `message` 中说明原因。
+- 如果算法返回低置信度结果，后端保留 `lowConfidence=true` 并由前端提示需要人工核验；如果算法服务暂不可用，后端返回空候选结果、`lowConfidence=true` 和明确 `message`，不再伪造演示 Top-5。
 
 ## 图片上传规则
 
@@ -82,6 +82,8 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 
 反馈提交后默认状态为 `pending`，第四周可扩展为后台审核、采纳、忽略和统计。
 
+当前 V1 只真实使用 `landmark` 表。`search_record` 和 `feedback` 表已在数据库脚本中预留，但运行时仍使用临时编号和 pending 响应，后续迭代再接入持久化。
+
 ## 错误码口径
 
 | HTTP 状态码 | 场景 |
@@ -90,4 +92,4 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 | `404` | 地标不存在、检索记录不存在 |
 | `409` | 数据冲突，例如重复地标编号 |
 | `500` | 后端内部错误 |
-| `502` | 预留给强依赖算法服务时使用；当前 V1 默认降级为 `200` 低置信度候选结果并在 `message` 中说明 |
+| `502` | 预留给强依赖算法服务时使用；当前 V1 默认返回 `200`、空候选结果、`lowConfidence=true` 和明确 `message` |

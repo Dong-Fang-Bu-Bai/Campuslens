@@ -20,10 +20,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 class ApiControllerTest {
   @Autowired
   private MockMvc mockMvc;
@@ -85,9 +87,8 @@ class ApiControllerTest {
     mockMvc.perform(multipart("/api/search/upload").file(file))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.lowConfidence").value(true))
-        .andExpect(jsonPath("$.message").value("算法服务暂不可用，已返回本地候选结果用于页面联调。原因：连接失败"))
-        .andExpect(jsonPath("$.results.length()").value(5))
-        .andExpect(jsonPath("$.results[0].confidenceLevel").value("low"));
+        .andExpect(jsonPath("$.message").value("算法服务暂不可用，未生成候选地标。原因：连接失败"))
+        .andExpect(jsonPath("$.results.length()").value(0));
   }
 
   @Test

@@ -35,7 +35,7 @@ paths:
                   format: binary
       responses:
         "200":
-          description: 检索成功；若算法服务暂不可用，返回低置信度本地候选结果并在 message 中说明原因
+          description: 检索成功；若算法服务暂不可用，返回空候选结果、lowConfidence=true 并在 message 中说明原因
           content:
             application/json:
               schema:
