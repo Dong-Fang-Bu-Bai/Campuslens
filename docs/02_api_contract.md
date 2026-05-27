@@ -10,7 +10,7 @@
 Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
                   |
                   v
-                MySQL + 图片目录 + 向量/索引文件
+                MySQL + 图片目录 + 特征/统计参数文件
 ```
 
 ## 用户端核心接口
@@ -32,7 +32,7 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 | `POST /api/admin/landmarks` | 新增地标 | M2 |
 | `PUT /api/admin/landmarks/{id}` | 修改地标 | M2 |
 | `POST /api/admin/landmarks/{id}/images` | 上传地标样本图片 | M2 |
-| `POST /api/admin/index/rebuild` | 重建索引 | M3 |
+| `POST /api/admin/index/rebuild` | 重建地标统计参数 | M3 |
 | `GET /api/admin/feedback` | 查看反馈记录 | M5 |
 
 ## 算法服务接口
@@ -42,8 +42,8 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 | 接口 | 说明 | 负责人 |
 | --- | --- | --- |
 | `POST /api/v1/search` | 接收上传图片文件，返回 Top-5 候选地标 | M3 周子栋 |
-| `POST /api/v1/index/rebuild` | 根据样本库重建 FAISS 向量索引 | M3 周子栋 |
-| `GET /api/v1/index/stats` | 查看当前索引状态、向量数量和维度 | M3 周子栋 |
+| `POST /api/v1/index/rebuild` | 根据样本库重建地标统计参数 | M3 周子栋 |
+| `GET /api/v1/index/stats` | 查看当前统计参数状态、样本数量和维度 | M3 周子栋 |
 | `GET /api/v1/health` | 算法服务健康检查 | M3 周子栋 |
 
 ## 字段命名规则
@@ -56,10 +56,11 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 ## Top-5 返回规则
 
 - 返回的是 Top-5 地标，不是 Top-5 图片。
-- 同一地标多张图片命中时，取最高相似度作为该地标得分。
+- 每个地标根据样本特征估计均值向量和协方差矩阵，查询时计算马氏距离并换算为置信度评分。
+- Top-5 按置信度从高到低排序；置信度越高，表示查询图越接近该地标特征分布。
 - 后端对外返回字段至少包含：`rank`、`landmarkId`、`landmarkCode`、`name`、`score`、`coverImageUrl`、`summary`、`locationText`、`mapX`、`mapY`。
 - 算法服务内部返回字段至少包含：`rank`、`landmarkCode`、`landmarkName`、`imagePath`、`imageFilename`、`score`，由 Spring Boot 后端补齐数据库中的 `landmarkId`、中文名称和简介等信息。
-- 如果最高相似度低于阈值，可以提示“未找到高置信度结果”，但仍展示候选 Top-5。
+- 如果最高置信度低于阈值，可以提示“未找到高置信度结果”，但仍展示候选 Top-5。
 
 ## 图片上传规则
 
