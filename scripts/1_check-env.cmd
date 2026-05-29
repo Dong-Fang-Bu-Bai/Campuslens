@@ -11,6 +11,7 @@ call :check java "-version"
 call :check mvn "-version"
 call :check node "-v"
 call :check npm "-v"
+call :check docker "--version"
 
 echo.
 echo [CampusLens] Environment check finished.

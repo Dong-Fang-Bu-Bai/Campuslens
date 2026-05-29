@@ -130,4 +130,14 @@ VALUES
     62.2800,
     10.1200,
     '/images/landmarks/l10.jpg'
-  );
+  )
+ON DUPLICATE KEY UPDATE
+  name = VALUES(name),
+  english_name = VALUES(english_name),
+  type = VALUES(type),
+  summary = VALUES(summary),
+  description = VALUES(description),
+  location_text = VALUES(location_text),
+  map_x = VALUES(map_x),
+  map_y = VALUES(map_y),
+  cover_image_url = VALUES(cover_image_url);

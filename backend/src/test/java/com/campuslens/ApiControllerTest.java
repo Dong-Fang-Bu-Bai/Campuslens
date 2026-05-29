@@ -5,20 +5,33 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
+import com.campuslens.service.AlgorithmSearchClient;
+import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResponse;
+import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResult;
+import com.campuslens.service.AlgorithmSearchException;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 class ApiControllerTest {
   @Autowired
   private MockMvc mockMvc;
+
+  @MockBean
+  private AlgorithmSearchClient algorithmSearchClient;
 
   @Test
   void healthReturnsOk() throws Exception {
@@ -35,7 +48,17 @@ class ApiControllerTest {
   }
 
   @Test
-  void uploadReturnsDemoTopFive() throws Exception {
+  void uploadReturnsAlgorithmTopFive() throws Exception {
+    when(algorithmSearchClient.search(any())).thenReturn(new AlgorithmSearchResponse(
+        List.of(
+            new AlgorithmSearchResult(1, "L03", "文雍广场", 0.91, "high", 3.12),
+            new AlgorithmSearchResult(2, "L01", "图书馆", 0.82, "medium", 5.34),
+            new AlgorithmSearchResult(3, "L04", "博学桥", 0.73, "medium", 7.56),
+            new AlgorithmSearchResult(4, "L05", "琴湖及湖心岛", 0.64, "medium", 8.78),
+            new AlgorithmSearchResult(5, "L10", "中心酒店", 0.52, "low", 11.23)),
+        false,
+        "Search successful"));
+
     MockMultipartFile file = new MockMultipartFile(
         "file",
         "sample.jpg",
@@ -44,7 +67,28 @@ class ApiControllerTest {
 
     mockMvc.perform(multipart("/api/search/upload").file(file))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.results.length()").value(5));
+        .andExpect(jsonPath("$.message").value("算法服务检索成功"))
+        .andExpect(jsonPath("$.results.length()").value(5))
+        .andExpect(jsonPath("$.results[0].landmarkCode").value("L03"))
+        .andExpect(jsonPath("$.results[0].confidenceLevel").value("high"))
+        .andExpect(jsonPath("$.results[0].mahalanobisDistance").value(3.12));
+  }
+
+  @Test
+  void uploadFallsBackWhenAlgorithmUnavailable() throws Exception {
+    when(algorithmSearchClient.search(any())).thenThrow(new AlgorithmSearchException("连接失败"));
+
+    MockMultipartFile file = new MockMultipartFile(
+        "file",
+        "sample.jpg",
+        MediaType.IMAGE_JPEG_VALUE,
+        new byte[] {1, 2, 3});
+
+    mockMvc.perform(multipart("/api/search/upload").file(file))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.lowConfidence").value(true))
+        .andExpect(jsonPath("$.message").value("算法服务暂不可用，未生成候选地标。原因：连接失败"))
+        .andExpect(jsonPath("$.results.length()").value(0));
   }
 
   @Test

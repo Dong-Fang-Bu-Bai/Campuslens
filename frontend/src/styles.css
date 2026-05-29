@@ -9,7 +9,7 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* 大厂级 Slate Dark Theme 曜石极暗配色变量 */
+  /* Slate Dark Theme 配色变量 */
   --bg-main: #070913;
   --bg-card: #0d121f; /* 高级毛玻璃深曜碳黑 */
   --text-primary: #f8fafc;
@@ -163,7 +163,7 @@ h3 {
 }
 
 /* ==========================================
-   2. 上传面板与大厂云卡片
+   2. 上传面板
    ========================================= */
 .upload-panel {
   padding: 0;
@@ -359,7 +359,7 @@ h3 {
   height: 100vh;
 }
 
-/* 大厂级：渐入与微垂直滑动 (Fade and Slide) */
+/* 渐入与微垂直滑动 (Fade and Slide) */
 .page-fade-enter-active,
 .page-fade-leave-active {
   transition: opacity 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
@@ -507,6 +507,36 @@ h3 {
   gap: 16px;
 }
 
+.warning-text,
+.empty-state {
+  margin: 0 0 16px;
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  border-radius: var(--radius-md);
+  background: rgba(245, 158, 11, 0.08);
+  color: #fbbf24;
+}
+
+.warning-text {
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.empty-state {
+  padding: 28px;
+}
+
+.empty-state h3 {
+  margin: 0 0 8px;
+  color: #ffffff;
+  font-size: 18px;
+}
+
+.empty-state p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
 /* 无边框浮空卡片 */
 .result-card {
   display: grid;
@@ -642,7 +672,15 @@ h3 {
 
 .result-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+.result-meta {
+  margin-right: auto;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 32px;
 }
 
 .result-actions button,

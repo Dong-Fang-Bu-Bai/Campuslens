@@ -45,6 +45,17 @@ Content-Type: application/json
   "comment": "实际是学术大讲堂"
 }
 
+### 提交识别反馈：不确定
+POST {{backend}}/api/feedback
+Content-Type: application/json
+
+{
+  "searchRecordId": 1,
+  "predictedLandmarkId": 1,
+  "feedbackType": "uncertain",
+  "comment": "照片角度较偏，无法确认候选地标"
+}
+
 ### 新增地标
 POST {{backend}}/api/admin/landmarks
 Content-Type: application/json
@@ -58,7 +69,7 @@ Content-Type: application/json
   "locationText": "文雍广场附近"
 }
 
-### 重建索引
+### 重建统计参数
 POST {{backend}}/api/admin/index/rebuild
 
 ### 算法服务检索接口
@@ -72,10 +83,10 @@ Content-Type: image/jpeg
 < ./sample.jpg
 --CampusLensAlgorithmBoundary--
 
-### 算法服务重建索引
+### 算法服务重建统计参数
 POST {{algorithm}}/api/v1/index/rebuild
 
-### 算法服务索引状态
+### 算法服务统计参数状态
 GET {{algorithm}}/api/v1/index/stats
 
 ### 算法服务健康检查

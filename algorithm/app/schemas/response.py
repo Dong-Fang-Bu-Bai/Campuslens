@@ -3,12 +3,13 @@ from typing import List, Optional
 
 
 class SearchResult(BaseModel):
+    """地标搜索结果"""
     rank: int
     landmarkCode: str
     landmarkName: str
-    imagePath: str
-    imageFilename: str
-    score: float
+    score: float  # 置信度评分（基于马氏距离）
+    confidenceLevel: str  # 置信度等级: high, medium, low
+    mahalanobisDistance: float  # 马氏距离（越小越匹配）
 
 
 class SearchResponse(BaseModel):
