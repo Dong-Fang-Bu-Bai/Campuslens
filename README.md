@@ -29,11 +29,11 @@ Campuslens/
 
 ## 本地演示启动
 
-Windows 下可以直接使用 `scripts/` 目录中的脚本启动和停止前后端：
+Windows 下可以直接使用 `scripts/` 目录中的脚本启动数据库、后端和前端：
 
 ```powershell
-scripts\check-env.cmd
-scripts\start-dev.cmd
+scripts\1_check-env.cmd
+scripts\2_start-dev.cmd
 ```
 
 启动后访问：
@@ -43,13 +43,37 @@ scripts\start-dev.cmd
 后端健康检查：http://localhost:8080/api/health
 ```
 
+默认数据库连接：
+
+```text
+MySQL: localhost:3306
+database: campuslens
+username: campuslens
+password: campuslens123
+```
+
+`2_start-dev.cmd` 会先调用 `scripts\start-database.cmd` 启动 Docker MySQL，再启动后端和前端。`start-database.cmd` 会优先使用 Windows PATH 中的 `docker`；如果 Windows 侧没有 Docker，但 WSL 中存在 `Ubuntu` 发行版且已配置 Docker Engine，则会自动通过 WSL 执行 `docker compose up -d mysql`。数据库首次创建容器数据卷时会自动执行 `database/schema.sql` 和 `database/seed_landmarks.sql`，初始化基础表和 L01-L10 地标数据。账号和密码仅用于本地开发，可通过 `.env` 覆盖；仓库只提交 `.env.example`。
+
+如果使用 WSL Docker，需要先在 Ubuntu 中确认当前用户有 Docker daemon 权限：
+
+```bash
+sudo usermod -aG docker $USER
+```
+
+执行后在 Windows PowerShell 中重启 WSL，再重新运行启动脚本：
+
+```powershell
+wsl --shutdown
+scripts\2_start-dev.cmd
+```
+
 停止由脚本启动的服务：
 
 ```powershell
-scripts\stop-dev.cmd
+scripts\3_stop-dev.cmd
 ```
 
-`stop-dev.cmd` 只读取 `.run/` 中的 PID 文件并停止本项目脚本启动的窗口，不会扫描端口或强行结束其他 Java、Node 进程。若服务是手动通过 `mvn spring-boot:run` 或 `npm run dev` 启动的，请直接关闭对应命令行窗口。
+`3_stop-dev.cmd` 只读取 `.run/` 中的 PID 文件并停止本项目脚本启动的窗口，不会扫描端口或强行结束其他 Java、Node 进程。若服务是手动通过 `mvn spring-boot:run` 或 `npm run dev` 启动的，请直接关闭对应命令行窗口。数据库可用 `docker compose stop mysql` 暂停，或用 `docker compose down` 停止容器；不要随意删除 volume，否则会清空本地数据库数据。
 
 ## 分支模型
 

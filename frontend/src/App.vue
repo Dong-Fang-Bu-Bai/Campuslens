@@ -22,7 +22,7 @@
           <small>支持 JPG、PNG、WebP，不超过 8MB</small>
         </label>
         <button class="primary-btn" :disabled="loading" :class="{ 'is-loading': loading }">
-          <span class="btn-text">{{ loading ? '大厂深度算法检索中...' : '上传并检索' }}</span>
+          <span class="btn-text">{{ loading ? '算法检索中...' : '上传并检索' }}</span>
           <span class="btn-shine"></span>
         </button>
         <p v-if="error" class="error-text">
@@ -60,7 +60,7 @@
             </button>
           </div>
           <div>
-            <p class="eyebrow">初始阶段原型</p>
+          <p class="eyebrow">V1 联调版本</p>
             <h2>{{ viewTitle }}</h2>
           </div>
         </div>
@@ -71,26 +71,30 @@
       <Transition name="page-fade" mode="out-in">
         <section v-if="activeView === 'results'" class="results-layout" key="results">
           <div class="results-main">
-            <!-- 顶置大厂级 AI 数据分析仪表大盘 -->
+            <!-- 本次检索状态概览 -->
             <div class="ai-analytical-header">
               <div class="stat-card">
-                <span class="stat-label">首选匹配率 (Top-1 Acc)</span>
-                <span class="stat-value">98.2%</span>
-                <span class="stat-desc">基于近期 500 次真实识别反馈统计</span>
+                <span class="stat-label">检索记录</span>
+                <span class="stat-value">#{{ searchMeta.searchRecordId }}</span>
+                <span class="stat-desc">{{ searchMeta.uploadImageUrl ? '已保存上传图片' : '等待上传校园照片' }}</span>
               </div>
               <div class="stat-card">
-                <span class="stat-label">算法置信度均值 (Avg Conf)</span>
-                <span class="stat-value">84.6%</span>
-                <span class="stat-desc">深度神经网络模型识别置信度</span>
+                <span class="stat-label">候选数量</span>
+                <span class="stat-value">{{ results.length }}</span>
+                <span class="stat-desc">后端返回的 Top-5 候选地标</span>
               </div>
               <div class="stat-card">
-                <span class="stat-label">验证标注总量 (Total Labels)</span>
-                <span class="stat-value">280+ 组</span>
-                <span class="stat-desc">首批 L01 - L10 已验证样本集</span>
+                <span class="stat-label">检索状态</span>
+                <span class="stat-value">{{ searchMeta.lowConfidence ? '需核验' : '可展示' }}</span>
+                <span class="stat-desc">{{ searchMeta.message }}</span>
               </div>
             </div>
 
-            <article class="result-list">
+            <p v-if="searchMeta.lowConfidence" class="warning-text">
+              {{ searchMeta.message }}
+            </p>
+
+            <article v-if="results.length" class="result-list">
               <div v-for="item in results" :key="item.landmarkId" class="result-card" :class="{ active: item.landmarkId === selectedId }" @click="selectLandmark(item.landmarkId)">
                 <div class="rank">{{ item.rank }}</div>
                 <div class="result-body">
@@ -111,11 +115,16 @@
                   </div>
 
                   <div class="result-actions">
+                    <span class="result-meta">{{ confidenceLabel(item.confidenceLevel) }}<template v-if="item.mahalanobisDistance != null"> · D={{ Number(item.mahalanobisDistance).toFixed(2) }}</template></span>
                     <button @click.stop="openModal(item)">详情</button>
                     <button @click.stop="openFeedback(item)">反馈</button>
                   </div>
                 </div>
               </div>
+            </article>
+            <article v-else class="empty-state">
+              <h3>暂无检索结果</h3>
+              <p>请上传 JPG、PNG 或 WebP 图片后重新检索。</p>
             </article>
           </div>
 
@@ -200,33 +209,25 @@
           <div class="feedback-layout">
             <!-- 左侧：高水准近期历史识别记录追踪大盘 -->
             <aside class="history-panel">
-              <h3>最近检索历史记录</h3>
-              <p class="panel-desc">近期被系统成功解析并验证的图像识别流水日志。</p>
+              <h3>本次检索记录</h3>
+              <p class="panel-desc">反馈将绑定当前 searchRecordId 和候选地标编号，第二周保留 pending 状态。</p>
               
               <div class="history-list">
                 <div class="history-item">
                   <div class="history-meta">
-                    <span class="history-time">2分钟前</span>
-                    <span class="history-status active">已验证</span>
+                    <span class="history-time">SearchRecord #{{ feedback.searchRecordId }}</span>
+                    <span class="history-status active">待反馈</span>
                   </div>
-                  <strong>IMG_20260524_2102.jpg</strong>
-                  <p>地标：L01 图书馆 (92% 置信度) · 结果：识别正确</p>
+                  <strong>{{ selectedLandmark?.code }} {{ selectedLandmark?.name }}</strong>
+                  <p>预测地标 ID：{{ feedback.predictedLandmarkId }} · 反馈类型：{{ feedback.feedbackType }}</p>
                 </div>
-                <div class="history-item">
+                <div v-for="item in results.slice(0, 3)" :key="item.landmarkCode" class="history-item">
                   <div class="history-meta">
-                    <span class="history-time">23分钟前</span>
-                    <span class="history-status wrong">需纠错</span>
+                    <span class="history-time">候选 #{{ item.rank }}</span>
+                    <span class="history-status" :class="{ active: item.confidenceLevel !== 'low', wrong: item.confidenceLevel === 'low' }">{{ confidenceLabel(item.confidenceLevel) }}</span>
                   </div>
-                  <strong>IMG_20260524_2034.jpg</strong>
-                  <p>地标：L02 学术大讲堂 (87% 置信度) · 反馈：修正为 L03</p>
-                </div>
-                <div class="history-item">
-                  <div class="history-meta">
-                    <span class="history-time">1小时前</span>
-                    <span class="history-status active">已验证</span>
-                  </div>
-                  <strong>IMG_20260524_1944.jpg</strong>
-                  <p>地标：L05 琴湖及岛屿 (81% 置信度) · 结果：识别正确</p>
+                  <strong>{{ item.landmarkCode }} {{ item.name }}</strong>
+                  <p>置信度：{{ Math.round(item.score * 100) }}%<template v-if="item.mahalanobisDistance != null"> · 马氏距离：{{ Number(item.mahalanobisDistance).toFixed(2) }}</template></p>
                 </div>
               </div>
             </aside>
@@ -234,7 +235,7 @@
             <!-- 右侧：反馈提交表单 -->
             <article class="feedback-card">
               <h3>提交反馈纠错</h3>
-              <p>系统记录反馈后，将作为真实样本用于后续深度学习算法的持续监督训练与性能演进。</p>
+              <p>当前阶段记录反馈入口和字段衔接，审核、采纳和统计在后续迭代完善。</p>
               <form @submit.prevent="submitFeedback">
                 <label>
                   反馈类型
@@ -269,7 +270,7 @@
       </Transition>
     </section>
 
-    <!-- 顶尖大厂级曜石毛玻璃详情弹窗 (Modal) -->
+    <!-- 地标详情弹窗 -->
     <Transition name="modal-fade">
       <div v-if="showModal && modalLandmark" class="modal-overlay" @click.self="closeModal">
         <div class="modal-content">
@@ -352,6 +353,12 @@ const error = ref('')
 const initialView = new URLSearchParams(window.location.search).get('view')
 const activeView = ref(['results', 'map', 'feedback'].includes(initialView) ? initialView : 'results')
 const feedbackMessage = ref('')
+const searchMeta = reactive({
+  searchRecordId: 1,
+  uploadImageUrl: '',
+  lowConfidence: false,
+  message: '尚未上传图片'
+})
 const feedback = reactive({
   searchRecordId: 1,
   predictedLandmarkId: 1,
@@ -485,6 +492,14 @@ const viewTitle = computed(() => ({
   feedback: '用户反馈纠错'
 }[activeView.value]))
 
+function confidenceLabel(value) {
+  return {
+    high: '高置信度',
+    medium: '中置信度',
+    low: '低置信度'
+  }[value] || '待核验'
+}
+
 onMounted(async () => {
   try {
     const response = await fetch('/api/landmarks')
@@ -524,15 +539,23 @@ async function submitSearch() {
     const data = await response.json()
     results.value = data.results.map((item) => ({
       ...item,
-      imageUrl: demoLandmarks.find(l => l.id === item.landmarkId)?.imageUrl || demoLandmarks[0].imageUrl
+      imageUrl: demoLandmarks.find(l => l.id === item.landmarkId)?.imageUrl || demoLandmarks[0].imageUrl,
+      confidenceLevel: item.confidenceLevel || 'low',
+      score: Math.max(0, Math.min(1, Number(item.score || 0)))
     }))
+    searchMeta.searchRecordId = data.searchRecordId
+    searchMeta.uploadImageUrl = data.uploadImageUrl || ''
+    searchMeta.lowConfidence = Boolean(data.lowConfidence)
+    searchMeta.message = data.message || '检索完成'
     feedback.searchRecordId = data.searchRecordId
     
     // 自动推送历史
     navigateToView('results')
-    selectedId.value = data.results[0]?.landmarkId || 1
+    selectedId.value = results.value[0]?.landmarkId || 1
   } catch (err) {
     error.value = err.message
+    searchMeta.lowConfidence = true
+    searchMeta.message = err.message
   } finally {
     loading.value = false
   }

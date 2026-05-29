@@ -1,0 +1,28 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: campuslens-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${CAMPUSLENS_DB_ROOT_PASSWORD:-root123456}
+      MYSQL_DATABASE: ${CAMPUSLENS_DB_NAME:-campuslens}
+      MYSQL_USER: ${CAMPUSLENS_DB_USERNAME:-campuslens}
+      MYSQL_PASSWORD: ${CAMPUSLENS_DB_PASSWORD:-campuslens123}
+      TZ: Asia/Shanghai
+    ports:
+      - "${CAMPUSLENS_DB_PORT:-3306}:3306"
+    volumes:
+      - campuslens_mysql_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./database/seed_landmarks.sql:/docker-entrypoint-initdb.d/02_seed_landmarks.sql:ro
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  campuslens_mysql_data:
