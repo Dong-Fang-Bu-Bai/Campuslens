@@ -159,8 +159,11 @@ public class SearchService {
     if ("Search successful".equalsIgnoreCase(message)) {
       return "算法服务检索成功";
     }
+    if ("Low match score, manual verification recommended".equalsIgnoreCase(message)) {
+      return "算法匹配等级较低，建议人工核验";
+    }
     if ("Low confidence, manual verification recommended".equalsIgnoreCase(message)) {
-      return "算法置信度较低，建议人工核验";
+      return "算法匹配等级较低，建议人工核验";
     }
     return message;
   }

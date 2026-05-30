@@ -103,11 +103,11 @@
                       <h3>{{ item.name }}</h3>
                       <p>{{ item.englishName }} · {{ item.locationText }}</p>
                     </div>
-                    <strong>{{ Math.round(item.score * 100) }}%</strong>
+                    <strong>匹配分 {{ Math.round(item.score * 100) }}%</strong>
                   </div>
                   <p>{{ item.summary }}</p>
                   
-                  <!-- 精密石墨拉丝置信度条 -->
+                  <!-- 精密石墨拉丝匹配分条 -->
                   <div class="confidence-container">
                     <div class="confidence-bar-bg">
                       <div class="confidence-bar-fill" :style="{ width: Math.round(item.score * 100) + '%' }"></div>
@@ -227,7 +227,7 @@
                     <span class="history-status" :class="{ active: item.confidenceLevel !== 'low', wrong: item.confidenceLevel === 'low' }">{{ confidenceLabel(item.confidenceLevel) }}</span>
                   </div>
                   <strong>{{ item.landmarkCode }} {{ item.name }}</strong>
-                  <p>置信度：{{ Math.round(item.score * 100) }}%<template v-if="item.mahalanobisDistance != null"> · 马氏距离：{{ Number(item.mahalanobisDistance).toFixed(2) }}</template></p>
+                  <p>匹配分：{{ Math.round(item.score * 100) }}%<template v-if="item.mahalanobisDistance != null"> · 马氏距离：{{ Number(item.mahalanobisDistance).toFixed(2) }}</template></p>
                 </div>
               </div>
             </aside>
@@ -494,9 +494,9 @@ const viewTitle = computed(() => ({
 
 function confidenceLabel(value) {
   return {
-    high: '高置信度',
-    medium: '中置信度',
-    low: '低置信度'
+    high: '高匹配',
+    medium: '中匹配',
+    low: '低匹配'
   }[value] || '待核验'
 }
 

@@ -37,7 +37,7 @@ def test_mahalanobis_search():
     result = response.json()
     
     print(f"\n✅ 搜索成功!")
-    print(f"低置信度标记: {result.get('lowConfidence', False)}")
+    print(f"低匹配等级标记: {result.get('lowConfidence', False)}")
     print(f"消息: {result.get('message', '')}")
     print(f"\n返回 {len(result['results'])} 个地标结果:\n")
     
@@ -45,20 +45,18 @@ def test_mahalanobis_search():
         print(f"{'='*60}")
         print(f"排名 #{i}: {landmark['landmarkName']} ({landmark['landmarkCode']})")
         print(f"{'='*60}")
-        print(f"  置信度评分:     {landmark['score']:.4f}")
+        print(f"  经验匹配分:     {landmark['score']:.4f}")
         print(f"  马氏距离:       {landmark['mahalanobisDistance']:.4f}")
-        print(f"  置信度等级:     {landmark['confidenceLevel']}")
+        print(f"  匹配等级:       {landmark['confidenceLevel']}")
         
         # 分析马氏距离的意义
-        mah_dist = landmark['mahalanobisDistance']
-        if mah_dist < 1.0:
-            interpretation = "✓ 查询点在该地标分布的核心区域"
-        elif mah_dist < 2.0:
-            interpretation = "✓ 查询点在该地标分布的正常范围内"
-        elif mah_dist < 3.0:
-            interpretation = "⚠ 查询点接近该地标分布的边缘"
+        score = landmark['score']
+        if score >= 0.8:
+            interpretation = "✓ 查询图与该地标特征分布高度接近"
+        elif score >= 0.4:
+            interpretation = "✓ 查询图与该地标特征分布有一定接近度"
         else:
-            interpretation = "✗ 查询点可能不属于该地标分布"
+            interpretation = "⚠ 查询图与该地标特征分布差异较大，建议人工核验"
         
         print(f"\n  解读: {interpretation}")
         print()
@@ -80,8 +78,8 @@ def test_mahalanobis_search():
     print("""
 1. 马氏距离考虑了特征之间的协方差结构
 2. 不需要手动设置调整因子，完全基于数据统计特性
-3. 有严格的概率解释：马氏距离 < χ²临界值 表示在95%置信区间内
-4. 自动适应不同地标的分散程度，无需人工干预
+3. 通过 sigmoid 将马氏距离映射为 0-1 经验匹配分，便于排序和展示区分度
+4. score 不具备概率或统计置信度含义，低匹配结果建议人工核验
 5. 精简的响应格式：只返回核心信息，减少冗余
     """)
 

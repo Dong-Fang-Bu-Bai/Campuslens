@@ -181,6 +181,7 @@ components:
           type: string
         lowConfidence:
           type: boolean
+          description: 兼容字段；true 表示所有候选均为低匹配等级，或算法服务暂不可用
         message:
           type: string
         results:
@@ -209,11 +210,11 @@ components:
         score:
           type: number
           format: double
-          description: 基于马氏距离和卡方分布换算得到的归一化置信度评分
+          description: 基于马氏距离 sigmoid 归一化得到的经验匹配分，仅用于排序、展示区分度和辅助判断，不具备概率或统计置信度含义
           example: 0.86
         confidenceLevel:
           type: string
-          description: 算法服务给出的置信度等级，对接算法服务后可透传
+          description: 兼容字段，算法服务给出的经验匹配等级
           enum: [high, medium, low]
           example: high
         mahalanobisDistance:

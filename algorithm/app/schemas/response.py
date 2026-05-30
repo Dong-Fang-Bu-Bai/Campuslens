@@ -7,14 +7,14 @@ class SearchResult(BaseModel):
     rank: int
     landmarkCode: str
     landmarkName: str
-    score: float  # 置信度评分（基于马氏距离）
-    confidenceLevel: str  # 置信度等级: high, medium, low
+    score: float  # 经验归一化匹配分（非概率值）
+    confidenceLevel: str  # 兼容字段，表示匹配等级: high, medium, low
     mahalanobisDistance: float  # 马氏距离（越小越匹配）
 
 
 class SearchResponse(BaseModel):
     results: List[SearchResult]
-    lowConfidence: bool = False
+    lowConfidence: bool = False  # 兼容字段，表示所有候选均为低匹配等级
     message: str = "检索成功"
 
 
