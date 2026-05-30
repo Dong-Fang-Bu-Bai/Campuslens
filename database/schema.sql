@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS search_record (
     FOREIGN KEY (best_landmark_id) REFERENCES landmark(id)
 );
 
+-- M5 用户反馈表
+-- 注：fk_feedback_search_record 暂时移除，等 M1 实现 search_record 持久化后恢复
 CREATE TABLE IF NOT EXISTS feedback (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   search_record_id BIGINT NOT NULL,
@@ -67,8 +69,6 @@ CREATE TABLE IF NOT EXISTS feedback (
   comment VARCHAR(500),
   status VARCHAR(50) NOT NULL DEFAULT 'pending',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_feedback_search_record
-    FOREIGN KEY (search_record_id) REFERENCES search_record(id),
   CONSTRAINT fk_feedback_predicted_landmark
     FOREIGN KEY (predicted_landmark_id) REFERENCES landmark(id),
   CONSTRAINT fk_feedback_confirmed_landmark

@@ -256,12 +256,17 @@
                   补充说明
                   <textarea v-model="feedback.comment" rows="4" placeholder="例如：实际是学术大讲堂入口"></textarea>
                 </label>
-                <button class="primary-btn">
-                  <span class="btn-text">提交反馈</span>
+                <button class="primary-btn" :disabled="feedbackSubmitting" :class="{ 'is-loading': feedbackSubmitting }">
+                  <span class="btn-text">{{ feedbackSubmitting ? '提交中...' : '提交反馈' }}</span>
+                  <span class="btn-shine"></span>
                 </button>
                 <p v-if="feedbackMessage" class="success-text">
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
                   {{ feedbackMessage }}
+                </p>
+                <p v-if="feedbackError" class="error-text">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                  {{ feedbackError }}
                 </p>
               </form>
             </article>
@@ -353,6 +358,8 @@ const error = ref('')
 const initialView = new URLSearchParams(window.location.search).get('view')
 const activeView = ref(['results', 'map', 'feedback'].includes(initialView) ? initialView : 'results')
 const feedbackMessage = ref('')
+const feedbackError = ref('')
+const feedbackSubmitting = ref(false)
 const searchMeta = reactive({
   searchRecordId: 1,
   uploadImageUrl: '',
@@ -578,8 +585,16 @@ function openFeedback(item) {
   navigateToView('feedback')
 }
 
+function resetFeedbackForm() {
+  feedback.comment = ''
+  feedback.feedbackType = 'correct'
+  feedback.confirmedLandmarkId = feedback.predictedLandmarkId
+}
+
 async function submitFeedback() {
   feedbackMessage.value = ''
+  feedbackError.value = ''
+  feedbackSubmitting.value = true
   const payload = { ...feedback }
   try {
     const response = await fetch('/api/feedback', {
@@ -593,8 +608,11 @@ async function submitFeedback() {
     }
     const data = await response.json()
     feedbackMessage.value = `反馈已提交，记录编号：${data.feedbackId}`
+    resetFeedbackForm()
   } catch (err) {
-    feedbackMessage.value = err.message
+    feedbackError.value = err.message
+  } finally {
+    feedbackSubmitting.value = false
   }
 }
 </script>
