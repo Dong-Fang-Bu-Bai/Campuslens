@@ -13,6 +13,35 @@ call :check node "-v"
 call :check npm "-v"
 call :check docker "--version"
 
+where py >nul 2>nul
+if errorlevel 1 (
+  echo [MISSING] py is not available in PATH.
+) else (
+  echo [OK] py
+  py -3.10 --version
+  echo.
+)
+
+echo [CampusLens] Checking algorithm local files...
+if exist "%~dp0..\algorithm\.venv\Scripts\python.exe" (
+  echo [OK] algorithm\.venv\Scripts\python.exe
+  "%~dp0..\algorithm\.venv\Scripts\python.exe" --version
+) else (
+  echo [MISSING] algorithm\.venv\Scripts\python.exe is not available.
+)
+
+if exist "%~dp0..\algorithm\models\dinov2_model.pth" (
+  echo [OK] algorithm\models\dinov2_model.pth
+) else (
+  echo [MISSING] algorithm\models\dinov2_model.pth is not available.
+)
+
+if exist "%~dp0..\algorithm\.env" (
+  echo [OK] algorithm\.env
+) else (
+  echo [MISSING] algorithm\.env is not available.
+)
+
 echo.
 echo [CampusLens] Environment check finished.
 pause

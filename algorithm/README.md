@@ -6,6 +6,8 @@
 
 **本服务仅支持离线模式，必须预先准备 DINOv2 模型文件。**
 
+模型权重和索引产物不提交到 GitHub。`models/dinov2_model.pth` 需要按本 README 下载到本地；`data/faiss_index/landmark_index.faiss`、`metadata.pkl`、`landmark_stats.pkl` 由 `/api/v1/index/rebuild` 根据本地数据集自动生成。
+
 ## 🎯 核心特性
 
 - ✅ **纯离线运行**: 无需网络连接，所有资源本地加载
@@ -28,6 +30,12 @@
 如未准备模型，可从以下途径获取：
 - [Facebook DINOv2 官方仓库](https://github.com/facebookresearch/dinov2)
 - [HuggingFace Model Hub](https://huggingface.co/facebook/dinov2-base)
+
+本项目默认文件名为 `dinov2_model.pth`。如果下载的是官方 `dinov2_vitb14_pretrain.pth`，请保存或重命名为：
+
+```text
+algorithm/models/dinov2_model.pth
+```
 
 ### 2. 地标图片数据集（必需）
 
