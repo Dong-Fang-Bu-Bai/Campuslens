@@ -105,6 +105,81 @@ class ApiControllerTest {
                 }
                 """))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.status").value("pending"));
+        .andExpect(jsonPath("$.status").value("pending"))
+        .andExpect(jsonPath("$.feedbackId").isNumber());
+  }
+
+  @Test
+  void feedbackRejectsMissingType() throws Exception {
+    mockMvc.perform(post("/api/feedback")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "searchRecordId": 1,
+                  "predictedLandmarkId": 1,
+                  "feedbackType": ""
+                }
+                """))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void feedbackRejectsInvalidType() throws Exception {
+    mockMvc.perform(post("/api/feedback")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "searchRecordId": 1,
+                  "predictedLandmarkId": 1,
+                  "feedbackType": "invalid_type"
+                }
+                """))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void feedbackWrongRejectsWithoutConfirmed() throws Exception {
+    mockMvc.perform(post("/api/feedback")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "searchRecordId": 1,
+                  "predictedLandmarkId": 1,
+                  "feedbackType": "wrong"
+                }
+                """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("识别错误反馈需要提供 confirmedLandmarkId"));
+  }
+
+  @Test
+  void feedbackUncertainSucceeds() throws Exception {
+    mockMvc.perform(post("/api/feedback")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "searchRecordId": 2,
+                  "predictedLandmarkId": 1,
+                  "feedbackType": "uncertain",
+                  "comment": "不太确定"
+                }
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("pending"))
+        .andExpect(jsonPath("$.feedbackId").isNumber());
+  }
+
+  @Test
+  void adminFeedbackReturnsList() throws Exception {
+    mockMvc.perform(get("/api/admin/feedback"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$").isArray());
+  }
+
+  @Test
+  void searchFeedbackReturnsList() throws Exception {
+    mockMvc.perform(get("/api/search/1/feedback"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$").isArray());
   }
 }

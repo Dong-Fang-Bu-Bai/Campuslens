@@ -1,5 +1,6 @@
 package com.campuslens.controller;
 
+import com.campuslens.model.FeedbackRecord;
 import com.campuslens.model.FeedbackRequest;
 import com.campuslens.model.FeedbackResponse;
 import com.campuslens.model.HealthResponse;
@@ -62,5 +63,15 @@ public class ApiController {
   @PostMapping("/feedback")
   public FeedbackResponse feedback(@Valid @RequestBody FeedbackRequest request) {
     return feedbackService.submit(request);
+  }
+
+  @GetMapping("/admin/feedback")
+  public List<FeedbackRecord> listFeedback() {
+    return feedbackService.listAll();
+  }
+
+  @GetMapping("/search/{searchRecordId}/feedback")
+  public List<FeedbackRecord> searchFeedback(@PathVariable Long searchRecordId) {
+    return feedbackService.listBySearchRecordId(searchRecordId);
   }
 }

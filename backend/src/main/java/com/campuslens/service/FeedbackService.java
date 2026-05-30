@@ -1,15 +1,22 @@
 package com.campuslens.service;
 
+import com.campuslens.model.FeedbackRecord;
 import com.campuslens.model.FeedbackRequest;
 import com.campuslens.model.FeedbackResponse;
+import com.campuslens.repository.FeedbackRepository;
+import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.stereotype.Service;
 
 @Service
 public class FeedbackService {
   private static final Set<String> FEEDBACK_TYPES = Set.of("correct", "wrong", "uncertain");
-  private final AtomicLong feedbackId = new AtomicLong(1);
+
+  private final FeedbackRepository feedbackRepository;
+
+  public FeedbackService(FeedbackRepository feedbackRepository) {
+    this.feedbackRepository = feedbackRepository;
+  }
 
   public FeedbackResponse submit(FeedbackRequest request) {
     if (!FEEDBACK_TYPES.contains(request.feedbackType())) {
@@ -22,6 +29,22 @@ public class FeedbackService {
     if ("wrong".equals(request.feedbackType()) && request.confirmedLandmarkId() == null) {
       throw new IllegalArgumentException("识别错误反馈需要提供 confirmedLandmarkId");
     }
-    return new FeedbackResponse(feedbackId.getAndIncrement(), "pending", "反馈已记录，后续可进入后台审核");
+
+    FeedbackRecord record = feedbackRepository.save(
+        request.searchRecordId(),
+        request.predictedLandmarkId(),
+        request.confirmedLandmarkId(),
+        request.feedbackType(),
+        request.comment());
+
+    return new FeedbackResponse(record.id(), record.status(), "反馈已记录，后续可进入后台审核");
+  }
+
+  public List<FeedbackRecord> listAll() {
+    return feedbackRepository.findAll();
+  }
+
+  public List<FeedbackRecord> listBySearchRecordId(Long searchRecordId) {
+    return feedbackRepository.findBySearchRecordId(searchRecordId);
   }
 }
