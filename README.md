@@ -23,17 +23,17 @@ Campuslens/
 - 后端：Spring Boot + REST API
 - 算法服务：Python FastAPI
 - 数据库：MySQL
-- 图片与向量：本地目录、向量文件或 FAISS index 文件
-- 检索策略：DINOv2 提取图像特征，FAISS 索引执行余弦相似度检索
+- 图片与向量：本地目录、向量文件、地标统计参数文件
+- 检索策略：DINOv2 提取图像特征，按地标样本特征估计均值和协方差，使用马氏距离与 sigmoid 经验匹配分返回 Top-5
 - 地图能力：基于校园平面图做静态标注，不做实时导航和室内导航
 
 ## 本地演示启动
 
-Windows 下可以直接使用 `scripts/` 目录中的脚本启动和停止前后端：
+Windows 下可以直接使用 `scripts/` 目录中的脚本启动后端、前端和算法服务：
 
 ```powershell
-scripts\check-env.cmd
-scripts\start-dev.cmd
+scripts\1_check-env.cmd
+scripts\2_start-dev.cmd
 ```
 
 启动后访问：
@@ -41,15 +41,47 @@ scripts\start-dev.cmd
 ```text
 前端页面：http://localhost:5173
 后端健康检查：http://localhost:8080/api/health
+算法健康检查：http://localhost:8000/api/v1/health
+```
+
+本地演示默认使用 `demo` profile 的 H2 内存库，不依赖 MySQL，适合页面联调和答辩演示。算法服务需要本机准备模型文件和索引参数：
+
+```text
+algorithm/models/dinov2_model.pth
+algorithm/data/faiss_index/landmark_index.faiss
+algorithm/data/faiss_index/metadata.pkl
+algorithm/data/faiss_index/landmark_stats.pkl
+```
+
+模型权重和 `algorithm/data/faiss_index/` 下的索引产物不提交到 GitHub。模型文件按 `algorithm/README.md` 下载到本地；索引和统计参数在算法服务启动后通过 `POST /api/v1/index/rebuild` 自动生成。
+
+如需连接 MySQL，可设置 `CAMPUSLENS_BACKEND_PROFILE=mysql` 后再启动脚本。`start-database.cmd` 会优先使用 Windows PATH 中的 `docker`；如果 Windows 侧没有 Docker，但 WSL 中存在 `Ubuntu` 发行版且已配置 Docker Engine，则会自动通过 WSL 执行 `docker compose up -d mysql`。数据库首次创建容器数据卷时会自动执行 `database/schema.sql` 和 `database/seed_landmarks.sql`，初始化基础表和 L01-L10 地标数据。账号和密码仅用于本地开发，可通过 `.env` 覆盖；仓库只提交 `.env.example`。
+
+```powershell
+set CAMPUSLENS_BACKEND_PROFILE=mysql
+scripts\2_start-dev.cmd
+```
+
+如果使用 WSL Docker，需要先在 Ubuntu 中确认当前用户有 Docker daemon 权限：
+
+```bash
+sudo usermod -aG docker $USER
+```
+
+执行后在 Windows PowerShell 中重启 WSL，再重新运行启动脚本：
+
+```powershell
+wsl --shutdown
+scripts\2_start-dev.cmd
 ```
 
 停止由脚本启动的服务：
 
 ```powershell
-scripts\stop-dev.cmd
+scripts\3_stop-dev.cmd
 ```
 
-`stop-dev.cmd` 只读取 `.run/` 中的 PID 文件并停止本项目脚本启动的窗口，不会扫描端口或强行结束其他 Java、Node 进程。若服务是手动通过 `mvn spring-boot:run` 或 `npm run dev` 启动的，请直接关闭对应命令行窗口。
+`3_stop-dev.cmd` 只读取 `.run/` 中的 PID 文件并停止本项目脚本启动的窗口，不会扫描端口或强行结束其他 Java、Node 进程。若服务是手动通过 `mvn spring-boot:run` 或 `npm run dev` 启动的，请直接关闭对应命令行窗口。数据库可用 `docker compose stop mysql` 暂停，或用 `docker compose down` 停止容器；不要随意删除 volume，否则会清空本地数据库数据。
 
 ## 分支模型
 
@@ -68,7 +100,7 @@ scripts\stop-dev.cmd
 | --- | --- | --- | --- |
 | 马启凡 | M1 图片上传与地标检索主流程 | `feature/m1-search-maqifan` | 马启凡 |
 | 叶炳良 | M2 地标图像库与元数据管理 | `feature/m2-landmark-yebingliang` | 叶炳良 |
-| 周子栋 | M3 图像特征提取与向量索引服务 | `feature/m3-vision-zhouzidong` | 周子栋 |
+| 周子栋 | M3 图像特征提取与统计检索服务 | `feature/m3-vision-zhouzidong` | 周子栋 |
 | 洪传凯 | M4 检索结果展示与地图导览 | `feature/m4-result-map-hongchuankai` | 洪传凯 |
 | 庄子杰 | M5 用户反馈纠错与检索记录统计 | `feature/m5-feedback-zhuangzijie` | 庄子杰 |
 

@@ -8,10 +8,11 @@ set "PID_DIR=%ROOT%\.run"
 echo [CampusLens] Stopping services started by CampusLens scripts...
 call :stop_one backend
 call :stop_one frontend
+call :stop_one algorithm
 
 echo.
 echo [CampusLens] Stop command finished.
-echo [CampusLens] If port 8080 or 5173 is still occupied, check whether a service was started manually.
+echo [CampusLens] If port 8080, 5173, or 8000 is still occupied, check whether a service was started manually.
 pause
 exit /b 0
 

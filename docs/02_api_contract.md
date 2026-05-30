@@ -4,13 +4,13 @@
 
 ## 调用关系
 
-用户端调用 Spring Boot 后端接口；后端负责文件校验、业务记录和数据组装。图像特征提取与检索由后端调用 Python FastAPI 算法服务完成。第一周最小工程暂不连接 MySQL，也不直接调用算法服务，当前以演示 Top-5 验证接口和原型衔接。
+用户端调用 Spring Boot 后端接口；后端负责文件校验、业务记录和数据组装。图像特征提取与检索由后端调用 Python FastAPI 算法服务完成。第二周 V1 主流程已将上传接口接到算法服务，并通过 MySQL `landmark` 表读取 L01-L10 基础地标数据。
 
 ```text
 Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
                   |
                   v
-                MySQL + 图片目录 + 向量/索引文件
+                MySQL + 图片目录 + 特征/统计参数文件
 ```
 
 ## 用户端核心接口
@@ -32,7 +32,7 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 | `POST /api/admin/landmarks` | 新增地标 | M2 |
 | `PUT /api/admin/landmarks/{id}` | 修改地标 | M2 |
 | `POST /api/admin/landmarks/{id}/images` | 上传地标样本图片 | M2 |
-| `POST /api/admin/index/rebuild` | 重建索引 | M3 |
+| `POST /api/admin/index/rebuild` | 重建地标统计参数 | M3 |
 | `GET /api/admin/feedback` | 查看反馈记录 | M5 |
 
 ## 算法服务接口
@@ -42,8 +42,8 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 | 接口 | 说明 | 负责人 |
 | --- | --- | --- |
 | `POST /api/v1/search` | 接收上传图片文件，返回 Top-5 候选地标 | M3 周子栋 |
-| `POST /api/v1/index/rebuild` | 根据样本库重建 FAISS 向量索引 | M3 周子栋 |
-| `GET /api/v1/index/stats` | 查看当前索引状态、向量数量和维度 | M3 周子栋 |
+| `POST /api/v1/index/rebuild` | 根据样本库重建地标统计参数 | M3 周子栋 |
+| `GET /api/v1/index/stats` | 查看当前统计参数状态、样本数量和维度 | M3 周子栋 |
 | `GET /api/v1/health` | 算法服务健康检查 | M3 周子栋 |
 
 ## 字段命名规则
@@ -56,18 +56,19 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 ## Top-5 返回规则
 
 - 返回的是 Top-5 地标，不是 Top-5 图片。
-- 同一地标多张图片命中时，取最高相似度作为该地标得分。
-- 后端对外返回字段至少包含：`rank`、`landmarkId`、`landmarkCode`、`name`、`score`、`coverImageUrl`、`summary`、`locationText`、`mapX`、`mapY`。
-- 算法服务内部返回字段至少包含：`rank`、`landmarkCode`、`landmarkName`、`imagePath`、`imageFilename`、`score`，由 Spring Boot 后端补齐数据库中的 `landmarkId`、中文名称和简介等信息。
-- 如果最高相似度低于阈值，可以提示“未找到高置信度结果”，但仍展示候选 Top-5。
+- 每个地标根据样本特征估计均值向量和协方差矩阵，查询时计算马氏距离并换算为经验归一化匹配分。
+- Top-5 按 `score` 从高到低排序；`score` 越高，表示查询图越接近该地标特征分布。该分数用于排序和展示区分度，不具备概率或统计置信度含义。
+- 后端对外返回字段至少包含：`rank`、`landmarkId`、`landmarkCode`、`name`、`score`、`confidenceLevel`、`mahalanobisDistance`、`coverImageUrl`、`summary`、`locationText`、`mapX`、`mapY`。
+- 算法服务内部返回字段至少包含：`rank`、`landmarkCode`、`landmarkName`、`score`、`confidenceLevel`、`mahalanobisDistance`，由 Spring Boot 后端根据 `landmarkCode` 补齐数据库中的 `landmarkId`、中文名称、简介、代表图和地图坐标等信息。
+- 如果算法返回的候选均为低匹配等级，后端保留兼容字段 `lowConfidence=true` 并由前端提示需要人工核验；如果算法服务暂不可用，后端返回空候选结果、`lowConfidence=true` 和明确 `message`，不再伪造演示 Top-5。
 
 ## 图片上传规则
 
-- 第一周最小工程限制上传图片类型为 JPG、PNG、WebP。
+- 当前上传接口限制上传图片类型为 JPG、PNG、WebP。
 - 单张图片大小上限为 8MB。
 - 后端保存上传图后返回 `uploadImageUrl`，运行目录下的 `uploads/` 不提交到 Git。
-- 当前最小工程返回演示 Top-5 结果，第二周替换为调用算法服务并补齐真实检索记录口径。
-- 地标样本图片由成员手动采集、整理和上传到课程指定位置或本地数据目录，仓库只保留目录结构和采集规范。
+- 当前版本优先调用算法服务返回 Top-5 地标，并按 `landmarkCode` 补齐展示信息。
+- 地标样本图片由成员手动采集并整理到本地数据目录；原图按 `.gitignore` 排除，不直接提交 Git。当前样本数量记录见 `datasets/landmarks/sample_inventory.md`。
 
 ## 反馈规则
 
@@ -77,7 +78,11 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 | `wrong` | 用户确认系统识别错误 | 必填，用于记录正确地标 |
 | `uncertain` | 用户无法判断或结果不明确 | 可为空 |
 
+`correct` 和 `wrong` 反馈必须带 `predictedLandmarkId`，用于关联本次 SearchResponse 中的预测地标；`wrong` 必须额外带 `confirmedLandmarkId`。
+
 反馈提交后默认状态为 `pending`，第四周可扩展为后台审核、采纳、忽略和统计。
+
+当前 V1 只真实使用 `landmark` 表。`search_record` 和 `feedback` 表已在数据库脚本中预留，但运行时仍使用临时编号和 pending 响应，后续迭代再接入持久化。
 
 ## 错误码口径
 
@@ -87,4 +92,4 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 | `404` | 地标不存在、检索记录不存在 |
 | `409` | 数据冲突，例如重复地标编号 |
 | `500` | 后端内部错误 |
-| `502` | 算法服务不可用或返回异常 |
+| `502` | 预留给强依赖算法服务时使用；当前 V1 默认返回 `200`、空候选结果、`lowConfidence=true` 和明确 `message` |

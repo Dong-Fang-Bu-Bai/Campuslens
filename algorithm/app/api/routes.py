@@ -36,12 +36,12 @@ async def search_landmark(file: UploadFile = File(...)):
         if not results:
             raise HTTPException(status_code=404, detail="No similar landmarks found")
         
-        low_confidence = results[0]['score'] < Config.CONFIDENCE_THRESHOLD
+        low_confidence = all(r['confidenceLevel'] == 'low' for r in results)
         
         response_data = SearchResponse(
             results=results,
             lowConfidence=low_confidence,
-            message="Low confidence" if low_confidence else "Search successful"
+            message="Low match score, manual verification recommended" if low_confidence else "Search successful"
         )
         
         return JSONResponse(

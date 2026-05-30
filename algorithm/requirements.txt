@@ -19,6 +19,7 @@ Pillow==10.2.0
 
 # Data processing
 numpy==1.26.3
+scipy==1.12.0
 
 # Configuration and utilities
 pydantic==2.5.3

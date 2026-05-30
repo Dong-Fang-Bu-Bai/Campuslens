@@ -35,15 +35,13 @@ paths:
                   format: binary
       responses:
         "200":
-          description: 检索成功
+          description: 检索成功；若算法服务暂不可用，返回空候选结果、lowConfidence=true 并在 message 中说明原因
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/SearchResponse"
         "400":
           description: 图片格式或参数错误
-        "502":
-          description: 算法服务不可用
   /api/landmarks:
     get:
       summary: 获取地标列表
@@ -158,11 +156,11 @@ paths:
           description: 上传成功
   /api/admin/index/rebuild:
     post:
-      summary: 重建特征索引
+      summary: 重建地标统计参数
       tags: [Admin]
       responses:
         "200":
-          description: 已提交索引重建任务
+          description: 已提交统计参数重建任务
   /api/admin/feedback:
     get:
       summary: 查看反馈记录
@@ -183,6 +181,7 @@ components:
           type: string
         lowConfidence:
           type: boolean
+          description: 兼容字段；true 表示所有候选均为低匹配等级，或算法服务暂不可用
         message:
           type: string
         results:
@@ -191,7 +190,7 @@ components:
             $ref: "#/components/schemas/SearchResult"
     SearchResult:
       type: object
-      required: [rank, landmarkId, landmarkCode, name, score]
+      required: [rank, landmarkId, landmarkCode, name, score, confidenceLevel]
       properties:
         rank:
           type: integer
@@ -211,11 +210,29 @@ components:
         score:
           type: number
           format: double
+          description: 基于马氏距离 sigmoid 归一化得到的经验匹配分，仅用于排序、展示区分度和辅助判断，不具备概率或统计置信度含义
           example: 0.86
+        confidenceLevel:
+          type: string
+          description: 兼容字段，算法服务给出的经验匹配等级
+          enum: [high, medium, low]
+          example: high
+        mahalanobisDistance:
+          type: number
+          format: double
+          nullable: true
+          description: 查询图到候选地标特征分布的马氏距离，数值越小表示越接近
+          example: 4.3239
         coverImageUrl:
           type: string
         summary:
           type: string
+        locationText:
+          type: string
+        mapX:
+          type: number
+        mapY:
+          type: number
     LandmarkSummary:
       type: object
       properties:
@@ -298,6 +315,9 @@ components:
         status:
           type: string
           example: pending
+        message:
+          type: string
+          example: 反馈已记录，后续可进入后台审核
     LandmarkCreateRequest:
       type: object
       required: [code, name]
