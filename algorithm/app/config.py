@@ -23,6 +23,7 @@ class Config:
     BATCH_SIZE = int(os.getenv("BATCH_SIZE", "32"))
     
     TOP_K_RESULTS = int(os.getenv("TOP_K_RESULTS", "5"))
+    # Legacy compatibility setting. Current FAISS scoring uses app.utils.scoring thresholds.
     CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.5"))
     
     ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png"}

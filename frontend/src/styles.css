@@ -648,7 +648,7 @@ h3 {
   font-feature-settings: "tnum";
 }
 
-/* 极细拉丝置信度进度条 */
+/* 极细拉丝匹配分进度条 */
 .confidence-container {
   margin: 12px 0 16px;
   display: flex;

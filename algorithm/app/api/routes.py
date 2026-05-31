@@ -41,7 +41,7 @@ async def search_landmark(file: UploadFile = File(...)):
         response_data = SearchResponse(
             results=results,
             lowConfidence=low_confidence,
-            message="Low confidence, manual verification recommended" if low_confidence else "Search successful"
+            message="Low match score, manual verification recommended" if low_confidence else "Search successful"
         )
         
         return JSONResponse(

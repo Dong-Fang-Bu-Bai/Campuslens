@@ -4,12 +4,7 @@ from pathlib import Path
 from typing import List, Tuple
 import pickle
 from app.config import Config
-
-try:
-    from scipy import stats as scipy_stats
-    HAS_SCIPY = True
-except ImportError:
-    HAS_SCIPY = False
+from app.utils.scoring import mahalanobis_match_score, match_level
 
 
 class FAISSManager:
@@ -181,15 +176,15 @@ class FAISSManager:
     def search_landmarks_by_category(self, query_vector: np.ndarray, top_k: int = 5, confidence_threshold: float = 0.7) -> List[dict]:
         """
         基于地标类别的搜索
-        利用地标统计特征进行自适应评判
+        利用地标统计特征计算经验匹配分
         
         Args:
             query_vector: 查询图片的特征向量
             top_k: 返回的地标数量
-            confidence_threshold: 置信度阈值
+            confidence_threshold: 兼容旧调用，当前不参与匹配分计算
         
         Returns:
-            地标列表，包含统计信息和自适应评分
+            地标列表，包含马氏距离和经验归一化匹配分
         """
         if self.index is None or self.index.ntotal == 0:
             raise ValueError("FAISS index is empty, please rebuild index first")
@@ -206,7 +201,7 @@ class FAISSManager:
         search_k = min(max(top_k * 5, 30), self.index.ntotal)
         _, indices = self.index.search(query_norm.reshape(1, -1), search_k)
         
-        # 对每个候选地标计算马氏距离评分（重排序）
+        # 对每个候选地标计算马氏距离和经验匹配分（重排序）
         results = []
         for idx in indices[0]:
             if idx == -1:  # FAISS 返回 -1 表示无结果
@@ -215,13 +210,11 @@ class FAISSManager:
             landmark_code = self.landmark_codes[idx]
             stats = self.landmark_stats[landmark_code]
             
-            # 计算基于马氏距离的置信度评分
-            score = self._calculate_mahalanobis_score(query_vector, stats)
-            
             # 计算马氏距离
             mahalanobis_dist = self._compute_mahalanobis_distance(query_vector, stats)
             
-            # 计算置信度等级
+            # 计算基于马氏距离的经验匹配分与等级
+            score = mahalanobis_match_score(mahalanobis_dist)
             confidence_level = self._get_confidence_level(score, stats)
             
             results.append({
@@ -233,7 +226,7 @@ class FAISSManager:
                 "mahalanobisDistance": round(float(mahalanobis_dist), 4)
             })
         
-        # 按马氏距离评分排序（降序）
+        # 按经验匹配分排序（降序）
         results.sort(key=lambda x: x["score"], reverse=True)
         
         # 取 Top-K 并更新排名
@@ -256,40 +249,20 @@ class FAISSManager:
     
     def _calculate_mahalanobis_score(self, query_vector: np.ndarray, stats: dict) -> float:
         """
-        基于马氏距离计算自适应评分
+        基于马氏距离计算经验匹配分（Sigmoid 归一化）
         
         核心思想：
-        - 马氏距离小 → 查询点在该地标分布内 → 高置信度
-        - 马氏距离大 → 查询点偏离地标分布 → 低置信度
-        
-        将马氏距离转换为 [0, 1] 范围的分数：
-        score = exp(-d² / (2 * χ²临界值))
-        
-        其中 χ²临界值 对应于卡方分布的置信区间
+        - 马氏距离越小，查询图越接近候选地标的特征分布中心
+        - 使用对数变换压缩距离范围，再用 Sigmoid 映射到 [0, 1]
+        - score 仅用于排序、展示区分度和辅助判断，不具备概率或统计置信度含义
         """
         mahalanobis_dist = self._compute_mahalanobis_distance(query_vector, stats)
-        
-        # 自由度为特征维度数（768维）
-        degrees_of_freedom = len(query_vector)
-        
-        # 使用卡方分布的95%分位数作为参考
-        if HAS_SCIPY:
-            chi2_critical = scipy_stats.chi2.ppf(0.95, df=degrees_of_freedom)
-        else:
-            # 近似值：对于大自由度，χ²(df) ≈ df
-            chi2_critical = degrees_of_freedom
-        
-        # 将马氏距离的平方转换为概率分数
-        # 使用指数衰减函数：score = exp(-d² / (2 * χ²临界值))
-        squared_distance = mahalanobis_dist ** 2
-        score = np.exp(-squared_distance / (2.0 * chi2_critical))
-        
-        return float(score)
+        return mahalanobis_match_score(mahalanobis_dist)
     
     def _calculate_adaptive_score(self, raw_score: float, stats: dict) -> float:
         """
         【已废弃】旧的自适应评分方法
-        现在使用基于马氏距离的方法
+        当前检索使用基于马氏距离的经验匹配分
         """
         avg_std = np.mean(stats["std"])
         adjustment_factor = self._get_adjustment_factor(stats["std"])
@@ -333,24 +306,6 @@ class FAISSManager:
     
     def _get_confidence_level(self, score: float, stats: dict) -> str:
         """
-        根据自适应评分和地标特征确定置信度等级
+        根据经验匹配分确定展示等级
         """
-        compactness = self._calculate_compactness(stats["std"])
-        
-        # 不同紧凑程度使用不同的阈值
-        thresholds = {
-            "very_compact": 0.90,   # 非常紧凑：需要很高分数
-            "compact": 0.85,        # 紧凑：高分数
-            "moderate": 0.80,       # 中等：中等分数
-            "dispersed": 0.75,      # 分散：较低分数
-            "very_dispersed": 0.70  # 非常分散：更低分数
-        }
-        
-        threshold = thresholds.get(compactness, 0.80)
-        
-        if score >= threshold:
-            return "high"
-        elif score >= threshold - 0.1:
-            return "medium"
-        else:
-            return "low"
+        return match_level(score)

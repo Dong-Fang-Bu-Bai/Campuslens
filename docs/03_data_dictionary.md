@@ -61,8 +61,8 @@
 | `uploadImageUrl` | String | 用户上传图片路径 |
 | `topResultsJson` | Text | Top-5 结果快照 |
 | `bestLandmarkId` | Long | 最高分候选地标 |
-| `bestScore` | Decimal | 最高置信度评分 |
-| `status` | String | 成功、失败、低置信度 |
+| `bestScore` | Decimal | 最高经验匹配分 |
+| `status` | String | 成功、失败、低匹配等级 |
 | `createdAt` | DateTime | 检索时间 |
 
 ## Feedback 用户反馈

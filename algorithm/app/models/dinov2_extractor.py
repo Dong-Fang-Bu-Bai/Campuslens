@@ -89,8 +89,10 @@ class DINOv2Extractor:
             
             if missing_keys:
                 print(f"  ⚠️  缺少的键: {len(missing_keys)} 个")
+                print(f"     前5个缺失键: {missing_keys[:5]}")
             if unexpected_keys:
                 print(f"  ⚠️  多余的键: {len(unexpected_keys)} 个")
+                print(f"     前5个多余键: {unexpected_keys[:5]}")
             
             print("✅ 成功加载 DINOv2 ViT-B/14 模型（纯 PyTorch 实现）")
             return model
