@@ -36,6 +36,12 @@ scripts\1_check-env.cmd
 scripts\2_start-dev.cmd
 ```
 
+默认启动流程会使用本机 Docker Desktop 启动 MySQL，并以 `mysql` profile 启动后端。如果需要做完整联调验收，直接运行：
+
+```powershell
+scripts\4_verify-dev.cmd
+```
+
 启动后访问：
 
 ```text
@@ -44,7 +50,7 @@ scripts\2_start-dev.cmd
 算法健康检查：http://localhost:8000/api/v1/health
 ```
 
-本地演示默认使用 `demo` profile 的 H2 内存库，不依赖 MySQL，适合页面联调和答辩演示。算法服务需要本机准备模型文件和索引参数：
+本地演示默认依赖 MySQL。算法服务需要本机准备模型文件和索引参数：
 
 ```text
 algorithm/models/dinov2_model.pth
@@ -55,12 +61,13 @@ algorithm/data/faiss_index/landmark_stats.pkl
 
 模型权重和 `algorithm/data/faiss_index/` 下的索引产物不提交到 GitHub。模型文件按 `algorithm/README.md` 下载到本地；索引和统计参数在算法服务启动后通过 `POST /api/v1/index/rebuild` 自动生成。
 
-如需连接 MySQL，可设置 `CAMPUSLENS_BACKEND_PROFILE=mysql` 后再启动脚本。`start-database.cmd` 会优先使用 Windows PATH 中的 `docker`；如果 Windows 侧没有 Docker，但 WSL 中存在 `Ubuntu` 发行版且已配置 Docker Engine，则会自动通过 WSL 执行 `docker compose up -d mysql`。数据库首次创建容器数据卷时会自动执行 `database/schema.sql` 和 `database/seed_landmarks.sql`，初始化基础表和 L01-L10 地标数据。账号和密码仅用于本地开发，可通过 `.env` 覆盖；仓库只提交 `.env.example`。
+MySQL 是默认启动路径，不需要额外设置 `CAMPUSLENS_BACKEND_PROFILE`。`start-database.cmd` 会优先使用 Windows 原生 Docker Desktop，并内置识别本机推荐路径 `D:\Tools\Docker\Docker\resources\bin`；如果 Docker daemon 未就绪，脚本会尝试启动 `D:\Tools\Docker\Docker\Docker Desktop.exe` 并等待就绪。如果 Windows 侧没有 Docker，但 WSL 中存在 `Ubuntu` 发行版且已配置 Docker Engine，则会自动通过 WSL 执行 `docker compose up -d mysql`。数据库首次创建容器数据卷时会自动执行 `database/schema.sql` 和 `database/seed_landmarks.sql`，初始化基础表和 L01-L10 地标数据。账号和密码仅用于本地开发，可通过 `.env` 覆盖；仓库只提交 `.env.example`。
 
 ```powershell
-set CAMPUSLENS_BACKEND_PROFILE=mysql
 scripts\2_start-dev.cmd
 ```
+
+当前本机已验证 Docker Desktop 程序安装在 `D:\Tools\Docker\Docker`，Docker Desktop 的 WSL 数据盘通过目录联接放在 `D:\DockerData\wsl`。项目脚本不依赖这个路径必须存在；存在时会优先使用它。
 
 如果使用 WSL Docker，需要先在 Ubuntu 中确认当前用户有 Docker daemon 权限：
 

@@ -272,6 +272,71 @@ h3 {
   cursor: not-allowed;
 }
 
+.secondary-btn {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+  color: #dbeafe;
+  background: #101827;
+  font-size: 12.5px;
+  font-weight: 700;
+  transition: var(--transition-smooth);
+}
+
+.secondary-btn:hover {
+  border-color: rgba(96, 165, 250, 0.35);
+  background: #142036;
+  color: #ffffff;
+}
+
+.inline-action {
+  width: auto;
+  margin-top: 18px;
+  padding: 0 14px;
+}
+
+.login-panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.login-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.login-title strong {
+  color: #e2e8f0;
+}
+
+.login-panel input {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+  background: #080c14;
+  color: #ffffff;
+  padding: 0 10px;
+  font-size: 12.5px;
+  outline: none;
+}
+
+.mini-message {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
 /* 按钮科幻无限横向扫描光轨 */
 .primary-btn.is-loading .btn-shine {
   position: absolute;
@@ -1217,7 +1282,157 @@ h3 {
 }
 
 /* ==========================================
-   10. 顶级曜石毛玻璃详情弹窗 (Modal CSS)
+   10. V2 管理后台
+   ========================================= */
+.admin-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+}
+
+.admin-card {
+  padding: 28px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.admin-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.admin-card-head h3 {
+  margin: 0;
+}
+
+.admin-card-head button,
+.admin-actions button {
+  min-height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+  background: #111827;
+  color: #cbd5e1;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-card-head button:hover,
+.admin-actions button:hover {
+  border-color: rgba(96, 165, 250, 0.35);
+  color: #ffffff;
+}
+
+.admin-table {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-row {
+  display: grid;
+  grid-template-columns: 70px minmax(160px, 1fr) 120px 100px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.035);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.012);
+  color: #cbd5e1;
+  font-size: 12.5px;
+}
+
+.admin-row-head {
+  color: #64748b;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.admin-row small {
+  display: block;
+  color: #64748b;
+  margin-top: 3px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  width: fit-content;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.12);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.status-badge.low_confidence,
+.status-badge.empty_result,
+.status-badge.pending {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.14);
+}
+
+.status-badge.algorithm_unavailable,
+.status-badge.ignored {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.14);
+}
+
+.status-badge.success,
+.status-badge.accepted {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.14);
+}
+
+.feedback-admin-list {
+  display: grid;
+  gap: 12px;
+}
+
+.feedback-admin-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.035);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.012);
+}
+
+.feedback-admin-item strong {
+  color: #ffffff;
+  font-size: 13.5px;
+}
+
+.feedback-admin-item p,
+.feedback-admin-item small {
+  display: block;
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.admin-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ==========================================
+   11. 顶级曜石毛玻璃详情弹窗 (Modal CSS)
    ========================================= */
 .modal-overlay {
   position: fixed;
@@ -1432,8 +1647,14 @@ h3 {
 @media (max-width: 980px) {
   .results-layout,
   .map-layout,
-  .feedback-layout {
+  .feedback-layout,
+  .feedback-admin-item {
     grid-template-columns: 1fr;
+  }
+
+  .admin-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 }
 
@@ -1451,6 +1672,10 @@ h3 {
   .result-card {
     grid-template-columns: 1fr;
     gap: 16px;
+  }
+
+  .admin-row {
+    grid-template-columns: 1fr;
   }
   
   .rank {

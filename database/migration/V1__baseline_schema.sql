@@ -1,6 +1,3 @@
--- CampusLens initial schema draft.
--- Field names use snake_case in database and camelCase in JSON APIs.
-
 CREATE TABLE IF NOT EXISTS landmark (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   code VARCHAR(16) NOT NULL UNIQUE,

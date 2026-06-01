@@ -3,18 +3,12 @@ setlocal
 chcp 65001 >nul
 
 set "ROOT=%~dp0.."
-if "%CAMPUSLENS_BACKEND_PROFILE%"=="" set "CAMPUSLENS_BACKEND_PROFILE=demo"
+if "%CAMPUSLENS_BACKEND_PROFILE%"=="" set "CAMPUSLENS_BACKEND_PROFILE=mysql"
 
 if /I "%CAMPUSLENS_BACKEND_PROFILE%"=="mysql" (
-  call "%~dp0start-database.cmd"
-  if errorlevel 1 (
-    echo.
-    echo [CampusLens] Database startup failed. Install Docker Desktop, configure WSL Docker, or start MySQL manually before launching backend.
-    pause
-    exit /b 1
-  )
+  echo [CampusLens] Using default backend profile "mysql"; backend startup will ensure MySQL is ready.
 ) else (
-  echo [CampusLens] Using backend profile "%CAMPUSLENS_BACKEND_PROFILE%"; skipping MySQL startup.
+  echo [CampusLens] Using explicit backend profile "%CAMPUSLENS_BACKEND_PROFILE%"; skipping MySQL startup.
 )
 echo.
 call "%~dp0start-backend.cmd"

@@ -1,6 +1,5 @@
 package com.campuslens.service;
 
-import com.campuslens.model.LandmarkDetail;
 import com.campuslens.model.SearchResponse;
 import com.campuslens.model.SearchResult;
 import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResponse;
@@ -15,7 +14,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -25,31 +23,52 @@ public class SearchService {
   private static final long MAX_FILE_SIZE = 8L * 1024 * 1024;
   private final LandmarkService landmarkService;
   private final AlgorithmSearchClient algorithmSearchClient;
-  private final AtomicLong searchRecordId = new AtomicLong(1);
+  private final SearchRecordService searchRecordService;
 
-  public SearchService(LandmarkService landmarkService, AlgorithmSearchClient algorithmSearchClient) {
+  public SearchService(
+      LandmarkService landmarkService,
+      AlgorithmSearchClient algorithmSearchClient,
+      SearchRecordService searchRecordService) {
     this.landmarkService = landmarkService;
     this.algorithmSearchClient = algorithmSearchClient;
+    this.searchRecordService = searchRecordService;
   }
 
   public SearchResponse search(MultipartFile file) {
     validate(file);
     String uploadUrl = save(file);
-    long currentSearchRecordId = searchRecordId.getAndIncrement();
     try {
       AlgorithmSearchResponse algorithmResponse = algorithmSearchClient.search(file);
       List<SearchResult> results = buildAlgorithmResults(algorithmResponse);
       if (results.isEmpty()) {
-        return unavailableResponse(currentSearchRecordId, uploadUrl, "算法服务未返回可匹配的 L01-L10 地标，请检查样本索引和 landmarkCode 映射。");
+        return recordedResponse(
+            uploadUrl,
+            true,
+            "算法服务未返回可匹配的 L01-L10 地标，请检查样本索引和 landmarkCode 映射。",
+            "empty_result",
+            results);
       }
+      boolean lowConfidence = algorithmResponse.lowConfidence();
+      String message = normalizeMessage(algorithmResponse.message());
       return new SearchResponse(
-          currentSearchRecordId,
+          searchRecordService.create(
+              uploadUrl,
+              results,
+              lowConfidence,
+              message,
+              lowConfidence ? "low_confidence" : "success",
+              "guest"),
           uploadUrl,
-          algorithmResponse.lowConfidence(),
-          normalizeMessage(algorithmResponse.message()),
+          lowConfidence,
+          message,
           results);
     } catch (AlgorithmSearchException ex) {
-      return unavailableResponse(currentSearchRecordId, uploadUrl, "算法服务暂不可用，未生成候选地标。原因：" + ex.getMessage());
+      return recordedResponse(
+          uploadUrl,
+          true,
+          "算法服务暂不可用，未生成候选地标。原因：" + ex.getMessage(),
+          "algorithm_unavailable",
+          List.of());
     }
   }
 
@@ -126,13 +145,18 @@ public class SearchService {
             item.mapY()));
   }
 
-  private SearchResponse unavailableResponse(long currentSearchRecordId, String uploadUrl, String message) {
+  private SearchResponse recordedResponse(
+      String uploadUrl,
+      boolean lowConfidence,
+      String message,
+      String status,
+      List<SearchResult> results) {
     return new SearchResponse(
-        currentSearchRecordId,
+        searchRecordService.create(uploadUrl, results, lowConfidence, message, status, "guest"),
         uploadUrl,
-        true,
+        lowConfidence,
         message,
-        List.of());
+        results);
   }
 
   private double clampScore(double score) {

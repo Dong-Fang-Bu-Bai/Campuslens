@@ -53,7 +53,7 @@
 
 ## SearchRecord 检索记录
 
-第二周 V1 已建表预留，当前运行时 `searchRecordId` 仍由后端临时生成；持久化计划放到后续迭代。
+第三周 V2 已接入运行时持久化。`POST /api/search/upload` 保存上传图后调用算法服务，并将检索状态、Top-5 快照和游客身份写入该表，接口返回的 `searchRecordId` 来自数据库主键。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -63,11 +63,14 @@
 | `bestLandmarkId` | Long | 最高分候选地标 |
 | `bestScore` | Decimal | 最高经验匹配分 |
 | `status` | String | 成功、失败、低匹配等级 |
+| `lowConfidence` | Boolean | 是否需要人工核验 |
+| `message` | String | 检索提示或异常说明 |
+| `guestId` | String | 未登录用户统一记录为 `guest` |
 | `createdAt` | DateTime | 检索时间 |
 
 ## Feedback 用户反馈
 
-第二周 V1 已建表预留，当前运行时 `feedbackId` 仍由后端临时生成，接口返回 `pending` 状态；审核、采纳和统计计划放到后续迭代。
+第三周 V2 已接入运行时持久化。提交反馈时会校验 `searchRecordId` 是否存在，并要求 `predictedLandmarkId` 来自本次检索结果，保证反馈和检索记录能闭环追踪。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -79,6 +82,7 @@
 | `comment` | String | 用户说明 |
 | `status` | String | 待处理、已采纳、已忽略 |
 | `createdAt` | DateTime | 提交时间 |
+| `updatedAt` | DateTime | 状态更新时间 |
 
 `feedbackType` 对外接口取值为 `correct`、`wrong`、`uncertain`。数据库可先保存同名字符串，后续如需要中文展示由前端或后台管理页面转换。
 
@@ -88,7 +92,7 @@
 
 ## AdminUser 管理员
 
-管理员端不是核心功能，账号体系可简化。
+第三周 V2 管理员端为本地演示最小实现，账号体系可简化。当前种子账号为 `admin/admin`，`passwordHash` 字段暂存演示口令，后续迭代再替换为加密摘要和完整权限控制。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -97,3 +101,14 @@
 | `passwordHash` | String | 密码哈希 |
 | `role` | String | 角色 |
 | `enabled` | Boolean | 是否启用 |
+| `createdAt` | DateTime | 创建时间 |
+
+## Flyway 迁移
+
+第三周 V2 使用 `database/migration/` 管理表结构和基础种子数据。
+
+| 脚本 | 说明 |
+| --- | --- |
+| `V1__baseline_schema.sql` | 创建地标、样本图、特征、检索记录、反馈和管理员表 |
+| `V2__v2_record_feedback_admin_fields.sql` | 为既有库补齐 V2 检索记录、反馈更新时间和管理员创建时间字段 |
+| `V3__seed_landmarks_and_admin.sql` | 写入 L01-L10 地标元数据和 `admin/admin` 演示账号 |

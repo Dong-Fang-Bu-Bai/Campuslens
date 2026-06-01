@@ -92,6 +92,38 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FeedbackResponse"
+  /api/admin/auth/login:
+    post:
+      summary: 管理员轻量登录
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminLoginRequest"
+      responses:
+        "200":
+          description: 登录成功；V2 使用 admin/admin 本地演示账号
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminLoginResponse"
+        "400":
+          description: 账号或密码错误
+  /api/admin/search-records:
+    get:
+      summary: 查看最近检索记录
+      tags: [Admin]
+      responses:
+        "200":
+          description: 最近 50 条检索记录
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminSearchRecord"
   /api/admin/landmarks:
     post:
       summary: 新增地标
@@ -168,6 +200,36 @@ paths:
       responses:
         "200":
           description: 反馈列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminFeedbackRecord"
+  /api/admin/feedback/{id}/status:
+    post:
+      summary: 更新反馈处理状态
+      tags: [Admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackStatusRequest"
+      responses:
+        "200":
+          description: 状态更新成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackResponse"
 components:
   schemas:
     SearchResponse:
@@ -318,6 +380,98 @@ components:
         message:
           type: string
           example: 反馈已记录，后续可进入后台审核
+    FeedbackStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending, accepted, ignored]
+    AdminLoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: admin
+        password:
+          type: string
+          example: admin
+    AdminLoginResponse:
+      type: object
+      properties:
+        loggedIn:
+          type: boolean
+        username:
+          type: string
+        role:
+          type: string
+        message:
+          type: string
+    AdminSearchRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        uploadImageUrl:
+          type: string
+        bestLandmarkName:
+          type: string
+          nullable: true
+        bestScore:
+          type: number
+          format: double
+          nullable: true
+        status:
+          type: string
+          enum: [success, low_confidence, empty_result, algorithm_unavailable]
+        lowConfidence:
+          type: boolean
+        message:
+          type: string
+        guestId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    AdminFeedbackRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        searchRecordId:
+          type: integer
+          format: int64
+        predictedLandmarkId:
+          type: integer
+          format: int64
+          nullable: true
+        predictedLandmarkName:
+          type: string
+          nullable: true
+        confirmedLandmarkId:
+          type: integer
+          format: int64
+          nullable: true
+        confirmedLandmarkName:
+          type: string
+          nullable: true
+        feedbackType:
+          type: string
+          enum: [correct, wrong, uncertain]
+        comment:
+          type: string
+        status:
+          type: string
+          enum: [pending, accepted, ignored]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     LandmarkCreateRequest:
       type: object
       required: [code, name]

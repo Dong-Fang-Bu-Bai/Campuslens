@@ -141,3 +141,10 @@ ON DUPLICATE KEY UPDATE
   map_x = VALUES(map_x),
   map_y = VALUES(map_y),
   cover_image_url = VALUES(cover_image_url);
+
+INSERT INTO admin_user (username, password_hash, role, enabled)
+VALUES ('admin', 'admin', 'admin', TRUE)
+ON DUPLICATE KEY UPDATE
+  password_hash = VALUES(password_hash),
+  role = VALUES(role),
+  enabled = VALUES(enabled);

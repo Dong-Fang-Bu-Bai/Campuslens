@@ -67,6 +67,7 @@ class ApiControllerTest {
 
     mockMvc.perform(multipart("/api/search/upload").file(file))
         .andExpect(status().isOk())
+        .andExpect(jsonPath("$.searchRecordId").isNumber())
         .andExpect(jsonPath("$.message").value("算法服务检索成功"))
         .andExpect(jsonPath("$.results.length()").value(5))
         .andExpect(jsonPath("$.results[0].landmarkCode").value("L03"))
@@ -93,18 +94,51 @@ class ApiControllerTest {
 
   @Test
   void feedbackReturnsPending() throws Exception {
+    when(algorithmSearchClient.search(any())).thenReturn(new AlgorithmSearchResponse(
+        List.of(new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12)),
+        false,
+        "Search successful"));
+
+    MockMultipartFile file = new MockMultipartFile(
+        "file",
+        "sample.jpg",
+        MediaType.IMAGE_JPEG_VALUE,
+        new byte[] {1, 2, 3});
+
+    String searchResponse = mockMvc.perform(multipart("/api/search/upload").file(file))
+        .andExpect(status().isOk())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+    long searchRecordId = Long.parseLong(searchResponse.replaceAll(".*\"searchRecordId\":(\\d+).*", "$1"));
+
     mockMvc.perform(post("/api/feedback")
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
-                  "searchRecordId": 1,
+                  "searchRecordId": %d,
                   "predictedLandmarkId": 1,
                   "confirmedLandmarkId": 1,
                   "feedbackType": "correct",
                   "comment": "识别正确"
                 }
-                """))
+                """.formatted(searchRecordId)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("pending"));
+  }
+
+  @Test
+  void adminLoginAndFeedbackStatusWork() throws Exception {
+    mockMvc.perform(post("/api/admin/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "username": "admin",
+                  "password": "admin"
+                }
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.loggedIn").value(true))
+        .andExpect(jsonPath("$.role").value("admin"));
   }
 }

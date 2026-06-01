@@ -4,7 +4,7 @@
 
 ## 调用关系
 
-用户端调用 Spring Boot 后端接口；后端负责文件校验、业务记录和数据组装。图像特征提取与检索由后端调用 Python FastAPI 算法服务完成。第二周 V1 主流程已将上传接口接到算法服务，并通过 MySQL `landmark` 表读取 L01-L10 基础地标数据。
+用户端调用 Spring Boot 后端接口；后端负责文件校验、业务记录和数据组装。图像特征提取与检索由后端调用 Python FastAPI 算法服务完成。第三周 V2 主流程已将上传接口接到算法服务，并通过 MySQL `landmark`、`search_record` 和 `feedback` 表保存可追溯记录。
 
 ```text
 Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
@@ -25,15 +25,18 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 
 ## 后台辅助接口
 
-管理员端不是核心演示主线，后台操作可以通过简化页面、接口测试工具或后端代码维护。
+第三周 V2 提供最小管理员后台入口。管理员账号为本地演示账号 `admin/admin`，只用于查看检索记录、查看反馈记录和处理反馈状态，不包含密码加密、权限分级和操作审计。
 
 | 接口 | 说明 | 负责人 |
 | --- | --- | --- |
+| `POST /api/admin/auth/login` | 管理员轻量登录 | M1 / M4 |
+| `GET /api/admin/search-records` | 查看最近检索记录 | M1 / M4 |
 | `POST /api/admin/landmarks` | 新增地标 | M2 |
 | `PUT /api/admin/landmarks/{id}` | 修改地标 | M2 |
 | `POST /api/admin/landmarks/{id}/images` | 上传地标样本图片 | M2 |
 | `POST /api/admin/index/rebuild` | 重建地标统计参数 | M3 |
 | `GET /api/admin/feedback` | 查看反馈记录 | M5 |
+| `POST /api/admin/feedback/{id}/status` | 将反馈状态更新为 `pending`、`accepted` 或 `ignored` | M5 |
 
 ## 算法服务接口
 
@@ -61,6 +64,7 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 - 后端对外返回字段至少包含：`rank`、`landmarkId`、`landmarkCode`、`name`、`score`、`confidenceLevel`、`mahalanobisDistance`、`coverImageUrl`、`summary`、`locationText`、`mapX`、`mapY`。
 - 算法服务内部返回字段至少包含：`rank`、`landmarkCode`、`landmarkName`、`score`、`confidenceLevel`、`mahalanobisDistance`，由 Spring Boot 后端根据 `landmarkCode` 补齐数据库中的 `landmarkId`、中文名称、简介、代表图和地图坐标等信息。
 - 如果算法返回的候选均为低匹配等级，后端保留兼容字段 `lowConfidence=true` 并由前端提示需要人工核验；如果算法服务暂不可用，后端返回空候选结果、`lowConfidence=true` 和明确 `message`，不再伪造演示 Top-5。
+- 每次上传都会写入 `search_record`。记录状态取值为 `success`、`low_confidence`、`empty_result`、`algorithm_unavailable`，并保存上传图路径、Top-5 快照、最高分候选、最高分、提示信息和 `guest` 游客身份。
 
 ## 图片上传规则
 
@@ -80,9 +84,11 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 
 `correct` 和 `wrong` 反馈必须带 `predictedLandmarkId`，用于关联本次 SearchResponse 中的预测地标；`wrong` 必须额外带 `confirmedLandmarkId`。
 
-反馈提交后默认状态为 `pending`，第四周可扩展为后台审核、采纳、忽略和统计。
+反馈提交前会校验 `searchRecordId` 是否存在，并校验 `predictedLandmarkId` 是否来自本次 Top-5 结果。反馈提交后写入 `feedback` 表，默认状态为 `pending`。后台可将状态更新为 `accepted` 或 `ignored`，第四周再扩展采纳后的样本更新、统计和审核记录。
 
-当前 V1 只真实使用 `landmark` 表。`search_record` 和 `feedback` 表已在数据库脚本中预留，但运行时仍使用临时编号和 pending 响应，后续迭代再接入持久化。
+## 数据库迁移口径
+
+第三周 V2 引入 Flyway，迁移脚本位于 `database/migration/`。Spring Boot 启动时从该目录执行版本化迁移，`schema.sql` 和 `seed_landmarks.sql` 保留为手工初始化和文档核对用脚本。Git 同步迁移脚本和基础种子数据，不同步本机 Docker MySQL volume 中的运行记录。
 
 ## 错误码口径
 

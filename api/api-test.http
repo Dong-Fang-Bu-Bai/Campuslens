@@ -22,6 +22,7 @@ Content-Type: image/jpeg
 --CampusLensBoundary--
 
 ### 提交识别反馈：正确
+# searchRecordId 需使用上一步上传接口返回的数据库记录 ID。
 POST {{backend}}/api/feedback
 Content-Type: application/json
 
@@ -54,6 +55,29 @@ Content-Type: application/json
   "predictedLandmarkId": 1,
   "feedbackType": "uncertain",
   "comment": "照片角度较偏，无法确认候选地标"
+}
+
+### 管理员轻量登录
+POST {{backend}}/api/admin/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin"
+}
+
+### 查看最近检索记录
+GET {{backend}}/api/admin/search-records
+
+### 查看反馈记录
+GET {{backend}}/api/admin/feedback
+
+### 处理反馈状态
+POST {{backend}}/api/admin/feedback/1/status
+Content-Type: application/json
+
+{
+  "status": "accepted"
 }
 
 ### 新增地标

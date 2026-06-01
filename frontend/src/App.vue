@@ -31,6 +31,22 @@
         </p>
       </form>
 
+      <section class="login-panel">
+        <div class="login-title">
+          <span>{{ adminLoggedIn ? '管理员已登录' : '游客模式' }}</span>
+          <strong>{{ adminLoggedIn ? adminUser.username : 'guest' }}</strong>
+        </div>
+        <template v-if="!adminLoggedIn">
+          <input v-model="adminLogin.username" type="text" placeholder="管理员账号" autocomplete="username" />
+          <input v-model="adminLogin.password" type="password" placeholder="管理员密码" autocomplete="current-password" />
+          <button type="button" class="secondary-btn" @click="submitAdminLogin">登录后台</button>
+        </template>
+        <template v-else>
+          <button type="button" class="secondary-btn" @click="openAdmin">进入后台</button>
+        </template>
+        <p v-if="adminMessage" class="mini-message">{{ adminMessage }}</p>
+      </section>
+
       <nav class="module-list" aria-label="模块状态">
         <button :class="{ active: activeView === 'results' }" @click="changeView('results')">
           <span class="active-line"></span>
@@ -43,6 +59,10 @@
         <button :class="{ active: activeView === 'feedback' }" @click="changeView('feedback')">
           <span class="active-line"></span>
           反馈纠错
+        </button>
+        <button :class="{ active: activeView === 'admin' }" @click="openAdmin">
+          <span class="active-line"></span>
+          管理后台
         </button>
       </nav>
     </aside>
@@ -60,7 +80,7 @@
             </button>
           </div>
           <div>
-          <p class="eyebrow">V1 联调版本</p>
+          <p class="eyebrow">V2 细化阶段</p>
             <h2>{{ viewTitle }}</h2>
           </div>
         </div>
@@ -138,6 +158,7 @@
               <span>地图坐标</span><strong>{{ selectedLandmark.mapX }}%, {{ selectedLandmark.mapY }}%</strong>
               <span>样本要求</span><strong>不少于 20 张</strong>
             </div>
+            <button type="button" class="secondary-btn inline-action" @click="changeView('map')">查看地图位置</button>
           </article>
         </section>
 
@@ -267,6 +288,61 @@
             </article>
           </div>
         </section>
+
+        <section v-else-if="activeView === 'admin'" class="admin-page" key="admin">
+          <div v-if="!adminLoggedIn" class="empty-state">
+            <h3>需要管理员登录</h3>
+            <p>当前可继续以游客身份检索和反馈；管理员使用 admin/admin 进入后台查看记录。</p>
+          </div>
+          <div v-else class="admin-layout">
+            <article class="admin-card">
+              <div class="admin-card-head">
+                <div>
+                  <p class="eyebrow">Search Records</p>
+                  <h3>检索记录</h3>
+                </div>
+                <button type="button" @click="loadAdminData">刷新</button>
+              </div>
+              <div class="admin-table">
+                <div class="admin-row admin-row-head">
+                  <span>ID</span>
+                  <span>最高候选</span>
+                  <span>状态</span>
+                  <span>游客</span>
+                </div>
+                <div v-for="record in adminSearchRecords" :key="record.id" class="admin-row">
+                  <span>#{{ record.id }}</span>
+                  <span>{{ record.bestLandmarkName || '无候选' }}<small>{{ scoreLabel(record.bestScore) }}</small></span>
+                  <span :class="['status-badge', record.status]">{{ recordStatusLabel(record.status) }}</span>
+                  <span>{{ record.guestId }}</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="admin-card">
+              <div class="admin-card-head">
+                <div>
+                  <p class="eyebrow">Feedback</p>
+                  <h3>反馈处理</h3>
+                </div>
+              </div>
+              <div class="feedback-admin-list">
+                <div v-for="item in adminFeedbackRecords" :key="item.id" class="feedback-admin-item">
+                  <div>
+                    <strong>#{{ item.id }} {{ feedbackTypeLabel(item.feedbackType) }}</strong>
+                    <p>检索 #{{ item.searchRecordId }} · 预测：{{ item.predictedLandmarkName || '-' }} · 确认：{{ item.confirmedLandmarkName || '-' }}</p>
+                    <small>{{ item.comment || '无补充说明' }}</small>
+                  </div>
+                  <div class="admin-actions">
+                    <span :class="['status-badge', item.status]">{{ feedbackStatusLabel(item.status) }}</span>
+                    <button type="button" @click="updateFeedbackStatus(item.id, 'accepted')">采纳</button>
+                    <button type="button" @click="updateFeedbackStatus(item.id, 'ignored')">忽略</button>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
       </Transition>
     </section>
 
@@ -315,6 +391,7 @@
                 </div>
               </div>
             </div>
+            <button type="button" class="secondary-btn inline-action" @click="jumpModalToMap">在地图中查看</button>
           </div>
         </div>
       </div>
@@ -326,8 +403,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 
 const demoLandmarks = [
-  { id: 1, code: 'L01', name: '图书馆', englishName: 'Library', type: '建筑', summary: '校园核心学习空间，建筑体量大、外立面辨识度高。', description: '图书馆位于文雍广场附近，是学生自习、借阅 and 课程资料检索的主要场所。', locationText: '文雍广场附近', mapX: 50.31, mapY: 59.33, imageUrl: 'https://images.unsplash.com/photo-1507842217343-583bb7270b66?auto=format&fit=crop&w=800&q=80' },
-  { id: 2, code: 'L02', name: '学术大讲堂', englishName: 'Academic Auditorium', type: '建筑', summary: '大型报告与答辩 activity 场所，适合作为答辩演示样本。', description: '学术大讲堂靠近东门，常用于学术报告、会议与集中教学活动。', locationText: '东门附近', mapX: 62.16, mapY: 61.22, imageUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=800&q=80' },
+  { id: 1, code: 'L01', name: '图书馆', englishName: 'Library', type: '建筑', summary: '校园核心学习空间，建筑体量大、外立面辨识度高。', description: '图书馆位于文雍广场附近，是学生自习、借阅和课程资料检索的主要场所。', locationText: '文雍广场附近', mapX: 50.31, mapY: 59.33, imageUrl: 'https://images.unsplash.com/photo-1507842217343-583bb7270b66?auto=format&fit=crop&w=800&q=80' },
+  { id: 2, code: 'L02', name: '学术大讲堂', englishName: 'Academic Auditorium', type: '建筑', summary: '大型报告与答辩活动场所，适合作为答辩演示样本。', description: '学术大讲堂靠近东门，常用于学术报告、会议与集中教学活动。', locationText: '东门附近', mapX: 62.16, mapY: 61.22, imageUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=800&q=80' },
   { id: 3, code: 'L03', name: '文雍广场', englishName: 'Wenyong Square', type: '广场', summary: '校园开放空间与人流汇聚点，便于地图静态标注。', description: '文雍广场位于图书馆前，是校园公共活动与通行的重要节点。', locationText: '图书馆前', mapX: 57.37, mapY: 63.56, imageUrl: 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&w=800&q=80' },
   { id: 4, code: 'L04', name: '博学桥', englishName: 'Boxue Bridge', type: '桥梁', summary: '连接湖区两侧的桥梁景观，适合作为地标景观样本。', description: '博学桥位于韵湖沿线，桥体、湖面和周边道路共同形成稳定的视觉特征。', locationText: '韵湖沿线', mapX: 57.75, mapY: 46.17, imageUrl: 'https://images.unsplash.com/photo-1445019980597-93fa8acb246c?auto=format&fit=crop&w=800&q=80' },
   { id: 5, code: 'L05', name: '琴湖及湖心岛', englishName: 'Qin Lake / Huxin Island', type: '湖区', summary: '湖泊与岛屿组合景观，外观特征明显。', description: '琴湖及湖心岛位于文雍路东侧，水域、绿化和湖心岛轮廓适合进行地标图像检索。', locationText: '文雍路东侧', mapX: 67.32, mapY: 26.88, imageUrl: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=800&q=80' },
@@ -351,8 +428,9 @@ const selectedFile = ref(null)
 const loading = ref(false)
 const error = ref('')
 const initialView = new URLSearchParams(window.location.search).get('view')
-const activeView = ref(['results', 'map', 'feedback'].includes(initialView) ? initialView : 'results')
+const activeView = ref(['results', 'map', 'feedback', 'admin'].includes(initialView) ? initialView : 'results')
 const feedbackMessage = ref('')
+const adminMessage = ref('')
 const searchMeta = reactive({
   searchRecordId: 1,
   uploadImageUrl: '',
@@ -366,6 +444,17 @@ const feedback = reactive({
   feedbackType: 'correct',
   comment: ''
 })
+const adminLogin = reactive({
+  username: 'admin',
+  password: ''
+})
+const adminUser = reactive({
+  username: '',
+  role: ''
+})
+const adminLoggedIn = ref(false)
+const adminSearchRecords = ref([])
+const adminFeedbackRecords = ref([])
 
 // 地图缩放与拖拽状态
 const zoomScale = ref(1.0)
@@ -414,12 +503,6 @@ function goForward() {
     historyIndex.value++
     activeView.value = viewHistory.value[historyIndex.value]
   }
-}
-
-function openModal(landmark) {
-  modalLandmark.value = landmark
-  showModal.value = true
-  window.addEventListener('keydown', handleEsc)
 }
 
 function closeModal() {
@@ -489,7 +572,8 @@ const selectedLandmark = computed(() => landmarks.value.find((item) => item.id =
 const viewTitle = computed(() => ({
   results: '图片检索结果',
   map: '校园地图导览',
-  feedback: '用户反馈纠错'
+  feedback: '用户反馈纠错',
+  admin: '管理员后台'
 }[activeView.value]))
 
 function confidenceLabel(value) {
@@ -505,10 +589,9 @@ onMounted(async () => {
     const response = await fetch('/api/landmarks')
     if (response.ok) {
       const data = await response.json()
-      // 如果后端发来地标，我们把 Unsplash 照片补全
       landmarks.value = data.map((item, index) => ({
         ...item,
-        imageUrl: demoLandmarks[index]?.imageUrl || demoLandmarks[0].imageUrl
+        imageUrl: imageForLandmark(item, index)
       }))
     }
   } catch {
@@ -570,6 +653,30 @@ function selectMapLandmark(id) {
   selectedId.value = id
 }
 
+async function openModal(landmark) {
+  selectedId.value = landmark.landmarkId || landmark.id
+  modalLandmark.value = landmark
+  showModal.value = true
+  try {
+    const response = await fetch(`/api/landmarks/${selectedId.value}`)
+    if (response.ok) {
+      const data = await response.json()
+      modalLandmark.value = {
+        ...data,
+        imageUrl: imageForLandmark(data, landmarks.value.findIndex(item => item.id === data.id)) || landmark.imageUrl
+      }
+    }
+  } catch {
+    modalLandmark.value = landmark
+  }
+  window.addEventListener('keydown', handleEsc)
+}
+
+function jumpModalToMap() {
+  closeModal()
+  navigateToView('map')
+}
+
 function openFeedback(item) {
   feedback.predictedLandmarkId = item.landmarkId
   feedback.confirmedLandmarkId = item.landmarkId
@@ -596,5 +703,97 @@ async function submitFeedback() {
   } catch (err) {
     feedbackMessage.value = err.message
   }
+}
+
+async function submitAdminLogin() {
+  adminMessage.value = ''
+  try {
+    const response = await fetch('/api/admin/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(adminLogin)
+    })
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}))
+      throw new Error(body.message || '登录失败')
+    }
+    const data = await response.json()
+    adminLoggedIn.value = true
+    adminUser.username = data.username
+    adminUser.role = data.role
+    adminMessage.value = data.message
+    await loadAdminData()
+    navigateToView('admin')
+  } catch (err) {
+    adminMessage.value = err.message
+  }
+}
+
+async function openAdmin() {
+  if (adminLoggedIn.value) {
+    await loadAdminData()
+  }
+  navigateToView('admin')
+}
+
+async function loadAdminData() {
+  const [recordsResponse, feedbackResponse] = await Promise.all([
+    fetch('/api/admin/search-records'),
+    fetch('/api/admin/feedback')
+  ])
+  if (recordsResponse.ok) {
+    adminSearchRecords.value = await recordsResponse.json()
+  }
+  if (feedbackResponse.ok) {
+    adminFeedbackRecords.value = await feedbackResponse.json()
+  }
+}
+
+async function updateFeedbackStatus(id, status) {
+  const response = await fetch(`/api/admin/feedback/${id}/status`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status })
+  })
+  if (response.ok) {
+    await loadAdminData()
+  }
+}
+
+function recordStatusLabel(status) {
+  return {
+    success: '成功',
+    low_confidence: '低匹配',
+    empty_result: '空结果',
+    algorithm_unavailable: '算法不可用'
+  }[status] || status
+}
+
+function feedbackTypeLabel(value) {
+  return {
+    correct: '识别正确',
+    wrong: '识别错误',
+    uncertain: '不确定'
+  }[value] || value
+}
+
+function feedbackStatusLabel(value) {
+  return {
+    pending: '待处理',
+    accepted: '已采纳',
+    ignored: '已忽略'
+  }[value] || value
+}
+
+function scoreLabel(value) {
+  return value == null ? '' : `匹配分 ${Math.round(Number(value) * 100)}%`
+}
+
+function imageForLandmark(item, index = 0) {
+  const candidate = item?.coverImageUrl || item?.images?.[0]?.imageUrl
+  if (candidate && !candidate.startsWith('/images/landmarks/')) {
+    return candidate
+  }
+  return demoLandmarks[index >= 0 ? index : 0]?.imageUrl || demoLandmarks[0].imageUrl
 }
 </script>

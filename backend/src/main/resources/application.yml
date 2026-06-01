@@ -9,9 +9,12 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   sql:
     init:
-      mode: always
-      schema-locations: file:../database/schema.sql
-      data-locations: file:../database/seed_landmarks.sql
+      mode: never
+  flyway:
+    enabled: true
+    locations: filesystem:../database/migration
+    baseline-on-migrate: true
+    baseline-version: 1
   servlet:
     multipart:
       max-file-size: 8MB
