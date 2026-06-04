@@ -1,5 +1,8 @@
 @backend = http://localhost:8080
 @algorithm = http://localhost:8000
+@adminToken = 请先执行管理员登录并复制返回 token
+@userToken = 请先执行用户登录并复制返回 token
+@guestId = guest-local-demo
 
 ### 后端健康检查
 GET {{backend}}/api/health
@@ -10,8 +13,37 @@ GET {{backend}}/api/landmarks
 ### 获取地标详情
 GET {{backend}}/api/landmarks/1
 
+### 普通用户注册
+POST {{backend}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "student01",
+  "password": "password123",
+  "email": "student01@example.com"
+}
+
+### 用户登录
+POST {{backend}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "student01",
+  "password": "password123"
+}
+
+### 管理员隐式登录后台
+POST {{backend}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin"
+}
+
 ### 上传图片并检索 Top-5
 POST {{backend}}/api/search/upload
+Authorization: Bearer {{userToken}}
 Content-Type: multipart/form-data; boundary=CampusLensBoundary
 
 --CampusLensBoundary
@@ -19,17 +51,23 @@ Content-Disposition: form-data; name="file"; filename="sample.jpg"
 Content-Type: image/jpeg
 
 < ./sample.jpg
+--CampusLensBoundary
+Content-Disposition: form-data; name="guestId"
+
+{{guestId}}
 --CampusLensBoundary--
 
 ### 提交识别反馈：正确
 # searchRecordId 需使用上一步上传接口返回的数据库记录 ID。
 POST {{backend}}/api/feedback
+Authorization: Bearer {{userToken}}
 Content-Type: application/json
 
 {
   "searchRecordId": 1,
   "predictedLandmarkId": 1,
   "confirmedLandmarkId": 1,
+  "guestId": "{{guestId}}",
   "feedbackType": "correct",
   "comment": "识别结果正确"
 }
@@ -57,23 +95,17 @@ Content-Type: application/json
   "comment": "照片角度较偏，无法确认候选地标"
 }
 
-### 管理员轻量登录
-POST {{backend}}/api/admin/auth/login
-Content-Type: application/json
-
-{
-  "username": "admin",
-  "password": "admin"
-}
-
 ### 查看最近检索记录
 GET {{backend}}/api/admin/search-records
+Authorization: Bearer {{adminToken}}
 
 ### 查看反馈记录
 GET {{backend}}/api/admin/feedback
+Authorization: Bearer {{adminToken}}
 
 ### 处理反馈状态
 POST {{backend}}/api/admin/feedback/1/status
+Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
 {
@@ -82,19 +114,25 @@ Content-Type: application/json
 
 ### 新增地标
 POST {{backend}}/api/admin/landmarks
+Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
 {
-  "code": "L01",
-  "name": "图书馆",
+  "code": "L11",
+  "name": "新增测试地标",
   "englishName": "Library",
   "type": "建筑",
   "summary": "校园核心学习空间，建筑体量大、外立面辨识度高。",
-  "locationText": "文雍广场附近"
+  "description": "用于管理员新增地标接口联调。",
+  "locationText": "文雍广场附近",
+  "mapX": 50.0,
+  "mapY": 50.0,
+  "coverImageUrl": "/images/landmarks/l11.jpg"
 }
 
 ### 重建统计参数
 POST {{backend}}/api/admin/index/rebuild
+Authorization: Bearer {{adminToken}}
 
 ### 算法服务检索接口
 POST {{algorithm}}/api/v1/search

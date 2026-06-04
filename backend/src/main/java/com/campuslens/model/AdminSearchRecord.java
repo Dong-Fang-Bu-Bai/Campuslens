@@ -11,5 +11,8 @@ public record AdminSearchRecord(
     boolean lowConfidence,
     String message,
     String guestId,
+    Long userId,
+    String username,
+    String userType,
     LocalDateTime createdAt) {
 }

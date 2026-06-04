@@ -4,6 +4,7 @@ import com.campuslens.model.AdminFeedbackRecord;
 import com.campuslens.model.FeedbackRequest;
 import com.campuslens.model.FeedbackResponse;
 import com.campuslens.model.FeedbackStatusRequest;
+import com.campuslens.model.SessionUser;
 import java.sql.PreparedStatement;
 import java.util.List;
 import java.util.Objects;
@@ -19,28 +20,35 @@ public class FeedbackService {
   private static final Set<String> FEEDBACK_STATUSES = Set.of("pending", "accepted", "ignored");
   private final JdbcTemplate jdbcTemplate;
   private final SearchRecordService searchRecordService;
+  private final AuthService authService;
 
-  public FeedbackService(JdbcTemplate jdbcTemplate, SearchRecordService searchRecordService) {
+  public FeedbackService(
+      JdbcTemplate jdbcTemplate,
+      SearchRecordService searchRecordService,
+      AuthService authService) {
     this.jdbcTemplate = jdbcTemplate;
     this.searchRecordService = searchRecordService;
+    this.authService = authService;
   }
 
-  public FeedbackResponse submit(FeedbackRequest request) {
+  public FeedbackResponse submit(FeedbackRequest request, SessionUser user) {
     validate(request);
+    Long userId = user == null ? null : activeUserId(user.userId());
     KeyHolder keyHolder = new GeneratedKeyHolder();
     jdbcTemplate.update(connection -> {
       PreparedStatement ps = connection.prepareStatement("""
           INSERT INTO feedback (
-            search_record_id, predicted_landmark_id, confirmed_landmark_id,
+            search_record_id, predicted_landmark_id, confirmed_landmark_id, user_id,
             feedback_type, comment, status
           )
-          VALUES (?, ?, ?, ?, ?, 'pending')
+          VALUES (?, ?, ?, ?, ?, ?, 'pending')
           """, new String[] {"id"});
       ps.setLong(1, request.searchRecordId());
       ps.setObject(2, request.predictedLandmarkId());
       ps.setObject(3, request.confirmedLandmarkId());
-      ps.setString(4, request.feedbackType());
-      ps.setString(5, request.comment());
+      ps.setObject(4, userId);
+      ps.setString(5, request.feedbackType());
+      ps.setString(6, request.comment());
       return ps;
     }, keyHolder);
     Number key = Objects.requireNonNull(keyHolder.getKey(), "feedback id not generated");
@@ -50,11 +58,13 @@ public class FeedbackService {
   public List<AdminFeedbackRecord> listRecent() {
     return jdbcTemplate.query("""
         SELECT f.id, f.search_record_id, f.predicted_landmark_id, p.name AS predicted_name,
-               f.confirmed_landmark_id, c.name AS confirmed_name, f.feedback_type,
+               f.confirmed_landmark_id, c.name AS confirmed_name, f.user_id,
+               u.username, f.feedback_type,
                f.comment, f.status, f.created_at, f.updated_at
         FROM feedback f
         LEFT JOIN landmark p ON f.predicted_landmark_id = p.id
         LEFT JOIN landmark c ON f.confirmed_landmark_id = c.id
+        LEFT JOIN app_user u ON f.user_id = u.id
         ORDER BY f.created_at DESC, f.id DESC
         LIMIT 50
         """, (rs, rowNum) -> new AdminFeedbackRecord(
@@ -64,6 +74,8 @@ public class FeedbackService {
         rs.getString("predicted_name"),
         rs.getObject("confirmed_landmark_id") == null ? null : rs.getLong("confirmed_landmark_id"),
         rs.getString("confirmed_name"),
+        rs.getObject("user_id") == null ? null : rs.getLong("user_id"),
+        rs.getString("username"),
         rs.getString("feedback_type"),
         rs.getString("comment"),
         rs.getString("status"),
@@ -103,5 +115,15 @@ public class FeedbackService {
     if ("wrong".equals(request.feedbackType()) && request.confirmedLandmarkId() == null) {
       throw new IllegalArgumentException("识别错误反馈需要提供 confirmedLandmarkId");
     }
+  }
+
+  private Long activeUserId(Long userId) {
+    if (userId == null) {
+      return null;
+    }
+    if (!authService.isActiveUser(userId)) {
+      throw new IllegalArgumentException("用户不存在或已停用");
+    }
+    return userId;
   }
 }

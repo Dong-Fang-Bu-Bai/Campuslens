@@ -2,6 +2,7 @@ package com.campuslens.service;
 
 import com.campuslens.model.SearchResponse;
 import com.campuslens.model.SearchResult;
+import com.campuslens.model.SessionUser;
 import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResponse;
 import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResult;
 import java.io.IOException;
@@ -24,18 +25,22 @@ public class SearchService {
   private final LandmarkService landmarkService;
   private final AlgorithmSearchClient algorithmSearchClient;
   private final SearchRecordService searchRecordService;
+  private final AuthService authService;
 
   public SearchService(
       LandmarkService landmarkService,
       AlgorithmSearchClient algorithmSearchClient,
-      SearchRecordService searchRecordService) {
+      SearchRecordService searchRecordService,
+      AuthService authService) {
     this.landmarkService = landmarkService;
     this.algorithmSearchClient = algorithmSearchClient;
     this.searchRecordService = searchRecordService;
+    this.authService = authService;
   }
 
-  public SearchResponse search(MultipartFile file) {
+  public SearchResponse search(MultipartFile file, SessionUser user, String guestId) {
     validate(file);
+    Long activeUserId = user == null ? null : activeUserId(user.userId());
     String uploadUrl = save(file);
     try {
       AlgorithmSearchResponse algorithmResponse = algorithmSearchClient.search(file);
@@ -46,7 +51,9 @@ public class SearchService {
             true,
             "算法服务未返回可匹配的 L01-L10 地标，请检查样本索引和 landmarkCode 映射。",
             "empty_result",
-            results);
+            results,
+            activeUserId,
+            guestId);
       }
       boolean lowConfidence = algorithmResponse.lowConfidence();
       String message = normalizeMessage(algorithmResponse.message());
@@ -57,7 +64,8 @@ public class SearchService {
               lowConfidence,
               message,
               lowConfidence ? "low_confidence" : "success",
-              "guest"),
+              activeUserId,
+              guestId),
           uploadUrl,
           lowConfidence,
           message,
@@ -68,7 +76,9 @@ public class SearchService {
           true,
           "算法服务暂不可用，未生成候选地标。原因：" + ex.getMessage(),
           "algorithm_unavailable",
-          List.of());
+          List.of(),
+          activeUserId,
+          guestId);
     }
   }
 
@@ -150,9 +160,11 @@ public class SearchService {
       boolean lowConfidence,
       String message,
       String status,
-      List<SearchResult> results) {
+      List<SearchResult> results,
+      Long userId,
+      String guestId) {
     return new SearchResponse(
-        searchRecordService.create(uploadUrl, results, lowConfidence, message, status, "guest"),
+        searchRecordService.create(uploadUrl, results, lowConfidence, message, status, userId, guestId),
         uploadUrl,
         lowConfidence,
         message,
@@ -190,5 +202,15 @@ public class SearchService {
       return "算法匹配等级较低，建议人工核验";
     }
     return message;
+  }
+
+  private Long activeUserId(Long userId) {
+    if (userId == null) {
+      return null;
+    }
+    if (!authService.isActiveUser(userId)) {
+      throw new IllegalArgumentException("用户不存在或已停用");
+    }
+    return userId;
   }
 }

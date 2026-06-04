@@ -9,6 +9,8 @@ public record AdminFeedbackRecord(
     String predictedLandmarkName,
     Long confirmedLandmarkId,
     String confirmedLandmarkName,
+    Long userId,
+    String username,
     String feedbackType,
     String comment,
     String status,

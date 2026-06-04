@@ -29,6 +29,7 @@ public class SearchRecordService {
       boolean lowConfidence,
       String message,
       String status,
+      Long userId,
       String guestId) {
     SearchResult best = results.isEmpty() ? null : results.get(0);
     String topResultsJson = toJson(results);
@@ -37,9 +38,9 @@ public class SearchRecordService {
       PreparedStatement ps = connection.prepareStatement("""
           INSERT INTO search_record (
             upload_image_url, top_results_json, best_landmark_id, best_score,
-            status, low_confidence, message, guest_id
+            status, low_confidence, message, guest_id, user_id, user_type
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """, new String[] {"id"});
       ps.setString(1, uploadImageUrl);
       ps.setString(2, topResultsJson);
@@ -53,7 +54,9 @@ public class SearchRecordService {
       ps.setString(5, status);
       ps.setBoolean(6, lowConfidence);
       ps.setString(7, message);
-      ps.setString(8, guestId == null || guestId.isBlank() ? "guest" : guestId);
+      ps.setString(8, userId == null ? normalizeGuestId(guestId) : "user-" + userId);
+      ps.setObject(9, userId);
+      ps.setString(10, userId == null ? "guest" : "user");
       return ps;
     }, keyHolder);
     Number key = Objects.requireNonNull(keyHolder.getKey(), "search_record id not generated");
@@ -98,9 +101,11 @@ public class SearchRecordService {
   public List<AdminSearchRecord> listRecent() {
     return jdbcTemplate.query("""
         SELECT sr.id, sr.upload_image_url, l.name AS best_landmark_name, sr.best_score,
-               sr.status, sr.low_confidence, sr.message, sr.guest_id, sr.created_at
+               sr.status, sr.low_confidence, sr.message, sr.guest_id,
+               sr.user_id, u.username, sr.user_type, sr.created_at
         FROM search_record sr
         LEFT JOIN landmark l ON sr.best_landmark_id = l.id
+        LEFT JOIN app_user u ON sr.user_id = u.id
         ORDER BY sr.created_at DESC, sr.id DESC
         LIMIT 50
         """, (rs, rowNum) -> new AdminSearchRecord(
@@ -112,6 +117,9 @@ public class SearchRecordService {
         rs.getBoolean("low_confidence"),
         rs.getString("message"),
         rs.getString("guest_id"),
+        rs.getObject("user_id") == null ? null : rs.getLong("user_id"),
+        rs.getString("username"),
+        rs.getString("user_type"),
         rs.getTimestamp("created_at").toLocalDateTime()));
   }
 
@@ -121,5 +129,16 @@ public class SearchRecordService {
     } catch (JsonProcessingException ex) {
       throw new IllegalArgumentException("Top-5 结果快照序列化失败");
     }
+  }
+
+  private String normalizeGuestId(String guestId) {
+    if (guestId == null || guestId.isBlank()) {
+      return "guest";
+    }
+    String value = guestId.trim();
+    if (value.length() > 100) {
+      return value.substring(0, 100);
+    }
+    return value;
   }
 }

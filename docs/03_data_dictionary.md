@@ -65,7 +65,9 @@
 | `status` | String | 成功、失败、低匹配等级 |
 | `lowConfidence` | Boolean | 是否需要人工核验 |
 | `message` | String | 检索提示或异常说明 |
-| `guestId` | String | 未登录用户统一记录为 `guest` |
+| `guestId` | String | 未登录用户的前端持久化游客标识；登录用户记录为 `user-{userId}` |
+| `userId` | Long | 登录用户 ID，未登录时为空 |
+| `userType` | String | `guest` 或 `user` |
 | `createdAt` | DateTime | 检索时间 |
 
 ## Feedback 用户反馈
@@ -78,6 +80,7 @@
 | `searchRecordId` | Long | 关联检索记录 |
 | `predictedLandmarkId` | Long | 系统预测地标 |
 | `confirmedLandmarkId` | Long | 用户确认地标，可为空 |
+| `userId` | Long | 登录用户 ID，未登录时为空 |
 | `feedbackType` | String | 正确、错误、不确定 |
 | `comment` | String | 用户说明 |
 | `status` | String | 待处理、已采纳、已忽略 |
@@ -90,18 +93,24 @@
 
 `mapX` 和 `mapY` 当前采用校园平面图百分比坐标，取值范围为 0-100。前端展示时以图片左上角为原点，`mapX` 表示横向百分比，`mapY` 表示纵向百分比。该口径适合初始阶段静态标注，后续若更换底图或接入 GIS 数据，需要同步修订地标元数据。
 
-## AdminUser 管理员
+## AppUser 用户
 
-第三周 V2 管理员端为本地演示最小实现，账号体系可简化。当前种子账号为 `admin/admin`，`passwordHash` 字段暂存演示口令，后续迭代再替换为加密摘要和完整权限控制。
+第三周 V2 使用 `app_user` 保存普通用户和管理员演示账号。普通用户通过右上角“登录/注册”入口注册，用户名为普通字符串且唯一，密码至少 8 位，邮箱选填。`admin/admin` 作为演示管理员账号写入同一张表，密码以 PBKDF2 哈希存储；登录后后端返回服务端会话 token，前端携带 token 访问需要登录或管理员权限的接口。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` | Long | 主键 |
-| `username` | String | 管理员账号 |
-| `passwordHash` | String | 密码哈希 |
-| `role` | String | 角色 |
+| `username` | String | 用户名，唯一 |
+| `passwordHash` | String | PBKDF2 哈希摘要，格式为 `pbkdf2$迭代次数$salt$hash` |
+| `email` | String | 选填邮箱 |
+| `role` | String | `user` 或 `admin` |
 | `enabled` | Boolean | 是否启用 |
 | `createdAt` | DateTime | 创建时间 |
+| `updatedAt` | DateTime | 更新时间 |
+
+## AdminUser 管理员兼容表
+
+`admin_user` 保留为旧后台登录接口的兼容表，密码同样以 PBKDF2 哈希存储。前端当前不直接调用 `POST /api/admin/auth/login`，统一调用 `POST /api/auth/login`。
 
 ## Flyway 迁移
 
@@ -110,5 +119,7 @@
 | 脚本 | 说明 |
 | --- | --- |
 | `V1__baseline_schema.sql` | 创建地标、样本图、特征、检索记录、反馈和管理员表 |
-| `V2__v2_record_feedback_admin_fields.sql` | 为既有库补齐 V2 检索记录、反馈更新时间和管理员创建时间字段 |
+| `V2__v2_record_feedback_admin_fields.sql` | 兼容占位迁移，保留版本序列 |
 | `V3__seed_landmarks_and_admin.sql` | 写入 L01-L10 地标元数据和 `admin/admin` 演示账号 |
+| `V4__app_user_auth_and_record_owner.sql` | 创建 `app_user`，为检索记录和反馈记录补充登录用户归属字段 |
+| `V5__hash_admin_passwords.sql` | 将管理员演示账号密码升级为 PBKDF2 哈希 |

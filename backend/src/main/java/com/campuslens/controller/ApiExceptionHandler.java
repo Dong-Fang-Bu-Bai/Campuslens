@@ -1,5 +1,7 @@
 package com.campuslens.controller;
 
+import com.campuslens.service.AdminRequiredException;
+import com.campuslens.service.AuthRequiredException;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +15,16 @@ public class ApiExceptionHandler {
   @ExceptionHandler(IllegalArgumentException.class)
   public ResponseEntity<Map<String, String>> badRequest(IllegalArgumentException ex) {
     return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
+  }
+
+  @ExceptionHandler(AuthRequiredException.class)
+  public ResponseEntity<Map<String, String>> unauthorized(AuthRequiredException ex) {
+    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", ex.getMessage()));
+  }
+
+  @ExceptionHandler(AdminRequiredException.class)
+  public ResponseEntity<Map<String, String>> forbidden(AdminRequiredException ex) {
+    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", ex.getMessage()));
   }
 
   @ExceptionHandler(MethodArgumentNotValidException.class)

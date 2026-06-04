@@ -3,6 +3,7 @@ package com.campuslens;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.mockito.ArgumentMatchers.any;
@@ -129,16 +130,165 @@ class ApiControllerTest {
 
   @Test
   void adminLoginAndFeedbackStatusWork() throws Exception {
-    mockMvc.perform(post("/api/admin/auth/login")
+    String token = login("admin", "admin");
+
+    mockMvc.perform(get("/api/admin/search-records")
+            .header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  void adminEndpointsRejectMissingAndUserTokens() throws Exception {
+    mockMvc.perform(get("/api/admin/search-records"))
+        .andExpect(status().isUnauthorized());
+
+    mockMvc.perform(post("/api/auth/register")
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
-                  "username": "admin",
-                  "password": "admin"
+                  "username": "student03",
+                  "password": "password123"
                 }
                 """))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.loggedIn").value(true))
-        .andExpect(jsonPath("$.role").value("admin"));
+        .andExpect(jsonPath("$.token").isString());
+
+    String token = login("student03", "password123");
+    mockMvc.perform(get("/api/admin/search-records")
+            .header("Authorization", "Bearer " + token))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void adminCanCreateAndUpdateLandmark() throws Exception {
+    String token = login("admin", "admin");
+
+    String createResponse = mockMvc.perform(post("/api/admin/landmarks")
+            .header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "code": "L99",
+                  "name": "测试地标",
+                  "englishName": "Test Landmark",
+                  "type": "测试",
+                  "summary": "测试摘要",
+                  "description": "测试描述",
+                  "locationText": "测试位置",
+                  "mapX": 10.5,
+                  "mapY": 20.5,
+                  "coverImageUrl": "/images/landmarks/l99.jpg"
+                }
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("L99"))
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+    long id = Long.parseLong(createResponse.replaceAll(".*\"id\":(\\d+),\"code\":\"L99\".*", "$1"));
+
+    mockMvc.perform(put("/api/admin/landmarks/" + id)
+            .header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "code": "L99",
+                  "name": "测试地标更新",
+                  "englishName": "Test Landmark",
+                  "type": "测试",
+                  "summary": "测试摘要",
+                  "description": "测试描述",
+                  "locationText": "测试位置",
+                  "mapX": 11.5,
+                  "mapY": 21.5,
+                  "coverImageUrl": "/images/landmarks/l99.jpg"
+                }
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.name").value("测试地标更新"));
+  }
+
+  @Test
+  void userRegisterAndLoginWork() throws Exception {
+    mockMvc.perform(post("/api/auth/register")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "username": "student01",
+                  "password": "password123",
+                  "email": "student01@example.com"
+                }
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.userId").isNumber())
+        .andExpect(jsonPath("$.username").value("student01"))
+        .andExpect(jsonPath("$.role").value("user"))
+        .andExpect(jsonPath("$.admin").value(false))
+        .andExpect(jsonPath("$.token").isString());
+
+    mockMvc.perform(post("/api/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "username": "student01",
+                  "password": "password123"
+                }
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.username").value("student01"))
+        .andExpect(jsonPath("$.role").value("user"))
+        .andExpect(jsonPath("$.token").isString());
+  }
+
+  @Test
+  void userRegisterRejectsShortPasswordAndDuplicateUsername() throws Exception {
+    mockMvc.perform(post("/api/auth/register")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "username": "shortpass",
+                  "password": "1234567"
+                }
+                """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("密码至少 8 位"));
+
+    mockMvc.perform(post("/api/auth/register")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "username": "student02",
+                  "password": "password123"
+                }
+                """))
+        .andExpect(status().isOk());
+
+    mockMvc.perform(post("/api/auth/register")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "username": "student02",
+                  "password": "password456"
+                }
+                """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("用户名已存在"));
+  }
+
+  private String login(String username, String password) throws Exception {
+    String response = mockMvc.perform(post("/api/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "username": "%s",
+                  "password": "%s"
+                }
+                """.formatted(username, password)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.token").isString())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+    return response.replaceAll(".*\"token\":\"([^\"]+)\".*", "$1");
   }
 }
