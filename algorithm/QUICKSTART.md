@@ -111,7 +111,7 @@ curl -X POST http://localhost:8000/api/v1/search -F "file=@test.jpg"
       "rank": 1,
       "landmarkCode": "L01",
       "landmarkName": "library",
-      "score": 0.9879,
+      "score": 0.8533,
       "confidenceLevel": "high",
       "mahalanobisDistance": 4.3239
     }
@@ -218,12 +218,12 @@ curl.exe -X POST ...
 
 ### Q7: 如何理解 score 和 mahalanobisDistance？
 **A**: 
-- `score`: 基于马氏距离的置信度评分（0-1），越高表示越匹配
-- `mahalanobisDistance`: 马氏距离，越小表示查询点越接近地标分布中心
-- 一般规则：
-  - `score > 0.8` → high confidence
-  - `score 0.4-0.8` → medium confidence  
-  - `score < 0.4` → low confidence
+- `score`: 基于马氏距离 sigmoid 归一化得到的经验匹配分（0-1），越高表示越匹配；该分数只用于排序、展示区分度和辅助判断，不具备概率或统计置信度含义
+- `mahalanobisDistance`: 马氏距离原始值，越小表示查询点越接近地标分布中心
+- `confidenceLevel`: 兼容字段，当前表示匹配等级
+  - `score >= 0.8` → high（高匹配）
+  - `score 0.4-0.8` → medium（中匹配）
+  - `score < 0.4` → low（低匹配，建议人工核验）
 
 详细算法说明见：[algo.md](algo.md)
 

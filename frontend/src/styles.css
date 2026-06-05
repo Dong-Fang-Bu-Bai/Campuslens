@@ -68,6 +68,14 @@ button {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 360px 1fr;
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  transition: grid-template-columns 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.app-shell.sidebar-collapsed {
+  grid-template-columns: 0px 1fr;
 }
 
 /* =========================================
@@ -79,11 +87,27 @@ button {
   gap: 32px;
   padding: 44px 36px;
   color: #cbd5e1;
-  background: #04060d; /* 极致纯粹暗夜黑 */
+  background: rgba(4, 6, 13, 0.75); /* 极致纯粹暗夜黑半透明 */
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-right: 1px solid rgba(255, 255, 255, 0.03);
   box-shadow: 20px 0 50px rgba(0, 0, 0, 0.3);
   position: relative;
   overflow: hidden;
+  transition: opacity 0.4s cubic-bezier(0.25, 0.8, 0.25, 1),
+              padding 0.4s cubic-bezier(0.25, 0.8, 0.25, 1),
+              border-color 0.4s cubic-bezier(0.25, 0.8, 0.25, 1),
+              visibility 0.4s;
+  visibility: visible;
+  opacity: 1;
+}
+
+.side-panel.collapsed {
+  padding: 44px 0px;
+  opacity: 0;
+  border-right-color: transparent;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .side-panel::before {
@@ -272,6 +296,71 @@ h3 {
   cursor: not-allowed;
 }
 
+.secondary-btn {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+  color: #dbeafe;
+  background: #101827;
+  font-size: 12.5px;
+  font-weight: 700;
+  transition: var(--transition-smooth);
+}
+
+.secondary-btn:hover {
+  border-color: rgba(96, 165, 250, 0.35);
+  background: #142036;
+  color: #ffffff;
+}
+
+.inline-action {
+  width: auto;
+  margin-top: 18px;
+  padding: 0 14px;
+}
+
+.login-panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.login-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.login-title strong {
+  color: #e2e8f0;
+}
+
+.login-panel input {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+  background: #080c14;
+  color: #ffffff;
+  padding: 0 10px;
+  font-size: 12.5px;
+  outline: none;
+}
+
+.mini-message {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
 /* 按钮科幻无限横向扫描光轨 */
 .primary-btn.is-loading .btn-shine {
   position: absolute;
@@ -354,7 +443,7 @@ h3 {
 .content-area {
   min-width: 0;
   padding: 44px 54px;
-  background: var(--bg-main);
+  background: transparent;
   overflow-y: auto;
   height: 100vh;
 }
@@ -648,7 +737,7 @@ h3 {
   font-feature-settings: "tnum";
 }
 
-/* 极细拉丝置信度进度条 */
+/* 极细拉丝匹配分进度条 */
 .confidence-container {
   margin: 12px 0 16px;
   display: flex;
@@ -782,6 +871,7 @@ h3 {
   box-shadow: var(--shadow-md);
   height: calc(100vh - 250px);
   min-height: 480px;
+  z-index: 2; /* 显式指定高层级，作为完全不透明的覆盖图层 */
 }
 
 /* 精致 macOS 超薄磨砂控制栏 */
@@ -1217,7 +1307,157 @@ h3 {
 }
 
 /* ==========================================
-   10. 顶级曜石毛玻璃详情弹窗 (Modal CSS)
+   10. V2 管理后台
+   ========================================= */
+.admin-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+}
+
+.admin-card {
+  padding: 28px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.admin-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.admin-card-head h3 {
+  margin: 0;
+}
+
+.admin-card-head button,
+.admin-actions button {
+  min-height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+  background: #111827;
+  color: #cbd5e1;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-card-head button:hover,
+.admin-actions button:hover {
+  border-color: rgba(96, 165, 250, 0.35);
+  color: #ffffff;
+}
+
+.admin-table {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-row {
+  display: grid;
+  grid-template-columns: 70px minmax(160px, 1fr) 120px 100px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.035);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.012);
+  color: #cbd5e1;
+  font-size: 12.5px;
+}
+
+.admin-row-head {
+  color: #64748b;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.admin-row small {
+  display: block;
+  color: #64748b;
+  margin-top: 3px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  width: fit-content;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.12);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.status-badge.low_confidence,
+.status-badge.empty_result,
+.status-badge.pending {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.14);
+}
+
+.status-badge.algorithm_unavailable,
+.status-badge.ignored {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.14);
+}
+
+.status-badge.success,
+.status-badge.accepted {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.14);
+}
+
+.feedback-admin-list {
+  display: grid;
+  gap: 12px;
+}
+
+.feedback-admin-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.035);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.012);
+}
+
+.feedback-admin-item strong {
+  color: #ffffff;
+  font-size: 13.5px;
+}
+
+.feedback-admin-item p,
+.feedback-admin-item small {
+  display: block;
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.admin-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ==========================================
+   11. 顶级曜石毛玻璃详情弹窗 (Modal CSS)
    ========================================= */
 .modal-overlay {
   position: fixed;
@@ -1297,12 +1537,19 @@ h3 {
   height: 240px;
   width: 100%;
   overflow: hidden;
+  background: #090d16;
 }
 
 .modal-hero img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  opacity: 0.82;
+  transition: opacity 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.modal-hero:hover img {
+  opacity: 1;
 }
 
 .modal-hero-overlay {
@@ -1311,7 +1558,7 @@ h3 {
   left: 0;
   width: 100%;
   padding: 28px;
-  background: linear-gradient(180deg, transparent, var(--bg-card) 95%);
+  background: linear-gradient(180deg, transparent 30%, rgba(13, 18, 31, 0.95) 100%);
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -1432,8 +1679,14 @@ h3 {
 @media (max-width: 980px) {
   .results-layout,
   .map-layout,
-  .feedback-layout {
+  .feedback-layout,
+  .feedback-admin-item {
     grid-template-columns: 1fr;
+  }
+
+  .admin-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 }
 
@@ -1452,6 +1705,10 @@ h3 {
     grid-template-columns: 1fr;
     gap: 16px;
   }
+
+  .admin-row {
+    grid-template-columns: 1fr;
+  }
   
   .rank {
     width: 34px;
@@ -1461,4 +1718,423 @@ h3 {
   .map-board {
     height: 400px;
   }
+}
+
+/* ==========================================
+   8. 登录注册页面美化 (曜黑科技感 & 亚克力毛玻璃)
+   ========================================= */
+
+.top-login-trigger-btn {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: var(--transition-smooth);
+}
+
+.top-login-trigger-btn:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(96, 165, 250, 0.35);
+  color: #ffffff;
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
+  transform: translateY(-1px);
+}
+
+.auth-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 120px);
+  padding: 20px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 32px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  animation: card-appear 0.4s cubic-bezier(0.25, 0.8, 0.25, 1) both;
+}
+
+.auth-tabs {
+  display: flex;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-md);
+  padding: 4px;
+  margin-bottom: 24px;
+}
+
+.auth-tabs button {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  transition: var(--transition-smooth);
+}
+
+.auth-tabs button:hover {
+  color: #ffffff;
+}
+
+.auth-tabs button.active {
+  color: #ffffff;
+  background: var(--color-accent);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+}
+
+.auth-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.auth-card input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  font-size: 13px;
+  color: #ffffff;
+  background: #080c14;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: var(--transition-smooth);
+}
+
+.auth-card input:focus {
+  border-color: rgba(96, 165, 250, 0.4);
+  background: #0a101b;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.1);
+}
+
+.auth-card .mini-message {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.auth-card .error-message {
+  color: var(--color-error);
+}
+
+.auth-card .success-message {
+  color: var(--color-success);
+}
+
+/* ==========================================
+   9. 登录后用户状态栏美化
+   ========================================= */
+
+.top-admin-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 6px 14px;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.admin-badge {
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 4px;
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--color-accent-light);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.admin-username {
+  font-size: 13px;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.top-action-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+  transition: var(--transition-smooth);
+}
+
+.top-action-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.top-action-btn.logout {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
+.top-action-btn.logout:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.15);
+}
+
+/* ==========================================
+   10. 悬浮折叠侧栏按钮 (曜黑亚克力 & 随动拉手)
+   ========================================= */
+
+.sidebar-toggle-btn {
+  position: fixed;
+  left: calc(360px - 14px); /* 默认贴在360px侧边栏右边缘 */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 48px;
+  background: rgba(13, 18, 31, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-left: none;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 5px 0 15px rgba(0, 0, 0, 0.3);
+  transition: left 0.4s cubic-bezier(0.25, 0.8, 0.25, 1),
+              background 0.3s,
+              color 0.3s,
+              border-color 0.3s,
+              box-shadow 0.3s;
+}
+
+.sidebar-toggle-btn:hover {
+  background: rgba(30, 41, 59, 0.9);
+  color: #ffffff;
+  border-color: rgba(59, 130, 246, 0.35);
+  box-shadow: 5px 0 20px rgba(59, 130, 246, 0.2);
+}
+
+.sidebar-toggle-btn.collapsed {
+  left: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
+}
+
+.sidebar-toggle-btn .toggle-arrow {
+  transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.sidebar-toggle-btn.collapsed .toggle-arrow {
+  transform: rotate(180deg);
+}
+
+/* 窄屏状态下隐藏折叠按钮，避免遮挡/排版错乱 */
+@media (max-width: 1120px) {
+  .sidebar-toggle-btn {
+    display: none !important;
+  }
+}
+
+/* ==========================================
+   11. 欢迎界面弹出层样式 (科技曜黑亚克力玻璃)
+   ========================================= */
+
+.welcome-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(4, 6, 13, 0.88); /* 极纯暗曜黑半透 */
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  display: grid;
+  place-items: center;
+  z-index: 9999; /* 全站最顶层 */
+}
+
+.welcome-card {
+  position: relative;
+  width: 90%;
+  max-width: 440px;
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 35px 80px rgba(0, 0, 0, 0.8), 
+              0 0 50px rgba(59, 130, 246, 0.04);
+}
+
+.welcome-bg-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.18; /* 柔和科技底图 */
+  mix-blend-mode: luminosity;
+  pointer-events: none;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 90%);
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 90%);
+}
+
+.welcome-card-content {
+  position: relative;
+  z-index: 2;
+  padding: 44px 36px 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.welcome-logo-badge {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--color-accent-light);
+  display: grid;
+  place-items: center;
+  margin-bottom: 22px;
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15);
+}
+
+.welcome-logo-badge svg {
+  color: var(--color-accent-light);
+  filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.4));
+}
+
+.welcome-eyebrow {
+  margin: 0 0 6px;
+  color: var(--color-accent-light);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
+.welcome-title {
+  margin: 0 0 20px;
+  font-size: 20px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.welcome-divider {
+  width: 50px;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.4), transparent);
+  margin-bottom: 24px;
+}
+
+.welcome-date-section {
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.welcome-date-section .solar-date {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #e2e8f0;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.welcome-date-section .lunar-date {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0;
+  letter-spacing: 0.05em;
+}
+
+.welcome-poem-box {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.02);
+  border-radius: var(--radius-md);
+  padding: 18px 24px;
+  margin-bottom: 30px;
+  width: 100%;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.welcome-poem-box .poem-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #94a3b8;
+  margin: 0;
+  line-height: 1.65;
+  letter-spacing: 0.04em;
+  font-style: italic;
+}
+
+.welcome-enter-btn {
+  width: 100%;
+  min-height: 46px;
+  margin-top: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* 欢迎界面进出场 Transition 过渡动画 */
+.welcome-fade-enter-active,
+.welcome-fade-leave-active {
+  transition: opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.welcome-fade-enter-active .welcome-card,
+.welcome-fade-leave-active .welcome-card {
+  transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1),
+              opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.welcome-fade-enter-from,
+.welcome-fade-leave-to {
+  opacity: 0;
+}
+
+.welcome-fade-enter-from .welcome-card {
+  transform: scale(0.96) translateY(12px);
+  opacity: 0;
+}
+
+.welcome-fade-leave-to .welcome-card {
+  transform: scale(0.96) translateY(-12px);
+  opacity: 0;
 }

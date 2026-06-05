@@ -141,3 +141,17 @@ ON DUPLICATE KEY UPDATE
   map_x = VALUES(map_x),
   map_y = VALUES(map_y),
   cover_image_url = VALUES(cover_image_url);
+
+INSERT INTO admin_user (username, password_hash, role, enabled)
+VALUES ('admin', 'pbkdf2$120000$Q2FtcHVzTGVuc0FkbWluU2FsdDIwMjY=$LEPlmZ9ZoM5rUib2xR2wp3rGVJ/FbI0XSoMtzZUIrQI=', 'admin', TRUE)
+ON DUPLICATE KEY UPDATE
+  password_hash = VALUES(password_hash),
+  role = VALUES(role),
+  enabled = VALUES(enabled);
+
+INSERT INTO app_user (username, password_hash, email, role, enabled)
+VALUES ('admin', 'pbkdf2$120000$Q2FtcHVzTGVuc0FkbWluU2FsdDIwMjY=$LEPlmZ9ZoM5rUib2xR2wp3rGVJ/FbI0XSoMtzZUIrQI=', NULL, 'admin', TRUE)
+ON DUPLICATE KEY UPDATE
+  password_hash = VALUES(password_hash),
+  role = VALUES(role),
+  enabled = VALUES(enabled);

@@ -24,16 +24,22 @@ Campuslens/
 - 算法服务：Python FastAPI
 - 数据库：MySQL
 - 图片与向量：本地目录、向量文件、地标统计参数文件
-- 检索策略：DINOv2 提取图像特征，按地标样本特征估计均值和协方差，使用马氏距离与卡方置信度评分返回 Top-5
+- 检索策略：DINOv2 提取图像特征，按地标样本特征估计均值和协方差，使用马氏距离与 sigmoid 经验匹配分返回 Top-5
 - 地图能力：基于校园平面图做静态标注，不做实时导航和室内导航
 
 ## 本地演示启动
 
-Windows 下可以直接使用 `scripts/` 目录中的脚本启动数据库、后端和前端：
+Windows 下可以直接使用 `scripts/` 目录中的脚本启动后端、前端和算法服务：
 
 ```powershell
 scripts\1_check-env.cmd
 scripts\2_start-dev.cmd
+```
+
+默认启动流程会使用本机 Docker Desktop 启动 MySQL，并以 `mysql` profile 启动后端。如果需要做完整联调验收，直接运行：
+
+```powershell
+scripts\4_verify-dev.cmd
 ```
 
 启动后访问：
@@ -41,18 +47,27 @@ scripts\2_start-dev.cmd
 ```text
 前端页面：http://localhost:5173
 后端健康检查：http://localhost:8080/api/health
+算法健康检查：http://localhost:8000/api/v1/health
 ```
 
-默认数据库连接：
+本地演示默认依赖 MySQL。算法服务需要本机准备模型文件和索引参数：
 
 ```text
-MySQL: localhost:3306
-database: campuslens
-username: campuslens
-password: campuslens123
+algorithm/models/dinov2_model.pth
+algorithm/data/faiss_index/landmark_index.faiss
+algorithm/data/faiss_index/metadata.pkl
+algorithm/data/faiss_index/landmark_stats.pkl
 ```
 
-`2_start-dev.cmd` 会先调用 `scripts\start-database.cmd` 启动 Docker MySQL，再启动后端和前端。`start-database.cmd` 会优先使用 Windows PATH 中的 `docker`；如果 Windows 侧没有 Docker，但 WSL 中存在 `Ubuntu` 发行版且已配置 Docker Engine，则会自动通过 WSL 执行 `docker compose up -d mysql`。数据库首次创建容器数据卷时会自动执行 `database/schema.sql` 和 `database/seed_landmarks.sql`，初始化基础表和 L01-L10 地标数据。账号和密码仅用于本地开发，可通过 `.env` 覆盖；仓库只提交 `.env.example`。
+模型权重和 `algorithm/data/faiss_index/` 下的索引产物不提交到 GitHub。模型文件按 `algorithm/README.md` 下载到本地；索引和统计参数在算法服务启动后通过 `POST /api/v1/index/rebuild` 自动生成。
+
+MySQL 是默认启动路径，不需要额外设置 `CAMPUSLENS_BACKEND_PROFILE`。`start-database.cmd` 会优先使用 Windows 原生 Docker Desktop，并内置识别本机推荐路径 `D:\Tools\Docker\Docker\resources\bin`；如果 Docker daemon 未就绪，脚本会尝试启动 `D:\Tools\Docker\Docker\Docker Desktop.exe` 并等待就绪。如果 Windows 侧没有 Docker，但 WSL 中存在 `Ubuntu` 发行版且已配置 Docker Engine，则会自动通过 WSL 执行 `docker compose up -d mysql`。数据库首次创建容器数据卷时会自动执行 `database/schema.sql` 和 `database/seed_landmarks.sql`，初始化基础表和 L01-L10 地标数据。账号和密码仅用于本地开发，可通过 `.env` 覆盖；仓库只提交 `.env.example`。
+
+```powershell
+scripts\2_start-dev.cmd
+```
+
+当前本机已验证 Docker Desktop 程序安装在 `D:\Tools\Docker\Docker`，Docker Desktop 的 WSL 数据盘通过目录联接放在 `D:\DockerData\wsl`。项目脚本不依赖这个路径必须存在；存在时会优先使用它。
 
 如果使用 WSL Docker，需要先在 Ubuntu 中确认当前用户有 Docker daemon 权限：
 

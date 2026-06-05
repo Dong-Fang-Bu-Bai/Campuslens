@@ -2,73 +2,95 @@ package com.campuslens.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
-import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class AlgorithmSearchClient {
   private final ObjectMapper objectMapper;
-  private final HttpClient httpClient;
+  private final RestTemplate restTemplate;
   private final String baseUrl;
 
   public AlgorithmSearchClient(
       ObjectMapper objectMapper,
+      RestTemplateBuilder restTemplateBuilder,
       @Value("${campuslens.algorithm.base-url:http://localhost:8000}") String baseUrl) {
     this.objectMapper = objectMapper;
     this.baseUrl = baseUrl.replaceAll("/+$", "");
-    this.httpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(3))
+    this.restTemplate = restTemplateBuilder
+        .setConnectTimeout(Duration.ofSeconds(3))
+        .setReadTimeout(Duration.ofSeconds(20))
         .build();
   }
 
   public AlgorithmSearchResponse search(MultipartFile file) {
-    String boundary = "CampusLensBoundary" + UUID.randomUUID();
-    HttpRequest request;
+    HttpEntity<MultiValueMap<String, Object>> request;
     try {
-      request = HttpRequest.newBuilder()
-          .uri(URI.create(baseUrl + "/api/v1/search"))
-          .timeout(Duration.ofSeconds(20))
-          .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-          .POST(HttpRequest.BodyPublishers.ofByteArrays(multipartBody(file, boundary)))
-          .build();
+      request = multipartRequest(file);
     } catch (IOException ex) {
       throw new AlgorithmSearchException("读取上传图片失败", ex);
     }
 
     try {
-      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-      if (response.statusCode() < 200 || response.statusCode() >= 300) {
-        throw new AlgorithmSearchException("算法服务返回 HTTP " + response.statusCode());
+      ResponseEntity<String> response = restTemplate.postForEntity(
+          baseUrl + "/api/v1/search",
+          request,
+          String.class);
+      if (!response.getStatusCode().is2xxSuccessful()) {
+        throw new AlgorithmSearchException(
+            "算法服务返回 HTTP " + response.getStatusCode().value() + ": " + response.getBody());
       }
-      return objectMapper.readValue(response.body(), AlgorithmSearchResponse.class);
+      return objectMapper.readValue(response.getBody(), AlgorithmSearchResponse.class);
     } catch (IOException ex) {
       throw new AlgorithmSearchException("解析算法服务响应失败", ex);
-    } catch (InterruptedException ex) {
-      Thread.currentThread().interrupt();
-      throw new AlgorithmSearchException("调用算法服务被中断", ex);
+    } catch (HttpStatusCodeException ex) {
+      throw new AlgorithmSearchException(
+          "算法服务返回 HTTP " + ex.getStatusCode().value() + ": " + ex.getResponseBodyAsString(), ex);
+    } catch (RestClientException ex) {
+      throw new AlgorithmSearchException("调用算法服务失败：" + ex.getMessage(), ex);
     }
   }
 
-  private List<byte[]> multipartBody(MultipartFile file, String boundary) throws IOException {
+  private HttpEntity<MultiValueMap<String, Object>> multipartRequest(MultipartFile file) throws IOException {
     String filename = file.getOriginalFilename() == null ? "upload.jpg" : file.getOriginalFilename();
-    String contentType = file.getContentType() == null ? "application/octet-stream" : file.getContentType();
-    String header = "--" + boundary + "\r\n"
-        + "Content-Disposition: form-data; name=\"file\"; filename=\"" + filename.replace("\"", "") + "\"\r\n"
-        + "Content-Type: " + contentType + "\r\n\r\n";
-    String footer = "\r\n--" + boundary + "--\r\n";
-    return List.of(
-        header.getBytes(StandardCharsets.UTF_8),
-        file.getBytes(),
-        footer.getBytes(StandardCharsets.UTF_8));
+    String contentType = file.getContentType() == null ? MediaType.APPLICATION_OCTET_STREAM_VALUE : file.getContentType();
+
+    ByteArrayResource fileResource = new ByteArrayResource(file.getBytes()) {
+      @Override
+      public String getFilename() {
+        return filename;
+      }
+
+      @Override
+      public long contentLength() {
+        return file.getSize();
+      }
+    };
+
+    HttpHeaders fileHeaders = new HttpHeaders();
+    fileHeaders.setContentType(MediaType.parseMediaType(contentType));
+    HttpEntity<ByteArrayResource> filePart = new HttpEntity<>(fileResource, fileHeaders);
+
+    MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+    body.add("file", filePart);
+
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+    return new HttpEntity<>(body, headers);
   }
 
   public record AlgorithmSearchResponse(

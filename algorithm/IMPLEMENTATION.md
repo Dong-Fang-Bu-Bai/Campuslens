@@ -83,8 +83,8 @@
    ↓
 5. 对每个候选地标：
    a. 计算马氏距离 d_M
-   b. 转换为置信度评分 score
-   c. 确定置信度等级
+   b. 转换为经验匹配分 score
+   c. 确定匹配等级
    ↓
 6. 按评分排序，返回 Top-K
 ```
@@ -100,7 +100,7 @@
 **主要功能**:
 - 地标统计信息计算
 - 马氏距离计算
-- 置信度评分转换
+- 经验匹配分转换
 - FAISS 索引管理
 
 **关键方法**:
@@ -281,41 +281,24 @@ def _compute_mahalanobis_distance(self, query_vector: np.ndarray, stats: dict) -
 
 ---
 
-### 置信度评分实现
+### 经验匹配分实现
 
 ```python
-def _calculate_mahalanobis_score(self, query_vector: np.ndarray, stats: dict) -> float:
+def mahalanobis_match_score(distance: float) -> float:
     """
-    基于马氏距离计算自适应评分
+    基于马氏距离计算经验匹配分
     
-    公式: score = exp(-d² / (2 · χ²_critical))
+    公式: score = 1 / (1 + exp(3.0 * (log(d + 1) - log(901))))
     
     Args:
-        query_vector: 查询图片的特征向量 (768,)
-        stats: 地标统计信息字典
+        distance: 查询图片到候选地标分布的马氏距离
     
     Returns:
-        置信度评分 [0, 1]
+        经验匹配分 [0, 1]，不具备概率或统计置信度含义
     """
-    # Step 1: 计算马氏距离
-    mahalanobis_dist = self._compute_mahalanobis_distance(query_vector, stats)
-    
-    # Step 2: 确定自由度（特征维度数）
-    degrees_of_freedom = len(query_vector)  # 768
-    
-    # Step 3: 计算卡方分布的95%分位数
-    if HAS_SCIPY:
-        chi2_critical = scipy_stats.chi2.ppf(0.95, df=degrees_of_freedom)
-        # 对于 df=768，结果约为 830.5
-    else:
-        # 近似：对于大自由度，χ²(df) ≈ df
-        chi2_critical = degrees_of_freedom
-    
-    # Step 4: 将马氏距离的平方转换为概率分数
-    squared_distance = mahalanobis_dist ** 2
-    score = np.exp(-squared_distance / (2.0 * chi2_critical))
-    
-    return float(score)
+    log_dist = math.log(distance + 1.0)
+    center = math.log(900.0 + 1.0)
+    return 1.0 / (1.0 + math.exp(3.0 * (log_dist - center)))
 ```
 
 ---
@@ -335,10 +318,10 @@ def search_landmarks_by_category(
     Args:
         query_vector: 查询图片的特征向量
         top_k: 返回的地标数量
-        confidence_threshold: 置信度阈值
+        confidence_threshold: 兼容旧调用，当前不参与匹配分计算
     
     Returns:
-        地标列表，包含统计信息和自适应评分
+        地标列表，包含马氏距离和经验匹配分
     """
     if self.index is None or self.index.ntotal == 0:
         raise ValueError("FAISS index is empty, please rebuild index first")
@@ -354,7 +337,7 @@ def search_landmarks_by_category(
     search_k = min(top_k * 2, self.index.ntotal)
     scores, indices = self.index.search(query_norm.reshape(1, -1), search_k)
     
-    # Step 3: 对每个候选地标计算马氏距离评分
+    # Step 3: 对每个候选地标计算马氏距离和经验匹配分
     results = []
     for idx, score in zip(indices[0], scores[0]):
         if idx == -1:  # FAISS 返回 -1 表示无结果
@@ -363,37 +346,27 @@ def search_landmarks_by_category(
         landmark_code = self.landmark_codes[idx]
         stats = self.landmark_stats[landmark_code]
         
-        # 3.1 计算基于马氏距离的自适应置信度
-        adaptive_score = self._calculate_mahalanobis_score(query_vector, stats)
+        # 3.1 计算马氏距离
+        mahalanobis_dist = self._compute_mahalanobis_distance(query_vector, stats)
         
         # 3.2 计算原始余弦相似度（用于对比）
         raw_cosine = float(score)
         
-        # 3.3 计算置信度等级
-        confidence_level = self._get_confidence_level(adaptive_score, stats)
-        
-        # 3.4 计算马氏距离
-        mahalanobis_dist = self._compute_mahalanobis_distance(query_vector, stats)
+        # 3.3 计算经验匹配分和匹配等级
+        match_score = mahalanobis_match_score(mahalanobis_dist)
+        confidence_level = match_level(match_score)
         
         results.append({
             "rank": 0,  # 稍后排序
             "landmarkCode": landmark_code,
             "landmarkName": stats["name"],
-            "rawScore": round(raw_cosine, 4),
-            "adaptiveScore": round(float(adaptive_score), 4),
-            "confidence": round(float(adaptive_score), 4),
+            "score": round(float(match_score), 4),
             "confidenceLevel": confidence_level,
-            "imageCount": stats["count"],
-            "statistics": {
-                "avgSimilarity": round(raw_cosine, 4),
-                "mahalanobisDistance": round(mahalanobis_dist, 4),
-                "stdDeviation": round(float(np.mean(stats["std"])), 4),
-                "compactness": self._calculate_compactness(stats["std"]),
-            }
+            "mahalanobisDistance": round(mahalanobis_dist, 4)
         })
     
-    # Step 4: 按自适应评分排序
-    results.sort(key=lambda x: x["adaptiveScore"], reverse=True)
+    # Step 4: 按经验匹配分排序
+    results.sort(key=lambda x: x["score"], reverse=True)
     
     # Step 5: 取 Top-K 并更新排名
     top_results = results[:top_k]

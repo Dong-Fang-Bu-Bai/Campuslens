@@ -22,6 +22,9 @@ paths:
     post:
       summary: 上传图片并检索 Top-5 地标
       tags: [Search]
+      security:
+        - bearerAuth: []
+        - {}
       requestBody:
         required: true
         content:
@@ -33,6 +36,9 @@ paths:
                 file:
                   type: string
                   format: binary
+                guestId:
+                  type: string
+                  description: 未登录游客标识；登录用户身份由 Bearer token 解析
       responses:
         "200":
           description: 检索成功；若算法服务暂不可用，返回空候选结果、lowConfidence=true 并在 message 中说明原因
@@ -92,10 +98,84 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FeedbackResponse"
+  /api/auth/register:
+    post:
+      summary: 普通用户注册
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthRegisterRequest"
+      responses:
+        "200":
+          description: 注册成功并返回用户身份
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: 用户名重复、密码过短或参数错误
+  /api/auth/login:
+    post:
+      summary: 用户登录；admin/admin 会返回管理员身份
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthLoginRequest"
+      responses:
+        "200":
+          description: 登录成功；role=admin 时前端自动进入后台
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: 用户名或密码错误
+  /api/admin/auth/login:
+    post:
+      summary: 管理员轻量登录（兼容旧接口，前端不直接展示）
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminLoginRequest"
+      responses:
+        "200":
+          description: 登录成功；V2 前端使用 /api/auth/login 隐式进入后台
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminLoginResponse"
+        "400":
+          description: 账号或密码错误
+  /api/admin/search-records:
+    get:
+      summary: 查看最近检索记录
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 最近 50 条检索记录
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminSearchRecord"
   /api/admin/landmarks:
     post:
       summary: 新增地标
       tags: [Admin]
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -109,6 +189,8 @@ paths:
     put:
       summary: 修改地标
       tags: [Admin]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -129,6 +211,8 @@ paths:
     post:
       summary: 上传地标样本图片
       tags: [Admin]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -158,6 +242,8 @@ paths:
     post:
       summary: 重建地标统计参数
       tags: [Admin]
+      security:
+        - bearerAuth: []
       responses:
         "200":
           description: 已提交统计参数重建任务
@@ -165,10 +251,49 @@ paths:
     get:
       summary: 查看反馈记录
       tags: [Admin]
+      security:
+        - bearerAuth: []
       responses:
         "200":
           description: 反馈列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminFeedbackRecord"
+  /api/admin/feedback/{id}/status:
+    post:
+      summary: 更新反馈处理状态
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackStatusRequest"
+      responses:
+        "200":
+          description: 状态更新成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackResponse"
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: 登录或注册接口返回的服务端会话 token。后台接口要求 role=admin。
   schemas:
     SearchResponse:
       type: object
@@ -181,6 +306,7 @@ components:
           type: string
         lowConfidence:
           type: boolean
+          description: 兼容字段；true 表示所有候选均为低匹配等级，或算法服务暂不可用
         message:
           type: string
         results:
@@ -209,11 +335,11 @@ components:
         score:
           type: number
           format: double
-          description: 基于马氏距离和卡方分布换算得到的归一化置信度评分
+          description: 基于马氏距离 sigmoid 归一化得到的经验匹配分，仅用于排序、展示区分度和辅助判断，不具备概率或统计置信度含义
           example: 0.86
         confidenceLevel:
           type: string
-          description: 算法服务给出的置信度等级，对接算法服务后可透传
+          description: 兼容字段，算法服务给出的经验匹配等级
           enum: [high, medium, low]
           example: high
         mahalanobisDistance:
@@ -300,6 +426,10 @@ components:
         confirmedLandmarkId:
           type: integer
           format: int64
+        guestId:
+          type: string
+          nullable: true
+          description: 未登录游客标识；登录用户身份由 Bearer token 解析
         feedbackType:
           type: string
           enum: [correct, wrong, uncertain]
@@ -317,9 +447,168 @@ components:
         message:
           type: string
           example: 反馈已记录，后续可进入后台审核
+    FeedbackStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending, accepted, ignored]
+    AuthRegisterRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          description: 普通字符串，数据库唯一
+          example: student01
+        password:
+          type: string
+          minLength: 8
+          example: password123
+        email:
+          type: string
+          format: email
+          nullable: true
+          description: 选填，用于绑定
+    AuthLoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: student01
+        password:
+          type: string
+          example: password123
+    AuthResponse:
+      type: object
+      properties:
+        userId:
+          type: integer
+          format: int64
+        username:
+          type: string
+        email:
+          type: string
+          nullable: true
+        role:
+          type: string
+          enum: [user, admin]
+        admin:
+          type: boolean
+        token:
+          type: string
+          description: 服务端会话 token，调用需登录接口时放入 Authorization: Bearer
+        message:
+          type: string
+    AdminLoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: admin
+        password:
+          type: string
+          example: admin
+    AdminLoginResponse:
+      type: object
+      properties:
+        loggedIn:
+          type: boolean
+        username:
+          type: string
+        role:
+          type: string
+        token:
+          type: string
+        message:
+          type: string
+    AdminSearchRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        uploadImageUrl:
+          type: string
+        bestLandmarkName:
+          type: string
+          nullable: true
+        bestScore:
+          type: number
+          format: double
+          nullable: true
+        status:
+          type: string
+          enum: [success, low_confidence, empty_result, algorithm_unavailable]
+        lowConfidence:
+          type: boolean
+        message:
+          type: string
+        guestId:
+          type: string
+        userId:
+          type: integer
+          format: int64
+          nullable: true
+        username:
+          type: string
+          nullable: true
+        userType:
+          type: string
+          enum: [guest, user]
+        createdAt:
+          type: string
+          format: date-time
+    AdminFeedbackRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        searchRecordId:
+          type: integer
+          format: int64
+        predictedLandmarkId:
+          type: integer
+          format: int64
+          nullable: true
+        predictedLandmarkName:
+          type: string
+          nullable: true
+        confirmedLandmarkId:
+          type: integer
+          format: int64
+          nullable: true
+        confirmedLandmarkName:
+          type: string
+          nullable: true
+        userId:
+          type: integer
+          format: int64
+          nullable: true
+        username:
+          type: string
+          nullable: true
+        feedbackType:
+          type: string
+          enum: [correct, wrong, uncertain]
+        comment:
+          type: string
+        status:
+          type: string
+          enum: [pending, accepted, ignored]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     LandmarkCreateRequest:
       type: object
-      required: [code, name]
+      required: [code, name, mapX, mapY]
       properties:
         code:
           type: string
@@ -339,6 +628,8 @@ components:
           type: number
         mapY:
           type: number
+        coverImageUrl:
+          type: string
     HealthResponse:
       type: object
       properties:

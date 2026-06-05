@@ -67,6 +67,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | `GET /api/landmarks` | REST Client | 返回 L01-L10 地标列表 |
 | `GET /api/landmarks/1` | REST Client | 返回图书馆详情 |
 | `POST /api/search/upload` | 上传 JPG、PNG 或 WebP | 算法服务可用时返回 `searchRecordId` 和候选结果；算法服务不可用时返回空结果和明确提示 |
+| `POST /api/auth/register` | 提交用户名、密码和选填邮箱 | 返回普通用户身份和 token，用户名唯一，密码至少 8 位，密码哈希入库 |
+| `POST /api/auth/login` | 提交用户名和密码 | 普通用户返回主页面身份和 token；`admin/admin` 返回管理员身份并进入后台 |
 | `POST /api/feedback` | 提交 JSON | 返回 `feedbackId` 和 `pending` 状态 |
 
 ## 当前边界
@@ -74,7 +76,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 - 后端已连接 MySQL 基础库，当前真实使用 `landmark` 表读取 L01-L10 地标元数据。
 - 图片上传保存到运行目录的 `uploads/`，该目录不进入 Git。
 - 检索结果优先来自算法服务 `/api/v1/search`，后端按 `landmarkCode` 补齐 L01-L10 地标展示字段。
-- `search_record` 和 `feedback` 表已在脚本中预留，当前运行时仍使用临时编号和 pending 响应，后续迭代再接入持久化。
+- `search_record` 和 `feedback` 表已接入持久化；登录用户的检索和反馈通过 Bearer token 解析 `userId`，未登录时记录本地持久化 `guestId`。
 - 地标样本图片由成员按采集规范手动采集并整理到本地 `datasets/landmarks/`，原图仍按 `.gitignore` 排除，不直接提交 Git。
 - 前端 dev server 通过 Vite proxy 访问后端接口，默认端口为 5173。
 
