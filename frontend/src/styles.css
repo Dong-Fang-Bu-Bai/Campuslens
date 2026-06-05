@@ -93,6 +93,7 @@ button {
   border-right: 1px solid rgba(255, 255, 255, 0.03);
   box-shadow: 20px 0 50px rgba(0, 0, 0, 0.3);
   position: relative;
+  z-index: 0;
   overflow: hidden;
   transition: opacity 0.4s cubic-bezier(0.25, 0.8, 0.25, 1),
               padding 0.4s cubic-bezier(0.25, 0.8, 0.25, 1),
@@ -130,13 +131,8 @@ button {
 .brand-logo {
   width: 36px;
   height: 36px;
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  color: var(--color-accent-light);
   display: grid;
   place-items: center;
-  box-shadow: 0 0 15px rgba(59, 130, 246, 0.1);
 }
 
 .eyebrow {
@@ -446,6 +442,8 @@ h3 {
   background: transparent;
   overflow-y: auto;
   height: 100vh;
+  position: relative;
+  z-index: 2;
 }
 
 /* 渐入与微垂直滑动 (Fade and Slide) */
@@ -1168,8 +1166,8 @@ h3 {
 }
 
 .history-item {
-  background: rgba(255, 255, 255, 0.01);
-  border: 1px solid rgba(255, 255, 255, 0.02);
+  background: #0b0f19;
+  border: 1px solid rgba(255, 255, 255, 0.04);
   border-radius: var(--radius-md);
   padding: 18px;
   display: flex;
@@ -1232,6 +1230,10 @@ h3 {
 
 .feedback-card {
   padding: 32px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .feedback-card h3 {
@@ -1748,19 +1750,56 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: calc(100vh - 120px);
-  padding: 20px;
+  min-height: calc(100vh - 210px); /* 留足顶级栏及 padding 空间，消除滚动条 */
+  padding: 0 20px;
 }
 
 .auth-card {
   width: 100%;
-  max-width: 400px;
-  padding: 32px;
+  max-width: 520px;
+  padding: 48px 54px;
   background: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   animation: card-appear 0.4s cubic-bezier(0.25, 0.8, 0.25, 1) both;
+}
+
+.auth-brand-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 32px;
+  text-align: center;
+}
+
+.auth-brand-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-bottom: 14px;
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.auth-brand-header h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0 0 6px;
+  letter-spacing: 0.05em;
+  background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.auth-brand-header p {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  margin: 0;
+  font-weight: 500;
+  opacity: 0.8;
 }
 
 .auth-tabs {
@@ -1769,13 +1808,13 @@ h3 {
   border: 1px solid rgba(255, 255, 255, 0.03);
   border-radius: var(--radius-md);
   padding: 4px;
-  margin-bottom: 24px;
+  margin-bottom: 30px;
 }
 
 .auth-tabs button {
   flex: 1;
-  padding: 8px 12px;
-  font-size: 13px;
+  padding: 10px 14px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-secondary);
   background: transparent;
@@ -1798,18 +1837,18 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 18px;
+  margin-bottom: 24px;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 13.5px;
   font-weight: 600;
   text-align: left;
 }
 
 .auth-card input {
   width: 100%;
-  min-height: 40px;
-  padding: 0 12px;
-  font-size: 13px;
+  min-height: 46px;
+  padding: 0 14px;
+  font-size: 14px;
   color: #ffffff;
   background: #080c14;
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -2019,14 +2058,9 @@ h3 {
 .welcome-logo-badge {
   width: 56px;
   height: 56px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: var(--color-accent-light);
   display: grid;
   place-items: center;
   margin-bottom: 22px;
-  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15);
 }
 
 .welcome-logo-badge svg {
@@ -2085,23 +2119,38 @@ h3 {
 }
 
 .welcome-poem-box {
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: var(--radius-md);
-  padding: 18px 24px;
+  padding: 20px 24px;
   margin-bottom: 30px;
   width: 100%;
-  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.05), 
+              0 12px 32px rgba(0, 0, 0, 0.35);
+  position: relative;
+  overflow: hidden;
+}
+
+.welcome-poem-box::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.2), transparent);
 }
 
 .welcome-poem-box .poem-text {
-  font-size: 13px;
-  font-weight: 500;
-  color: #94a3b8;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #f1f5f9;
   margin: 0;
-  line-height: 1.65;
-  letter-spacing: 0.04em;
-  font-style: italic;
+  line-height: 1.7;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.08);
 }
 
 .welcome-enter-btn {
@@ -2137,4 +2186,40 @@ h3 {
 .welcome-fade-leave-to .welcome-card {
   transform: scale(0.96) translateY(-12px);
   opacity: 0;
+}
+
+/* ==========================================
+   12. 全局及主要内容容器滚动条美化
+   ========================================= */
+.content-area::-webkit-scrollbar,
+.side-panel::-webkit-scrollbar,
+::-webkit-scrollbar {
+  width: 8px; /* 8px 宽度，完全匹配 Gemini 风格 */
+  height: 8px;
+}
+
+.content-area::-webkit-scrollbar-track,
+.side-panel::-webkit-scrollbar-track,
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.content-area::-webkit-scrollbar-thumb,
+.side-panel::-webkit-scrollbar-thumb,
+::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.22); /* 常态下清晰明显的实心半透灰白 */
+  border-radius: 99px;
+  transition: background-color 0.25s ease;
+}
+
+.content-area::-webkit-scrollbar-thumb:hover,
+.side-panel::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(96, 165, 250, 0.55); /* 悬浮时渐变为科技亮蓝 */
+}
+
+.content-area::-webkit-scrollbar-thumb:active,
+.side-panel::-webkit-scrollbar-thumb:active,
+::-webkit-scrollbar-thumb:active {
+  background-color: rgba(59, 130, 246, 0.85); /* 拖动时点亮为高饱和深蓝 */
 }

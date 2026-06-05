@@ -8,6 +8,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.PreparedStatement;
 import java.util.List;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class SearchRecordService {
+  private static final Pattern GUEST_SEQUENCE_PATTERN = Pattern.compile("^guest#([1-9]\\d*)$");
   private final JdbcTemplate jdbcTemplate;
   private final ObjectMapper objectMapper;
 
@@ -23,7 +26,7 @@ public class SearchRecordService {
     this.objectMapper = objectMapper;
   }
 
-  public long create(
+  public SearchRecordCreation create(
       String uploadImageUrl,
       List<SearchResult> results,
       boolean lowConfidence,
@@ -33,6 +36,7 @@ public class SearchRecordService {
       String guestId) {
     SearchResult best = results.isEmpty() ? null : results.get(0);
     String topResultsJson = toJson(results);
+    String storedGuestId = userId == null ? normalizeGuestId(guestId) : "user-" + userId;
     KeyHolder keyHolder = new GeneratedKeyHolder();
     jdbcTemplate.update(connection -> {
       PreparedStatement ps = connection.prepareStatement("""
@@ -54,13 +58,13 @@ public class SearchRecordService {
       ps.setString(5, status);
       ps.setBoolean(6, lowConfidence);
       ps.setString(7, message);
-      ps.setString(8, userId == null ? normalizeGuestId(guestId) : "user-" + userId);
+      ps.setString(8, storedGuestId);
       ps.setObject(9, userId);
       ps.setString(10, userId == null ? "guest" : "user");
       return ps;
     }, keyHolder);
     Number key = Objects.requireNonNull(keyHolder.getKey(), "search_record id not generated");
-    return key.longValue();
+    return new SearchRecordCreation(key.longValue(), storedGuestId);
   }
 
   public boolean exists(Long searchRecordId) {
@@ -125,20 +129,70 @@ public class SearchRecordService {
 
   private String toJson(List<SearchResult> results) {
     try {
-      return objectMapper.writeValueAsString(results);
+      return objectMapper.writeValueAsString(results.stream()
+          .map(SearchResultSnapshot::from)
+          .toList());
     } catch (JsonProcessingException ex) {
       throw new IllegalArgumentException("Top-5 结果快照序列化失败");
     }
   }
 
-  private String normalizeGuestId(String guestId) {
+  private synchronized String normalizeGuestId(String guestId) {
     if (guestId == null || guestId.isBlank()) {
-      return "guest";
+      return nextGuestId();
     }
     String value = guestId.trim();
-    if (value.length() > 100) {
-      return value.substring(0, 100);
+    if (GUEST_SEQUENCE_PATTERN.matcher(value).matches()) {
+      return value;
     }
-    return value;
+    return nextGuestId();
+  }
+
+  private String nextGuestId() {
+    int max = jdbcTemplate.queryForList(
+            "SELECT guest_id FROM search_record WHERE user_type = 'guest' AND guest_id LIKE 'guest#%'",
+            String.class).stream()
+        .mapToInt(this::guestSequence)
+        .max()
+        .orElse(0);
+    return "guest#" + (max + 1);
+  }
+
+  private int guestSequence(String guestId) {
+    Matcher matcher = GUEST_SEQUENCE_PATTERN.matcher(guestId == null ? "" : guestId.trim());
+    return matcher.matches() ? Integer.parseInt(matcher.group(1)) : 0;
+  }
+
+  public record SearchRecordCreation(Long id, String guestId) {
+  }
+
+  private record SearchResultSnapshot(
+      int rank,
+      Long landmarkId,
+      String landmarkCode,
+      String name,
+      String englishName,
+      double score,
+      String confidenceLevel,
+      Double mahalanobisDistance,
+      String summary,
+      String locationText,
+      double mapX,
+      double mapY) {
+    private static SearchResultSnapshot from(SearchResult result) {
+      return new SearchResultSnapshot(
+          result.rank(),
+          result.landmarkId(),
+          result.landmarkCode(),
+          result.name(),
+          result.englishName(),
+          result.score(),
+          result.confidenceLevel(),
+          result.mahalanobisDistance(),
+          result.summary(),
+          result.locationText(),
+          result.mapX(),
+          result.mapY());
+    }
   }
 }

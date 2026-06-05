@@ -3,7 +3,7 @@
     <aside class="side-panel" :class="{ 'collapsed': isSidebarCollapsed }">
       <div class="brand-header">
         <div class="brand-logo">
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+          <img src="/logo.png" alt="CampusLens" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />
         </div>
         <div>
           <p class="eyebrow">CampusLens</p>
@@ -336,7 +336,7 @@
           <div class="welcome-bg-image" style="background-image: url('/welcome-bg.png');"></div>
           <div class="welcome-card-content">
             <div class="welcome-logo-badge">
-              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+              <img src="/logo.png" alt="CampusLens" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />
             </div>
             <p class="welcome-eyebrow">CampusLens</p>
             <h2 class="welcome-title">欢迎使用 CampusLens 校园慧眼</h2>
@@ -349,7 +349,9 @@
             </div>
             
             <div class="welcome-poem-box">
-              <p class="poem-text">“{{ welcomePoem }}”</p>
+              <p class="poem-text">
+                <span style="color: var(--color-accent-light); opacity: 0.5; font-family: Georgia, serif; font-size: 1.2em; vertical-align: -0.1em; margin-right: 4px;">“</span>{{ welcomePoem }}<span style="color: var(--color-accent-light); opacity: 0.5; font-family: Georgia, serif; font-size: 1.2em; vertical-align: -0.2em; margin-left: 4px;">”</span>
+              </p>
             </div>
             
             <button type="button" class="primary-btn welcome-enter-btn" @click="dismissWelcome">
@@ -428,6 +430,7 @@ const loading = ref(false)
 const error = ref('')
 const initialView = new URLSearchParams(window.location.search).get('view')
 const activeView = ref(['results', 'map', 'feedback', 'auth', 'admin'].includes(initialView) ? initialView : 'results')
+isSidebarCollapsed.value = (activeView.value === 'auth')
 const feedbackMessage = ref('')
 const authMessage = ref('')
 const authError = ref(false)
@@ -591,8 +594,9 @@ onMounted(async () => {
   if (!dismissed) {
     welcomePoem.value = poems[Math.floor(Math.random() * poems.length)]
     const today = new Date()
-    const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }
-    welcomeDate.value.solar = today.toLocaleDateString('zh-CN', options)
+    const dateStr = today.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
+    const weekdayStr = today.toLocaleDateString('zh-CN', { weekday: 'long' })
+    welcomeDate.value.solar = `${dateStr}  ${weekdayStr}`
     welcomeDate.value.lunar = getLunarDateString(today)
     showWelcomeModal.value = true
   }
@@ -649,6 +653,7 @@ async function submitSearch() {
       throw new Error(body.message || '检索请求失败')
     }
     const data = await response.json()
+    saveGuestId(data.guestId)
     results.value = data.results.map((item) => {
       const matched = landmarks.value.find(l => l.id === item.landmarkId)
       let imgUrl = item.coverImageUrl || item.cover_image_url || item.imageUrl
@@ -763,6 +768,9 @@ function switchAuthMode(mode) {
 watch(activeView, (newView) => {
   if (newView === 'auth') {
     clearAuth()
+    isSidebarCollapsed.value = true
+  } else {
+    isSidebarCollapsed.value = false
   }
 })
 
@@ -881,11 +889,17 @@ function loadStoredUser() {
 function loadGuestId() {
   const key = 'campuslens.guestId'
   const existing = localStorage.getItem(key)
-  if (existing) {
+  if (/^guest#[1-9]\d*$/.test(existing || '')) {
     return existing
   }
-  const generated = `guest-${crypto.randomUUID()}`
-  localStorage.setItem(key, generated)
-  return generated
+  localStorage.removeItem(key)
+  return 'guest'
+}
+
+function saveGuestId(value) {
+  if (/^guest#[1-9]\d*$/.test(value || '')) {
+    guestId.value = value
+    localStorage.setItem('campuslens.guestId', value)
+  }
 }
 </script>
