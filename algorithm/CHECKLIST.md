@@ -29,8 +29,8 @@
 - [x] `docker-compose.yml` - Docker Compose 配置
 
 ### 文档
-- [x] `README.md` - 详细使用文档（**已更新至 v2.0**）
-- [x] `QUICKSTART.md` - 快速启动指南（**已更新至 v2.0**）
+- [x] `README.md` - 详细使用文档（**已更新至 v2.1**）
+- [x] `QUICKSTART.md` - 快速启动指南（**已更新至 v2.1**）
 - [x] `algo.md` - 算法原理说明（马氏距离 + sigmoid 经验匹配分）
 - [x] `GPU_SUPPORT.md` - GPU 加速配置指南
 - [x] `CHECKLIST.md` - 项目清单（本文档）
@@ -210,7 +210,7 @@ docker-compose up -d
 
 ## 🔄 版本历史
 
-### v2.1 (2026-05-19) - 当前版本
+### v2.1 (2026-06-06) - 当前版本
 - ✅ 移除未使用的余弦相似度变量
 - ✅ 改进 FAISS 召回策略（`top_k * 2` → `max(top_k * 5, 30)`）
 - ✅ 提升召回率至 >99%
@@ -278,6 +278,6 @@ docker-compose up -d
 
 **项目状态**: ✅ 完成  
 **当前版本**: v2.1  
-**最后更新**: 2026-05-19  
+**最后更新**: 2026-06-06  
 **实现模式**: 纯离线 + 统计学方法  
 **核心技术**: DINOv2 + FAISS + 马氏距离 + FastAPI

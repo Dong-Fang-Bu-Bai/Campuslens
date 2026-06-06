@@ -15,6 +15,8 @@
 - ✅ **经验匹配分**: 基于马氏距离和 sigmoid 归一化提供稳定区分度
 - ✅ **匹配等级**: 返回 high/medium/low 等级辅助人工核验，不解释为概率置信度
 - ✅ **CPU/GPU 双模式**: 自动检测硬件，GPU 加速提升 6-7 倍性能
+- ✅ **高召回率**: FAISS 召回策略优化（`max(top_k * 5, 30)`），召回率 >99%
+- ✅ **精简响应**: v2.1+ 使用精简的 API 响应格式，只返回核心字段
 
 ---
 
@@ -117,7 +119,12 @@ curl.exe -X POST http://localhost:8000/api/v1/index/rebuild
 #### Step 6: 测试检索
 ```bash
 curl.exe -X POST http://localhost:8000/api/v1/search `
-  -F "file=@.\datasets\landmarks\L01_library\编号1_图书馆_1.jpg" | python -m json.tool
+  -F "file=@.\datasets\landmarks\L01_library\编号1_图书馆_1.jpg"
+```
+
+**注意**：PowerShell 中 `curl` 是 `Invoke-WebRequest` 的别名，请使用 `curl.exe`。如需格式化 JSON 输出，可使用 `ConvertFrom-Json`：
+```powershell
+curl.exe -X POST http://localhost:8000/api/v1/search -F "file=@test.jpg" | Select-Object -ExpandProperty Content | ConvertFrom-Json
 ```
 
 ---
@@ -522,19 +529,19 @@ ls -R ../datasets/landmarks/
 
 ## 🔄 版本历史
 
-### v2.1 (2026-05-19) - 当前版本
+### v2.1 (2026-06-06) - 当前版本
 - ✅ 移除未使用的余弦相似度变量
 - ✅ 改进 FAISS 召回策略（`top_k * 2` → `max(top_k * 5, 30)`）
 - ✅ 提升召回率至 >99%
 - ✅ 精简 API 响应格式
 
-### v2.0 (2026-05-19)
+### v2.0 (2026-05-30)
 - ✅ 升级为地标类别级别检索
 - ✅ 引入马氏距离评分算法
 - ✅ 实现基于马氏距离 sigmoid 归一化的经验匹配分
 - ✅ 添加协方差矩阵分析
 
-### v1.0 (2026-05-18)
+### v1.0 (2026-05-20)
 - ✅ 基础图片级别检索
 - ✅ DINOv2 + FAISS 集成
 - ✅ CPU/GPU 双模式支持

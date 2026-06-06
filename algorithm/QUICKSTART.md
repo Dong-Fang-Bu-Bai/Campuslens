@@ -95,7 +95,12 @@ curl -X POST http://localhost:8000/api/v1/index/rebuild
 **PowerShell:**
 ```powershell
 curl.exe -X POST http://localhost:8000/api/v1/search `
-  -F "file=@.\datasets\landmarks\L01_library\编号1_图书馆_1.jpg" | python -m json.tool
+  -F "file=@.\datasets\landmarks\L01_library\编号1_图书馆_1.jpg"
+```
+
+如需格式化 JSON 输出：
+```powershell
+curl.exe -X POST http://localhost:8000/api/v1/search -F "file=@test.jpg" | Select-Object -ExpandProperty Content | ConvertFrom-Json
 ```
 
 **CMD:**
@@ -245,4 +250,4 @@ curl.exe -X POST ...
 
 ---
 
-**最后更新**: 2026-05-19
+**最后更新**: 2026-06-06
