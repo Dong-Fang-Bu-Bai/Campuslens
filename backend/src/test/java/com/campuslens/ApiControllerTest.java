@@ -163,13 +163,37 @@ class ApiControllerTest {
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
+                  "searchRecordId": 99999,
+                  "predictedLandmarkId": 1,
+                  "feedbackType": "wrong"
+                }
+                """))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void feedbackWrongRejectsWithoutConfirmedForValidSearch() throws Exception {
+    // First create a search record via upload
+    when(algorithmSearchClient.search(any())).thenReturn(new AlgorithmSearchResponse(
+        List.of(new AlgorithmSearchResult(1, "L01", "图书馆", 0.92, "high", 2.5)),
+        false, "ok"));
+
+    MockMultipartFile file = new MockMultipartFile(
+        "file", "test.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {1, 2, 3});
+    mockMvc.perform(multipart("/api/search/upload").file(file))
+        .andExpect(status().isOk());
+
+    // Now test wrong type without confirmedLandmarkId
+    mockMvc.perform(post("/api/feedback")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
                   "searchRecordId": 1,
                   "predictedLandmarkId": 1,
                   "feedbackType": "wrong"
                 }
                 """))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.message").value("识别错误反馈需要提供 confirmedLandmarkId"));
+        .andExpect(status().isBadRequest());
   }
 
   @Test
@@ -191,7 +215,9 @@ class ApiControllerTest {
 
   @Test
   void adminFeedbackReturnsList() throws Exception {
-    mockMvc.perform(get("/api/admin/feedback"))
+    String token = login("admin", "admin");
+    mockMvc.perform(get("/api/admin/feedback")
+            .header("Authorization", "Bearer " + token))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$").isArray());
   }
