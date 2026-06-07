@@ -6,6 +6,7 @@ set "ROOT=%~dp0.."
 set "WSL_DISTRO=Ubuntu"
 set "PID_DIR=%ROOT%\.run"
 set "DB_ENV=%PID_DIR%\database-env.cmd"
+if exist "D:\Tools\Docker\Docker\resources\bin\docker.exe" set "PATH=D:\Tools\Docker\Docker\resources\bin;%PATH%"
 if "%CAMPUSLENS_DB_NAME%"=="" set "CAMPUSLENS_DB_NAME=campuslens"
 if "%CAMPUSLENS_DB_USERNAME%"=="" set "CAMPUSLENS_DB_USERNAME=campuslens"
 if "%CAMPUSLENS_DB_PASSWORD%"=="" set "CAMPUSLENS_DB_PASSWORD=campuslens123"
@@ -14,6 +15,8 @@ cd /d "%ROOT%"
 
 where docker >nul 2>nul
 if not errorlevel 1 (
+  call :ensure_windows_docker
+  if errorlevel 1 exit /b 1
   echo [CampusLens] Starting MySQL database with Windows Docker Compose...
   docker compose up -d mysql
   if errorlevel 1 exit /b 1
@@ -98,6 +101,24 @@ echo [CampusLens] MySQL startup check finished.
 echo [CampusLens] Database: campuslens, user: campuslens
 endlocal
 exit /b 0
+
+:ensure_windows_docker
+docker info >nul 2>nul
+if not errorlevel 1 exit /b 0
+echo [CampusLens] Windows Docker daemon is not ready. Trying to start Docker Desktop...
+if exist "D:\Tools\Docker\Docker\Docker Desktop.exe" (
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'D:\Tools\Docker\Docker\Docker Desktop.exe' -WindowStyle Hidden" >nul 2>nul
+) else (
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'Docker Desktop' -WindowStyle Hidden" >nul 2>nul
+)
+for /l %%I in (1,1,60) do (
+  docker info >nul 2>nul
+  if not errorlevel 1 exit /b 0
+  powershell -NoProfile -Command "Start-Sleep -Seconds 3" >nul
+)
+echo [CampusLens] Docker Desktop did not become ready in time.
+echo [CampusLens] Open Docker Desktop manually and retry this script.
+exit /b 1
 
 :wait_mysql_windows
 echo [CampusLens] Waiting for MySQL health check...

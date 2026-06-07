@@ -22,6 +22,28 @@ if errorlevel 1 (
 )
 
 if not exist "%PID_DIR%" mkdir "%PID_DIR%"
+
+call :http_ok "http://localhost:5173"
+if not errorlevel 1 (
+  echo [CampusLens] Frontend already responds at http://localhost:5173
+  endlocal
+  exit /b 0
+)
+
+if exist "%PID_FILE%" (
+  set /p OLD_PID=<"%PID_FILE%"
+  if not "%OLD_PID%"=="" (
+    tasklist /FI "PID eq %OLD_PID%" | findstr /R /C:" %OLD_PID% " >nul 2>nul
+    if not errorlevel 1 (
+      echo [CampusLens] Frontend already has a launcher PID: %OLD_PID%
+      echo [CampusLens] Page: http://localhost:5173
+      endlocal
+      exit /b 0
+    )
+  )
+  del "%PID_FILE%" >nul 2>nul
+)
+
 if not exist "%FRONTEND_DIR%\node_modules" (
   echo [CampusLens] node_modules not found. Installing frontend dependencies...
   pushd "%FRONTEND_DIR%"
@@ -49,3 +71,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 echo [CampusLens] Frontend launcher PID saved to %PID_FILE%.
 echo [CampusLens] Keep the new frontend window open while developing.
 endlocal
+exit /b 0
+
+:http_ok
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r = Invoke-WebRequest -UseBasicParsing -Uri '%~1' -TimeoutSec 2; if ($r.StatusCode -ge 200 -and $r.StatusCode -lt 500) { exit 0 } } catch { }; exit 1" >nul 2>nul
+exit /b %errorlevel%

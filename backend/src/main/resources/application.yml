@@ -3,15 +3,19 @@ server:
 
 spring:
   datasource:
-    url: ${CAMPUSLENS_DATASOURCE_URL:jdbc:mysql://localhost:3306/campuslens?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
+    url: ${CAMPUSLENS_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/campuslens?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
     username: ${CAMPUSLENS_DATASOURCE_USERNAME:campuslens}
     password: ${CAMPUSLENS_DATASOURCE_PASSWORD:campuslens123}
     driver-class-name: com.mysql.cj.jdbc.Driver
   sql:
     init:
-      mode: always
-      schema-locations: file:../database/schema.sql
-      data-locations: file:../database/seed_landmarks.sql
+      mode: never
+  flyway:
+    enabled: true
+    locations: filesystem:../database/migration
+    baseline-on-migrate: true
+    baseline-version: 1
+    validate-on-migrate: false
   servlet:
     multipart:
       max-file-size: 8MB

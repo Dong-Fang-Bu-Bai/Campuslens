@@ -1,10 +1,11 @@
 package com.campuslens.service;
 
-import com.campuslens.model.LandmarkDetail;
 import com.campuslens.model.SearchResponse;
 import com.campuslens.model.SearchResult;
+import com.campuslens.model.SessionUser;
 import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResponse;
 import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResult;
+import com.campuslens.service.SearchRecordService.SearchRecordCreation;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -15,7 +16,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -25,31 +25,63 @@ public class SearchService {
   private static final long MAX_FILE_SIZE = 8L * 1024 * 1024;
   private final LandmarkService landmarkService;
   private final AlgorithmSearchClient algorithmSearchClient;
-  private final AtomicLong searchRecordId = new AtomicLong(1);
+  private final SearchRecordService searchRecordService;
+  private final AuthService authService;
 
-  public SearchService(LandmarkService landmarkService, AlgorithmSearchClient algorithmSearchClient) {
+  public SearchService(
+      LandmarkService landmarkService,
+      AlgorithmSearchClient algorithmSearchClient,
+      SearchRecordService searchRecordService,
+      AuthService authService) {
     this.landmarkService = landmarkService;
     this.algorithmSearchClient = algorithmSearchClient;
+    this.searchRecordService = searchRecordService;
+    this.authService = authService;
   }
 
-  public SearchResponse search(MultipartFile file) {
+  public SearchResponse search(MultipartFile file, SessionUser user, String guestId) {
     validate(file);
+    Long activeUserId = user == null ? null : activeUserId(user.userId());
     String uploadUrl = save(file);
-    long currentSearchRecordId = searchRecordId.getAndIncrement();
     try {
       AlgorithmSearchResponse algorithmResponse = algorithmSearchClient.search(file);
       List<SearchResult> results = buildAlgorithmResults(algorithmResponse);
       if (results.isEmpty()) {
-        return unavailableResponse(currentSearchRecordId, uploadUrl, "算法服务未返回可匹配的 L01-L10 地标，请检查样本索引和 landmarkCode 映射。");
+        return recordedResponse(
+            uploadUrl,
+            true,
+            "算法服务未返回可匹配的 L01-L10 地标，请检查样本索引和 landmarkCode 映射。",
+            "empty_result",
+            results,
+            activeUserId,
+            guestId);
       }
-      return new SearchResponse(
-          currentSearchRecordId,
+      boolean lowConfidence = algorithmResponse.lowConfidence();
+      String message = normalizeMessage(algorithmResponse.message());
+      SearchRecordCreation record = searchRecordService.create(
           uploadUrl,
-          algorithmResponse.lowConfidence(),
-          normalizeMessage(algorithmResponse.message()),
+          results,
+          lowConfidence,
+          message,
+          lowConfidence ? "low_confidence" : "success",
+          activeUserId,
+          guestId);
+      return new SearchResponse(
+          record.id(),
+          uploadUrl,
+          record.guestId(),
+          lowConfidence,
+          message,
           results);
     } catch (AlgorithmSearchException ex) {
-      return unavailableResponse(currentSearchRecordId, uploadUrl, "算法服务暂不可用，未生成候选地标。原因：" + ex.getMessage());
+      return recordedResponse(
+          uploadUrl,
+          true,
+          "算法服务暂不可用，未生成候选地标。原因：" + ex.getMessage(),
+          "algorithm_unavailable",
+          List.of(),
+          activeUserId,
+          guestId);
     }
   }
 
@@ -126,13 +158,22 @@ public class SearchService {
             item.mapY()));
   }
 
-  private SearchResponse unavailableResponse(long currentSearchRecordId, String uploadUrl, String message) {
+  private SearchResponse recordedResponse(
+      String uploadUrl,
+      boolean lowConfidence,
+      String message,
+      String status,
+      List<SearchResult> results,
+      Long userId,
+      String guestId) {
+    SearchRecordCreation record = searchRecordService.create(uploadUrl, results, lowConfidence, message, status, userId, guestId);
     return new SearchResponse(
-        currentSearchRecordId,
+        record.id(),
         uploadUrl,
-        true,
+        record.guestId(),
+        lowConfidence,
         message,
-        List.of());
+        results);
   }
 
   private double clampScore(double score) {
@@ -166,5 +207,15 @@ public class SearchService {
       return "算法匹配等级较低，建议人工核验";
     }
     return message;
+  }
+
+  private Long activeUserId(Long userId) {
+    if (userId == null) {
+      return null;
+    }
+    if (!authService.isActiveUser(userId)) {
+      throw new IllegalArgumentException("用户不存在或已停用");
+    }
+    return userId;
   }
 }

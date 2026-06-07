@@ -3,6 +3,7 @@ setlocal
 chcp 65001 >nul
 
 if exist "D:\Tools\apache-maven-3.9.11\bin\mvn.cmd" set "PATH=D:\Tools\apache-maven-3.9.11\bin;%PATH%"
+if exist "D:\Tools\Docker\Docker\resources\bin\docker.exe" set "PATH=D:\Tools\Docker\Docker\resources\bin;%PATH%"
 
 echo [CampusLens] Checking local environment...
 echo.
@@ -12,6 +13,12 @@ call :check mvn "-version"
 call :check node "-v"
 call :check npm "-v"
 call :check docker "--version"
+if exist "D:\Tools\Docker\Docker\Docker Desktop.exe" (
+  echo [OK] Docker Desktop install path: D:\Tools\Docker\Docker
+)
+if exist "D:\DockerData\wsl" (
+  echo [OK] Docker Desktop data path: D:\DockerData\wsl
+)
 
 where py >nul 2>nul
 if errorlevel 1 (
