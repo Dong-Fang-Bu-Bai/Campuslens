@@ -742,6 +742,10 @@ function resetFeedbackForm() {
 async function submitFeedback() {
   feedbackMessage.value = ''
   feedbackError.value = ''
+  if (feedback.feedbackType === 'wrong' && !feedback.confirmedLandmarkId) {
+    feedbackError.value = '识别错误反馈请选择正确地标'
+    return
+  }
   feedbackSubmitting.value = true
   const payload = { ...feedback, guestId: guestId.value }
   try {

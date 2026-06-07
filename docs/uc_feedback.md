@@ -20,13 +20,13 @@
 
 1. 用户已完成图片上传，并获取 Top-5 地标检索结果。
 2. 系统中存在 `landmark` 地标数据。
-3. 检索记录已保存至 `search_records` 表。
+3. 检索记录已保存至 `search_record` 表。
 
 ## 后置条件
 
 ### 成功保证
 
-- 系统保存用户反馈记录至 `user_feedback` 表。
+- 系统保存用户反馈记录至 `feedback` 表。
 - 反馈状态置为 `pending`，等待后续审核。
 
 ### 最小保证
@@ -43,7 +43,7 @@
    - 补充说明（选填，最多 500 字）
 3. **用户选择正确地标**：当用户选择"识别错误"反馈类型后，系统展示地标下拉列表，列出全部可用地标供用户选择。用户从中选取正确的地标。
 4. **用户提交反馈**：用户点击"提交"按钮，系统校验表单完整性（错误类型必须选择正确地标），调用 `POST /api/feedback` 提交反馈数据。
-5. **系统保存反馈**：后端接收请求，将反馈数据写入 `user_feedback` 表，关联 `search_records` 记录，返回保存成功的反馈 ID。
+5. **系统保存反馈**：后端接收请求，将反馈数据写入 `feedback` 表，关联 `search_record` 记录，返回保存成功的反馈 ID。
 6. **前端提示完成**：系统关闭纠错弹窗，展示"反馈已提交，感谢您的帮助"提示信息。
 
 ## 备选流
@@ -90,7 +90,7 @@
 | BR2 | 反馈类型为 `wrong` 时，`confirmed_landmark_id` 为必填。 |
 | BR3 | 反馈类型为 `correct` 时，`confirmed_landmark_id` 默认等于 `predicted_landmark_id`。 |
 | BR4 | 反馈类型为 `uncertain` 时，`confirmed_landmark_id` 允许为空。 |
-| BR5 | 反馈提交后状态默认为 `pending`，后续由管理员审核变更为 `reviewed` 或 `adopted`。 |
+| BR5 | 反馈提交后状态默认为 `pending`，后续由管理员审核变更为 `accepted` 或 `ignored`。 |
 
 ## 涉及接口
 
@@ -102,6 +102,6 @@
 
 | 表名 | 用途 |
 |------|------|
-| `search_records` | 检索记录 |
-| `user_feedback` | 纠错反馈 |
+| `search_record` | 检索记录 |
+| `feedback` | 纠错反馈 |
 | `landmark` | 地标信息（查询正确地标列表） |
