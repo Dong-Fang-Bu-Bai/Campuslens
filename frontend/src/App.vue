@@ -1,9 +1,9 @@
 <template>
-  <main class="app-shell">
-    <aside class="side-panel">
+  <main class="app-shell" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
+    <aside class="side-panel" :class="{ 'collapsed': isSidebarCollapsed }">
       <div class="brand-header">
         <div class="brand-logo">
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+          <img src="/logo.png" alt="CampusLens" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />
         </div>
         <div>
           <p class="eyebrow">CampusLens</p>
@@ -31,6 +31,7 @@
         </p>
       </form>
 
+
       <nav class="module-list" aria-label="模块状态">
         <button :class="{ active: activeView === 'results' }" @click="changeView('results')">
           <span class="active-line"></span>
@@ -43,6 +44,10 @@
         <button :class="{ active: activeView === 'feedback' }" @click="changeView('feedback')">
           <span class="active-line"></span>
           反馈纠错
+        </button>
+        <button v-if="isAdmin" :class="{ active: activeView === 'admin' }" @click="openAdmin">
+          <span class="active-line"></span>
+          管理后台
         </button>
       </nav>
     </aside>
@@ -60,11 +65,25 @@
             </button>
           </div>
           <div>
-          <p class="eyebrow">V1 联调版本</p>
+          <p class="eyebrow">V2 细化阶段</p>
             <h2>{{ viewTitle }}</h2>
           </div>
         </div>
-        <span class="status-pill">M1 / M2 / M4 / M5</span>
+        <div class="top-bar-login">
+          <template v-if="!currentUser">
+            <button type="button" class="top-login-trigger-btn" @click="openAuth">
+              登录/注册
+            </button>
+          </template>
+          <template v-else>
+            <div class="top-admin-status">
+              <span class="admin-badge">{{ isAdmin ? 'Admin' : 'User' }}</span>
+              <span class="admin-username">{{ currentUser.username }}</span>
+              <button v-if="isAdmin" type="button" class="top-action-btn" @click="openAdmin">进入后台</button>
+              <button type="button" class="top-action-btn logout" @click="handleLogout">退出</button>
+            </div>
+          </template>
+        </div>
       </header>
 
       <!-- 引入 Vue 极致渐入垂直淡滑过渡 -->
@@ -136,8 +155,9 @@
             <div class="detail-grid">
               <span>类型</span><strong>{{ selectedLandmark.type }}</strong>
               <span>地图坐标</span><strong>{{ selectedLandmark.mapX }}%, {{ selectedLandmark.mapY }}%</strong>
-              <span>样本要求</span><strong>不少于 20 张</strong>
+              <span>推荐打卡点</span><strong>正门口 / 广场旁</strong>
             </div>
+            <button type="button" class="secondary-btn inline-action" @click="changeView('map')">查看地图位置</button>
           </article>
         </section>
 
@@ -272,54 +292,77 @@
             </article>
           </div>
         </section>
+
+        <AuthPanel
+          v-else-if="activeView === 'auth'"
+          key="auth"
+          :mode="authMode"
+          :form="authForm"
+          :message="authMessage"
+          :error="authError"
+          @switch-mode="switchAuthMode"
+          @submit="submitAuth"
+          @update-form="updateAuthForm"
+        />
+
+        <AdminPanel
+          v-else-if="activeView === 'admin'"
+          key="admin"
+          :is-admin="isAdmin"
+          :search-records="adminSearchRecords"
+          :feedback-records="adminFeedbackRecords"
+          @refresh="loadAdminData"
+          @update-status="updateFeedbackStatus"
+        />
       </Transition>
     </section>
 
-    <!-- 地标详情弹窗 -->
-    <Transition name="modal-fade">
-      <div v-if="showModal && modalLandmark" class="modal-overlay" @click.self="closeModal">
-        <div class="modal-content">
-          <button class="modal-close" @click="closeModal" title="关闭 (Esc)">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-          </button>
-          
-          <!-- 高精实拍底图 -->
-          <div class="modal-hero">
-            <img :src="modalLandmark.imageUrl" :alt="modalLandmark.name" />
-            <div class="modal-hero-overlay">
-              <span class="modal-code">{{ modalLandmark.code }}</span>
-              <h2>{{ modalLandmark.name }}</h2>
-              <p>{{ modalLandmark.englishName }} · {{ modalLandmark.locationText }}</p>
+    <LandmarkModal
+      :show="showModal"
+      :landmark="modalLandmark"
+      @close="closeModal"
+      @jump-map="jumpModalToMap"
+    />
+    <InteractiveBackground />
+    <button 
+      type="button" 
+      class="sidebar-toggle-btn"
+      :class="isSidebarCollapsed ? 'collapsed' : 'expanded'"
+      @click="isSidebarCollapsed = !isSidebarCollapsed"
+      :title="isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="toggle-arrow"><polyline points="15 18 9 12 15 6"></polyline></svg>
+    </button>
+
+    <!-- 欢迎界面弹出层 -->
+    <Transition name="welcome-fade">
+      <div v-if="showWelcomeModal" class="welcome-overlay">
+        <div class="welcome-card">
+          <div class="welcome-bg-image" style="background-image: url('/welcome-bg.png');"></div>
+          <div class="welcome-card-content">
+            <div class="welcome-logo-badge">
+              <img src="/logo.png" alt="CampusLens" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />
             </div>
-          </div>
-          
-          <div class="modal-body">
-            <div class="modal-section">
-              <h4>地标实景详细介绍</h4>
-              <p>{{ modalLandmark.description }}</p>
+            <p class="welcome-eyebrow">CampusLens</p>
+            <h2 class="welcome-title">欢迎使用 CampusLens 校园慧眼</h2>
+            
+            <div class="welcome-divider"></div>
+            
+            <div class="welcome-date-section">
+              <p class="solar-date">{{ welcomeDate.solar }}</p>
+              <p class="lunar-date">{{ welcomeDate.lunar }}</p>
             </div>
             
-            <div class="modal-section">
-              <h4>深度解析指标</h4>
-              <div class="modal-grid">
-                <div class="grid-item">
-                  <span>地标类型</span>
-                  <strong>{{ modalLandmark.type }}</strong>
-                </div>
-                <div class="grid-item">
-                  <span>地图百分比坐标</span>
-                  <strong>X: {{ modalLandmark.mapX }}%, Y: {{ modalLandmark.mapY }}%</strong>
-                </div>
-                <div class="grid-item">
-                  <span>样本容量限制</span>
-                  <strong>不少于 20 张</strong>
-                </div>
-                <div class="grid-item">
-                  <span>验证状态</span>
-                  <strong style="color: #10b981;">已校验并收录</strong>
-                </div>
-              </div>
+            <div class="welcome-poem-box">
+              <p class="poem-text">
+                <span style="color: var(--color-accent-light); opacity: 0.5; font-family: Georgia, serif; font-size: 1.2em; vertical-align: -0.1em; margin-right: 4px;">“</span>{{ welcomePoem }}<span style="color: var(--color-accent-light); opacity: 0.5; font-family: Georgia, serif; font-size: 1.2em; vertical-align: -0.2em; margin-left: 4px;">”</span>
+              </p>
             </div>
+            
+            <button type="button" class="primary-btn welcome-enter-btn" @click="dismissWelcome">
+              <span class="btn-text">进入系统</span>
+              <span class="btn-shine"></span>
+            </button>
           </div>
         </div>
       </div>
@@ -328,19 +371,54 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import AdminPanel from './components/AdminPanel.vue'
+import AuthPanel from './components/AuthPanel.vue'
+import LandmarkModal from './components/LandmarkModal.vue'
+import InteractiveBackground from './components/InteractiveBackground.vue'
+import { getLunarDateString } from './utils/lunar.js'
+
+const isSidebarCollapsed = ref(false)
+
+const showWelcomeModal = ref(false)
+const welcomePoem = ref('')
+const welcomeDate = ref({ solar: '', lunar: '' })
+
+const poems = [
+  "凡是过往，皆为序章。",
+  "仰望星空，脚踏实地。",
+  "生如夏花之绚烂，死如秋叶之静美。",
+  "路漫漫其修远兮，吾将上下而求索。",
+  "心有猛虎，细嗅蔷薇。",
+  "明月装饰了你的窗子，你装饰了别人的梦。",
+  "知者不惑，仁者不忧，勇者不惧。",
+  "博学之，审问之，慎思之，明辨之，笃行之。",
+  "独行快，众行远。",
+  "星光不问赶路人，时光不负有心人。",
+  "大漠孤烟直，长河落日圆。",
+  "山海自有归期，风雨自有相逢。",
+  "答案在未来的路上，而非过去的时光里。",
+  "追风赶月莫停留，平芜尽处是春山。",
+  "向野而生，踏歌而行。",
+  "满怀希望，就会所向披靡。",
+  "既然选择了远方，便只顾风雨兼程。",
+  "纵有疾风起，人生不言弃。",
+  "愿你在冷铁卷刃前，得以窥见天光。",
+  "行而不辍，未来可期。",
+  "心之所向，素履以往。"
+]
 
 const demoLandmarks = [
-  { id: 1, code: 'L01', name: '图书馆', englishName: 'Library', type: '建筑', summary: '校园核心学习空间，建筑体量大、外立面辨识度高。', description: '图书馆位于文雍广场附近，是学生自习、借阅 and 课程资料检索的主要场所。', locationText: '文雍广场附近', mapX: 50.31, mapY: 59.33, imageUrl: 'https://images.unsplash.com/photo-1507842217343-583bb7270b66?auto=format&fit=crop&w=800&q=80' },
-  { id: 2, code: 'L02', name: '学术大讲堂', englishName: 'Academic Auditorium', type: '建筑', summary: '大型报告与答辩 activity 场所，适合作为答辩演示样本。', description: '学术大讲堂靠近东门，常用于学术报告、会议与集中教学活动。', locationText: '东门附近', mapX: 62.16, mapY: 61.22, imageUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=800&q=80' },
-  { id: 3, code: 'L03', name: '文雍广场', englishName: 'Wenyong Square', type: '广场', summary: '校园开放空间与人流汇聚点，便于地图静态标注。', description: '文雍广场位于图书馆前，是校园公共活动与通行的重要节点。', locationText: '图书馆前', mapX: 57.37, mapY: 63.56, imageUrl: 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&w=800&q=80' },
-  { id: 4, code: 'L04', name: '博学桥', englishName: 'Boxue Bridge', type: '桥梁', summary: '连接湖区两侧的桥梁景观，适合作为地标景观样本。', description: '博学桥位于韵湖沿线，桥体、湖面和周边道路共同形成稳定的视觉特征。', locationText: '韵湖沿线', mapX: 57.75, mapY: 46.17, imageUrl: 'https://images.unsplash.com/photo-1445019980597-93fa8acb246c?auto=format&fit=crop&w=800&q=80' },
-  { id: 5, code: 'L05', name: '琴湖及湖心岛', englishName: 'Qin Lake / Huxin Island', type: '湖区', summary: '湖泊与岛屿组合景观，外观特征明显。', description: '琴湖及湖心岛位于文雍路东侧，水域、绿化和湖心岛轮廓适合进行地标图像检索。', locationText: '文雍路东侧', mapX: 67.32, mapY: 26.88, imageUrl: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=800&q=80' },
-  { id: 6, code: 'L06', name: '体育馆', englishName: 'Stadium', type: '场馆', summary: '体育活动场馆，建筑边界清晰。', description: '体育馆位于文雍路西侧，服务课程教学、赛事活动和学生日常锻炼。', locationText: '文雍路西侧', mapX: 43.88, mapY: 49.07, imageUrl: 'https://images.unsplash.com/photo-1544698310-74ea9d1c8258?auto=format&fit=crop&w=800&q=80' },
-  { id: 7, code: 'L07', name: '游泳馆', englishName: 'Natatorium', type: '场馆', summary: '运动场馆类地标，适合与体育馆形成区分样本。', description: '游泳馆位于体育馆北侧，是运动场馆类地标。', locationText: '体育馆北侧', mapX: 45.39, mapY: 41.25, imageUrl: 'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?auto=format&fit=crop&w=800&q=80' },
-  { id: 8, code: 'L08', name: '第一饭堂', englishName: 'The First Dining Hall', type: '生活服务', summary: '生活服务类建筑，面向学生日常场景。', description: '第一饭堂位于尚学路西侧，属于学生高频到达地点。', locationText: '尚学路西侧', mapX: 33.8, mapY: 47.17, imageUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80' },
-  { id: 9, code: 'L09', name: '第二饭堂', englishName: 'The Second Dining Hall', type: '生活服务', summary: '生活服务类建筑，可与第一饭堂对比识别。', description: '第二饭堂位于东二门附近，与第一饭堂同属生活服务类建筑。', locationText: '东二门附近', mapX: 37.96, mapY: 21.84, imageUrl: 'https://images.unsplash.com/photo-1578474846511-04ba529f0b88?auto=format&fit=crop&w=800&q=80' },
-  { id: 10, code: 'L10', name: '中心酒店', englishName: 'Hotel', type: '建筑', summary: '校内接待建筑，靠近北门且地图标注清晰。', description: '中心酒店位于北门内侧，主要用于校内接待和住宿服务。', locationText: '北门内侧', mapX: 62.28, mapY: 10.12, imageUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80' }
+  { id: 1, code: 'L01', name: '图书馆', englishName: 'Library', type: '建筑', summary: '校园核心文化与学术中心，拥有独特的书页外立面结构。', description: '图书馆位于文雍广场北侧，是学生自习、借阅和课程资料检索的主要场所。建筑气势宏伟，外立面呈半开卷书页状，是校园最具标志性的文化地标。', locationText: '文雍广场北侧', mapX: 50.31, mapY: 59.33, imageUrl: 'https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=1200&q=80' },
+  { id: 2, code: 'L02', name: '学术大讲堂', englishName: 'Academic Auditorium', type: '建筑', summary: '举办大型学术报告与校园文娱盛典的多功能现代化场馆。', description: '学术大讲堂邻近东门，是学校举办大型学术报告、文化盛典及师生集中教学活动的主阵地。其弧形入口极具现代感与辨识度。', locationText: '东门附近', mapX: 62.16, mapY: 61.22, imageUrl: 'https://images.unsplash.com/photo-1492538368577-870624790c4a?auto=format&fit=crop&w=1200&q=80' },
+  { id: 3, code: 'L03', name: '文雍广场', englishName: 'Wenyong Square', type: '广场', summary: '开阔宽广的标志性休闲广场，是校园人文景观的核心纽带。', description: '文雍广场坐落于图书馆南侧，是一座融绿化、喷泉与休闲步道于一体的开阔广场，为校园师生举行集会和课余小憩的重要集散地。', locationText: '图书馆南侧', mapX: 57.37, mapY: 63.56, imageUrl: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1200&q=80' },
+  { id: 4, code: 'L04', name: '博学桥', englishName: 'Boxue Bridge', type: '桥梁', summary: '横跨韵湖的典雅观景石桥，连接南北主要功能园区。', description: '博学桥横跨在美丽的韵湖之上，将教学区与生活区优雅连通。桥身造型典雅，与湖面交相辉映，是备受师生喜爱的校园写意景观。', locationText: '韵湖沿线', mapX: 57.75, mapY: 46.17, imageUrl: 'https://images.unsplash.com/photo-1549880338-65ddcdfd017b?auto=format&fit=crop&w=1200&q=80' },
+  { id: 5, code: 'L05', name: '琴湖及湖心岛', englishName: 'Qin Lake / Huxin Island', type: '湖区', summary: '环境幽雅的水域景观，湖水碧绿，岛上植被常青。', description: '琴湖及湖心岛位于文雍路东侧，水体清澈，绿化茂密。清晨和傍晚，这里烟波浩渺，是校园内最富有自然诗意和静谧之美的一隅。', locationText: '文雍路东侧', mapX: 67.32, mapY: 26.88, imageUrl: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80' },
+  { id: 6, code: 'L06', name: '体育馆', englishName: 'Stadium', type: '场馆', summary: '配备多功能运动场地的现代化综合室内健身体育馆。', description: '体育馆位于文雍路西侧，是一座设施完善的现代化多功能场馆，服务全校体育教学、文体赛事和日常锻炼，极具动感的网架几何外形十分夺目。', locationText: '文雍路西侧', mapX: 43.88, mapY: 49.07, imageUrl: 'https://images.unsplash.com/photo-1577416412292-747c6607f055?auto=format&fit=crop&w=1200&q=80' },
+  { id: 7, code: 'L07', name: '游泳馆', englishName: 'Natatorium', type: '场馆', summary: '配备先进循环系统的室内温水游泳馆。', description: '游泳馆位于体育馆北侧，配有标准泳道和水循环系统，是日常游泳教学、水上运动训练以及师生消暑运动的首选场馆。', locationText: '体育馆北侧', mapX: 45.39, mapY: 41.25, imageUrl: 'https://images.unsplash.com/photo-1519766304817-4f37bda74a27?auto=format&fit=crop&w=1200&q=80' },
+  { id: 8, code: 'L08', name: '第一饭堂', englishName: 'The First Dining Hall', type: '生活服务', summary: '大众膳食生活服务中心，提供多风味特色餐饮。', description: '第一饭堂位于尚学路西侧，汇集了全国各地的特色美食与实惠膳食，是学生日常用餐和生活交流的主要生活服务场所。', locationText: '尚学路西侧', mapX: 33.8, mapY: 47.17, imageUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80' },
+  { id: 9, code: 'L09', name: '第二饭堂', englishName: 'The Second Dining Hall', type: '生活服务', summary: '东区师生自选精致餐饮中心，兼备休闲社交空间。', description: '第二饭堂邻近东二门附近，与第一饭堂同属生活服务类建筑，内部设有现代化的自选餐厅与休闲卡座，主打精品小吃和社交就餐，为东区师生提供高品质膳食体验。', locationText: '东二门附近', mapX: 37.96, mapY: 21.84, imageUrl: 'https://images.unsplash.com/photo-1578474846511-04ba529f0b88?auto=format&fit=crop&w=1200&q=80' },
+  { id: 10, code: 'L10', name: '中心酒店', englishName: 'Hotel', type: '建筑', summary: '校内接待与住宿场所，设施齐全服务高档。', description: '中心酒店位于北门内侧，主要用于校内接待和住宿服务，大厅宽敞，周边绿化环抱，为来访专家和宾客提供舒适静谧的居住环境。', locationText: '北门内侧', mapX: 62.28, mapY: 10.12, imageUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80' }
 ]
 
 const landmarks = ref(demoLandmarks)
@@ -356,10 +434,13 @@ const selectedFile = ref(null)
 const loading = ref(false)
 const error = ref('')
 const initialView = new URLSearchParams(window.location.search).get('view')
-const activeView = ref(['results', 'map', 'feedback'].includes(initialView) ? initialView : 'results')
+const activeView = ref(['results', 'map', 'feedback', 'auth', 'admin'].includes(initialView) ? initialView : 'results')
+isSidebarCollapsed.value = (activeView.value === 'auth')
 const feedbackMessage = ref('')
 const feedbackError = ref('')
 const feedbackSubmitting = ref(false)
+const authMessage = ref('')
+const authError = ref(false)
 const searchMeta = reactive({
   searchRecordId: 1,
   uploadImageUrl: '',
@@ -373,6 +454,16 @@ const feedback = reactive({
   feedbackType: 'correct',
   comment: ''
 })
+const authMode = ref('login')
+const authForm = reactive({
+  username: '',
+  password: '',
+  email: ''
+})
+const currentUser = ref(loadStoredUser())
+const guestId = ref(loadGuestId())
+const adminSearchRecords = ref([])
+const adminFeedbackRecords = ref([])
 
 // 地图缩放与拖拽状态
 const zoomScale = ref(1.0)
@@ -421,12 +512,6 @@ function goForward() {
     historyIndex.value++
     activeView.value = viewHistory.value[historyIndex.value]
   }
-}
-
-function openModal(landmark) {
-  modalLandmark.value = landmark
-  showModal.value = true
-  window.addEventListener('keydown', handleEsc)
 }
 
 function closeModal() {
@@ -493,10 +578,13 @@ function endDrag() {
 }
 
 const selectedLandmark = computed(() => landmarks.value.find((item) => item.id === selectedId.value))
+const isAdmin = computed(() => currentUser.value?.role === 'admin')
 const viewTitle = computed(() => ({
   results: '图片检索结果',
   map: '校园地图导览',
-  feedback: '用户反馈纠错'
+  feedback: '用户反馈纠错',
+  auth: authMode.value === 'login' ? '用户登录' : '用户注册',
+  admin: '管理员后台'
 }[activeView.value]))
 
 function confidenceLabel(value) {
@@ -508,20 +596,43 @@ function confidenceLabel(value) {
 }
 
 onMounted(async () => {
+  // 检查是否首次进入以弹出欢迎界面
+  const dismissed = localStorage.getItem('campuslens.welcomeDismissed')
+  if (!dismissed) {
+    welcomePoem.value = poems[Math.floor(Math.random() * poems.length)]
+    const today = new Date()
+    const dateStr = today.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
+    const weekdayStr = today.toLocaleDateString('zh-CN', { weekday: 'long' })
+    welcomeDate.value.solar = `${dateStr}  ${weekdayStr}`
+    welcomeDate.value.lunar = getLunarDateString(today)
+    showWelcomeModal.value = true
+  }
+
   try {
     const response = await fetch('/api/landmarks')
     if (response.ok) {
       const data = await response.json()
-      // 如果后端发来地标，我们把 Unsplash 照片补全
       landmarks.value = data.map((item, index) => ({
         ...item,
-        imageUrl: demoLandmarks[index]?.imageUrl || demoLandmarks[0].imageUrl
+        imageUrl: imageForLandmark(item, index)
+      }))
+      results.value = landmarks.value.slice(0, 5).map((item, index) => ({
+        ...item,
+        rank: index + 1,
+        landmarkId: item.id,
+        landmarkCode: item.code,
+        score: [0.92, 0.87, 0.81, 0.76, 0.71][index]
       }))
     }
   } catch {
     landmarks.value = demoLandmarks
   }
 })
+
+function dismissWelcome() {
+  localStorage.setItem('campuslens.welcomeDismissed', 'true')
+  showWelcomeModal.value = false
+}
 
 function onFileChange(event) {
   selectedFile.value = event.target.files?.[0] || null
@@ -537,19 +648,32 @@ async function submitSearch() {
   error.value = ''
   const form = new FormData()
   form.append('file', selectedFile.value)
+  form.append('guestId', guestId.value)
   try {
-    const response = await fetch('/api/search/upload', { method: 'POST', body: form })
+    const response = await fetch('/api/search/upload', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: form
+    })
     if (!response.ok) {
       const body = await response.json().catch(() => ({}))
       throw new Error(body.message || '检索请求失败')
     }
     const data = await response.json()
-    results.value = data.results.map((item) => ({
-      ...item,
-      imageUrl: demoLandmarks.find(l => l.id === item.landmarkId)?.imageUrl || demoLandmarks[0].imageUrl,
-      confidenceLevel: item.confidenceLevel || 'low',
-      score: Math.max(0, Math.min(1, Number(item.score || 0)))
-    }))
+    saveGuestId(data.guestId)
+    results.value = data.results.map((item) => {
+      const matched = landmarks.value.find(l => l.id === item.landmarkId)
+      let imgUrl = item.coverImageUrl || item.cover_image_url || item.imageUrl
+      if (!imgUrl || (!imgUrl.startsWith('http') && !imgUrl.startsWith('data:'))) {
+        imgUrl = matched?.imageUrl || demoLandmarks[0].imageUrl
+      }
+      return {
+        ...item,
+        imageUrl: imgUrl,
+        confidenceLevel: item.confidenceLevel || 'low',
+        score: Math.max(0, Math.min(1, Number(item.score || 0)))
+      }
+    })
     searchMeta.searchRecordId = data.searchRecordId
     searchMeta.uploadImageUrl = data.uploadImageUrl || ''
     searchMeta.lowConfidence = Boolean(data.lowConfidence)
@@ -577,6 +701,30 @@ function selectMapLandmark(id) {
   selectedId.value = id
 }
 
+async function openModal(landmark) {
+  selectedId.value = landmark.landmarkId || landmark.id
+  modalLandmark.value = landmark
+  showModal.value = true
+  try {
+    const response = await fetch(`/api/landmarks/${selectedId.value}`)
+    if (response.ok) {
+      const data = await response.json()
+      modalLandmark.value = {
+        ...data,
+        imageUrl: imageForLandmark(data, landmarks.value.findIndex(item => item.id === data.id)) || landmark.imageUrl
+      }
+    }
+  } catch {
+    modalLandmark.value = landmark
+  }
+  window.addEventListener('keydown', handleEsc)
+}
+
+function jumpModalToMap() {
+  closeModal()
+  navigateToView('map')
+}
+
 function openFeedback(item) {
   feedback.predictedLandmarkId = item.landmarkId
   feedback.confirmedLandmarkId = item.landmarkId
@@ -595,11 +743,11 @@ async function submitFeedback() {
   feedbackMessage.value = ''
   feedbackError.value = ''
   feedbackSubmitting.value = true
-  const payload = { ...feedback }
+  const payload = { ...feedback, guestId: guestId.value }
   try {
     const response = await fetch('/api/feedback', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(payload)
     })
     if (!response.ok) {
@@ -613,6 +761,163 @@ async function submitFeedback() {
     feedbackError.value = err.message
   } finally {
     feedbackSubmitting.value = false
+  }
+}
+
+function clearAuth() {
+  authForm.username = ''
+  authForm.password = ''
+  authForm.email = ''
+  authMessage.value = ''
+  authError.value = false
+}
+
+function openAuth() {
+  authMode.value = 'login'
+  clearAuth()
+  navigateToView('auth')
+}
+
+function switchAuthMode(mode) {
+  authMode.value = mode
+  clearAuth()
+}
+
+watch(activeView, (newView) => {
+  if (newView === 'auth') {
+    clearAuth()
+    isSidebarCollapsed.value = true
+  } else {
+    isSidebarCollapsed.value = false
+  }
+})
+
+
+function updateAuthForm(nextForm) {
+  authForm.username = nextForm.username
+  authForm.password = nextForm.password
+  authForm.email = nextForm.email
+}
+
+async function submitAuth() {
+  authMessage.value = ''
+  authError.value = false
+  try {
+    const endpoint = authMode.value === 'login' ? '/api/auth/login' : '/api/auth/register'
+    const payload = {
+      username: authForm.username,
+      password: authForm.password
+    }
+    if (authMode.value === 'register' && authForm.email) {
+      payload.email = authForm.email
+    }
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}))
+      throw new Error(body.message || (authMode.value === 'login' ? '登录失败' : '注册失败'))
+    }
+    const data = await response.json()
+    currentUser.value = data
+    localStorage.setItem('campuslens.currentUser', JSON.stringify(data))
+    authMessage.value = data.message
+    authForm.password = ''
+    if (data.admin) {
+      await loadAdminData()
+      navigateToView('admin')
+      return
+    }
+    navigateToView('results')
+  } catch (err) {
+    authError.value = true
+    authMessage.value = err.message
+  }
+}
+
+function handleLogout() {
+  currentUser.value = null
+  localStorage.removeItem('campuslens.currentUser')
+  authMessage.value = ''
+  authError.value = false
+  authForm.password = ''
+  if (activeView.value === 'admin' || activeView.value === 'auth') {
+    navigateToView('results')
+  }
+}
+
+async function openAdmin() {
+  if (isAdmin.value) {
+    await loadAdminData()
+    navigateToView('admin')
+    return
+  }
+  openAuth()
+}
+
+async function loadAdminData() {
+  const headers = authHeaders()
+  const [recordsResponse, feedbackResponse] = await Promise.all([
+    fetch('/api/admin/search-records', { headers }),
+    fetch('/api/admin/feedback', { headers })
+  ])
+  if (recordsResponse.ok) {
+    adminSearchRecords.value = await recordsResponse.json()
+  }
+  if (feedbackResponse.ok) {
+    adminFeedbackRecords.value = await feedbackResponse.json()
+  }
+}
+
+async function updateFeedbackStatus(id, status) {
+  const response = await fetch(`/api/admin/feedback/${id}/status`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ status })
+  })
+  if (response.ok) {
+    await loadAdminData()
+  }
+}
+
+function imageForLandmark(item, index = 0) {
+  const candidate = item?.coverImageUrl || item?.cover_image_url || item?.imageUrl || item?.images?.[0]?.imageUrl
+  if (candidate && (candidate.startsWith('http') || candidate.startsWith('data:'))) {
+    return candidate
+  }
+  const idx = index >= 0 ? index : 0
+  return demoLandmarks[idx]?.imageUrl || demoLandmarks[0].imageUrl
+}
+
+function authHeaders() {
+  return currentUser.value?.token ? { Authorization: `Bearer ${currentUser.value.token}` } : {}
+}
+
+function loadStoredUser() {
+  try {
+    const raw = localStorage.getItem('campuslens.currentUser')
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function loadGuestId() {
+  const key = 'campuslens.guestId'
+  const existing = localStorage.getItem(key)
+  if (/^guest#[1-9]\d*$/.test(existing || '')) {
+    return existing
+  }
+  localStorage.removeItem(key)
+  return 'guest'
+}
+
+function saveGuestId(value) {
+  if (/^guest#[1-9]\d*$/.test(value || '')) {
+    guestId.value = value
+    localStorage.setItem('campuslens.guestId', value)
   }
 }
 </script>

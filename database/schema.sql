@@ -53,22 +53,30 @@ CREATE TABLE IF NOT EXISTS search_record (
   best_landmark_id BIGINT,
   best_score DECIMAL(8, 6),
   status VARCHAR(50) NOT NULL DEFAULT 'success',
+  low_confidence BOOLEAN NOT NULL DEFAULT FALSE,
+  message VARCHAR(500),
+  guest_id VARCHAR(100) NOT NULL DEFAULT 'guest',
+  user_id BIGINT,
+  user_type VARCHAR(50) NOT NULL DEFAULT 'guest',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_search_record_best_landmark
     FOREIGN KEY (best_landmark_id) REFERENCES landmark(id)
 );
 
 -- M5 用户反馈表
--- 注：fk_feedback_search_record 暂时移除，等 M1 实现 search_record 持久化后恢复
 CREATE TABLE IF NOT EXISTS feedback (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   search_record_id BIGINT NOT NULL,
   predicted_landmark_id BIGINT,
   confirmed_landmark_id BIGINT,
+  user_id BIGINT,
   feedback_type VARCHAR(50) NOT NULL,
   comment VARCHAR(500),
   status VARCHAR(50) NOT NULL DEFAULT 'pending',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_feedback_search_record
+    FOREIGN KEY (search_record_id) REFERENCES search_record(id),
   CONSTRAINT fk_feedback_predicted_landmark
     FOREIGN KEY (predicted_landmark_id) REFERENCES landmark(id),
   CONSTRAINT fk_feedback_confirmed_landmark
@@ -80,5 +88,17 @@ CREATE TABLE IF NOT EXISTS admin_user (
   username VARCHAR(100) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   role VARCHAR(50) NOT NULL DEFAULT 'admin',
-  enabled BOOLEAN NOT NULL DEFAULT TRUE
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS app_user (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  username VARCHAR(100) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  email VARCHAR(255),
+  role VARCHAR(50) NOT NULL DEFAULT 'user',
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );

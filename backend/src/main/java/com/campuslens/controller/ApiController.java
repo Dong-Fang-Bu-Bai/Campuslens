@@ -1,21 +1,38 @@
 package com.campuslens.controller;
 
+import com.campuslens.model.AdminFeedbackRecord;
+import com.campuslens.model.AdminLoginRequest;
+import com.campuslens.model.AdminLoginResponse;
+import com.campuslens.model.AdminSearchRecord;
+import com.campuslens.model.AuthLoginRequest;
+import com.campuslens.model.AuthRegisterRequest;
+import com.campuslens.model.AuthResponse;
 import com.campuslens.model.FeedbackRecord;
 import com.campuslens.model.FeedbackRequest;
 import com.campuslens.model.FeedbackResponse;
+import com.campuslens.model.FeedbackStatusRequest;
 import com.campuslens.model.HealthResponse;
 import com.campuslens.model.LandmarkDetail;
+import com.campuslens.model.LandmarkImage;
 import com.campuslens.model.LandmarkSummary;
+import com.campuslens.model.LandmarkUpsertRequest;
 import com.campuslens.model.SearchResponse;
+import com.campuslens.model.SessionUser;
+import com.campuslens.service.AdminService;
+import com.campuslens.service.AuthService;
 import com.campuslens.service.FeedbackService;
 import com.campuslens.service.LandmarkService;
+import com.campuslens.service.SearchRecordService;
 import com.campuslens.service.SearchService;
+import com.campuslens.service.SessionService;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -28,14 +45,26 @@ public class ApiController {
   private final LandmarkService landmarkService;
   private final SearchService searchService;
   private final FeedbackService feedbackService;
+  private final SearchRecordService searchRecordService;
+  private final AdminService adminService;
+  private final AuthService authService;
+  private final SessionService sessionService;
 
   public ApiController(
       LandmarkService landmarkService,
       SearchService searchService,
-      FeedbackService feedbackService) {
+      FeedbackService feedbackService,
+      SearchRecordService searchRecordService,
+      AdminService adminService,
+      AuthService authService,
+      SessionService sessionService) {
     this.landmarkService = landmarkService;
     this.searchService = searchService;
     this.feedbackService = feedbackService;
+    this.searchRecordService = searchRecordService;
+    this.adminService = adminService;
+    this.authService = authService;
+    this.sessionService = sessionService;
   }
 
   @GetMapping("/health")
@@ -56,18 +85,86 @@ public class ApiController {
   }
 
   @PostMapping("/search/upload")
-  public SearchResponse upload(@RequestPart("file") MultipartFile file) {
-    return searchService.search(file);
+  public SearchResponse upload(
+      @RequestPart("file") MultipartFile file,
+      @RequestPart(value = "guestId", required = false) String guestId,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.find(authorization).orElse(null);
+    return searchService.search(file, user, guestId);
   }
 
   @PostMapping("/feedback")
-  public FeedbackResponse feedback(@Valid @RequestBody FeedbackRequest request) {
-    return feedbackService.submit(request);
+  public FeedbackResponse feedback(
+      @Valid @RequestBody FeedbackRequest request,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.find(authorization).orElse(null);
+    return feedbackService.submit(request, user);
+  }
+
+  @PostMapping("/auth/register")
+  public AuthResponse register(@Valid @RequestBody AuthRegisterRequest request) {
+    return authService.register(request);
+  }
+
+  @PostMapping("/auth/login")
+  public AuthResponse login(@Valid @RequestBody AuthLoginRequest request) {
+    return authService.login(request);
+  }
+
+  @PostMapping("/admin/auth/login")
+  public AdminLoginResponse adminLogin(@Valid @RequestBody AdminLoginRequest request) {
+    return adminService.login(request);
+  }
+
+  @GetMapping("/admin/search-records")
+  public List<AdminSearchRecord> adminSearchRecords(
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    sessionService.requireAdmin(authorization);
+    return searchRecordService.listRecent();
   }
 
   @GetMapping("/admin/feedback")
-  public List<FeedbackRecord> listFeedback() {
-    return feedbackService.listAll();
+  public List<AdminFeedbackRecord> adminFeedback(
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    sessionService.requireAdmin(authorization);
+    return feedbackService.listRecent();
+  }
+
+  @PostMapping("/admin/feedback/{id}/status")
+  public FeedbackResponse updateFeedbackStatus(
+      @PathVariable Long id,
+      @Valid @RequestBody FeedbackStatusRequest request,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    sessionService.requireAdmin(authorization);
+    return feedbackService.updateStatus(id, request);
+  }
+
+  @PostMapping("/admin/landmarks")
+  public LandmarkDetail createLandmark(
+      @Valid @RequestBody LandmarkUpsertRequest request,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    sessionService.requireAdmin(authorization);
+    return landmarkService.create(request);
+  }
+
+  @PutMapping("/admin/landmarks/{id}")
+  public LandmarkDetail updateLandmark(
+      @PathVariable Long id,
+      @Valid @RequestBody LandmarkUpsertRequest request,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    sessionService.requireAdmin(authorization);
+    return landmarkService.update(id, request);
+  }
+
+  @PostMapping("/admin/landmarks/{id}/images")
+  public LandmarkImage addLandmarkImage(
+      @PathVariable Long id,
+      @RequestPart("file") MultipartFile file,
+      @RequestPart(value = "angle", required = false) String angle,
+      @RequestPart(value = "lightCondition", required = false) String lightCondition,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    sessionService.requireAdmin(authorization);
+    return landmarkService.addImage(id, file, angle, lightCondition);
   }
 
   @GetMapping("/search/{searchRecordId}/feedback")

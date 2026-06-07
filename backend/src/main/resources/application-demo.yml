@@ -6,6 +6,7 @@ spring:
     driver-class-name: org.h2.Driver
   sql:
     init:
-      mode: always
-      schema-locations: file:../database/schema.sql
-      data-locations: file:../database/seed_landmarks.sql
+      mode: never
+  flyway:
+    enabled: true
+    locations: filesystem:../database/migration

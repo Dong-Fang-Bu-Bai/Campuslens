@@ -37,6 +37,13 @@ if not exist "%ALGORITHM_DIR%\models\dinov2_model.pth" (
 
 if not exist "%PID_DIR%" mkdir "%PID_DIR%"
 
+call :http_ok "http://localhost:8000/api/v1/health"
+if not errorlevel 1 (
+  echo [CampusLens] Algorithm service already responds at http://localhost:8000/api/v1/health
+  endlocal
+  exit /b 0
+)
+
 if exist "%PID_FILE%" (
   set /p OLD_PID=<"%PID_FILE%"
   if not "%OLD_PID%"=="" (
@@ -66,3 +73,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 echo [CampusLens] Algorithm launcher PID saved to %PID_FILE%.
 echo [CampusLens] Keep the new algorithm window open while developing.
 endlocal
+exit /b 0
+
+:http_ok
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r = Invoke-WebRequest -UseBasicParsing -Uri '%~1' -TimeoutSec 2; if ($r.StatusCode -ge 200 -and $r.StatusCode -lt 500) { exit 0 } } catch { }; exit 1" >nul 2>nul
+exit /b %errorlevel%
