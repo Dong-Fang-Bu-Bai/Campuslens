@@ -38,7 +38,7 @@ class Config:
     def validate_config(cls):
         if not Path(cls.DINO_MODEL_PATH).exists():
             raise FileNotFoundError(
-                f"❌ DINOv2 模型文件不存在: {cls.DINO_MODEL_PATH}\n"
-                f"请将模型文件放置在此路径，或设置环境变量 DINO_MODEL_PATH"
+                f"[ERROR] DINOv2 model file not found: {cls.DINO_MODEL_PATH}\n"
+                f"Please place the model file at this path or set DINO_MODEL_PATH environment variable"
             )
-        print(f"✅ 模型文件验证通过: {cls.DINO_MODEL_PATH}")
+        print(f"[OK] Model file validated: {cls.DINO_MODEL_PATH}")
