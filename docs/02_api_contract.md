@@ -24,6 +24,11 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 | `POST /api/feedback` | 提交识别纠错反馈 | M5 庄子杰 |
 | `POST /api/auth/register` | 普通用户注册，用户名唯一，密码至少 8 位，邮箱选填 | M1 / M4 |
 | `POST /api/auth/login` | 用户登录；输入 `admin/admin` 时返回管理员身份并由前端自动进入后台 | M1 / M4 |
+| `GET /api/me/search-records` | 登录用户查看自己的检索历史，返回上传图、最高候选、Top-5 快照和反馈状态 | M1 / M4 |
+| `GET /api/check-ins` | 查询校园打卡留言，可按 `landmarkId` 过滤 | M2 / M4 / M5 |
+| `POST /api/check-ins` | 发布打卡留言，登录用户显示用户名，游客显示 `guest#number` | M2 / M4 / M5 |
+| `POST /api/check-ins/{id}/like` | 点赞或取消点赞打卡留言 | M4 / M5 |
+| `POST /api/check-ins/{id}/replies` | 发表一级回复 | M4 / M5 |
 
 ## 后台辅助接口
 
@@ -38,6 +43,7 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 | `POST /api/admin/landmarks/{id}/images` | 上传地标样本图片，需管理员 token | M2 |
 | `POST /api/admin/index/rebuild` | 重建地标统计参数，仍归 M3 实现 | M3 |
 | `GET /api/admin/feedback` | 查看反馈记录，需管理员 token | M5 |
+| `GET /api/admin/feedback/{id}` | 查看反馈详情，含上传图、Top-5 快照、算法建议和校正样本同步状态 | M5 / M4 |
 | `POST /api/admin/feedback/{id}/status` | 将反馈状态更新为 `pending`、`accepted` 或 `ignored`，需管理员 token | M5 |
 
 ## 算法服务接口
@@ -50,6 +56,7 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 | `POST /api/v1/index/rebuild` | 根据样本库重建地标统计参数 | M3 周子栋 |
 | `GET /api/v1/index/stats` | 查看当前统计参数状态、样本数量和维度 | M3 周子栋 |
 | `GET /api/v1/health` | 算法服务健康检查 | M3 周子栋 |
+| `POST /api/v1/adaptation/correction-samples` | 接收管理员采纳后的校正样本元数据，写入 JSONL manifest 并返回采纳建议 | M3 周子栋 |
 
 ## 字段命名规则
 
@@ -87,6 +94,19 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 `correct` 和 `wrong` 反馈必须带 `predictedLandmarkId`，用于关联本次 SearchResponse 中的预测地标；`wrong` 必须额外带 `confirmedLandmarkId`。
 
 反馈提交前会校验 `searchRecordId` 是否存在，并校验 `predictedLandmarkId` 是否来自本次 Top-5 结果。登录用户提交反馈时由 Bearer token 解析当前用户，后端不再信任前端传入的 `userId`；未登录用户仍可按游客身份反馈，并可携带 `guestId` 与检索记录保持一致。反馈提交后写入 `feedback` 表，默认状态为 `pending`。后台可将状态更新为 `accepted` 或 `ignored`，第四周再扩展采纳后的样本更新、统计和审核记录。
+
+第四周 V3 已扩展反馈采纳闭环：管理员将反馈更新为 `accepted` 后，后端会创建 `correction_sample` 记录，并通过异步任务通知算法服务 `/api/v1/adaptation/correction-samples`。算法服务返回 `suggestAccept`、`reviewScore`、`reason`、`sarEligible` 和 `nextAction` 后，后端将校正样本标记为 `synced`；若算法服务不可用或超时，校正样本保留为 `sync_failed`，管理员采纳动作不回滚。
+
+## 打卡留言规则
+
+- 打卡留言复用 L01-L10 地标 ID 和地图坐标，不新增独立地点字典。
+- 登录用户发布留言、点赞和回复时显示用户名；未登录游客使用 `guestId`，无效游客编号由后端规范化为 `guest#number`。
+- 留言和回复当前只支持一级文本互动，单条内容最长 500 字符。
+- 后台内容删除能力作为后续扩展预留，本周先实现用户端查询、发布、点赞和一级回复。
+
+## 个人历史规则
+
+`GET /api/me/search-records` 必须携带 Bearer token。服务端只按 token 解析出的 `userId` 查询 `search_record`，不会接受前端传入的用户编号。游客历史仅在前端本机当前会话中展示，不提供服务端跨设备查询。
 
 ## 数据库迁移口径
 

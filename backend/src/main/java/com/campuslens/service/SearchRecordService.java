@@ -2,6 +2,8 @@ package com.campuslens.service;
 
 import com.campuslens.model.AdminSearchRecord;
 import com.campuslens.model.SearchResult;
+import com.campuslens.model.UserSearchRecord;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -125,6 +127,56 @@ public class SearchRecordService {
         rs.getString("username"),
         rs.getString("user_type"),
         rs.getTimestamp("created_at").toLocalDateTime()));
+  }
+
+  public List<UserSearchRecord> listForUser(Long userId, int limit) {
+    int safeLimit = Math.max(1, Math.min(limit, 50));
+    return jdbcTemplate.query("""
+        SELECT sr.id, sr.upload_image_url, l.name AS best_landmark_name, sr.best_score,
+               sr.status, sr.low_confidence, sr.message, sr.top_results_json,
+               (
+                 SELECT f.status
+                 FROM feedback f
+                 WHERE f.search_record_id = sr.id
+                 ORDER BY f.updated_at DESC, f.id DESC
+                 LIMIT 1
+               ) AS feedback_status,
+               sr.created_at
+        FROM search_record sr
+        LEFT JOIN landmark l ON sr.best_landmark_id = l.id
+        WHERE sr.user_id = ?
+        ORDER BY sr.created_at DESC, sr.id DESC
+        LIMIT ?
+        """, (rs, rowNum) -> new UserSearchRecord(
+        rs.getLong("id"),
+        rs.getString("upload_image_url"),
+        rs.getString("best_landmark_name"),
+        rs.getObject("best_score") == null ? null : rs.getDouble("best_score"),
+        rs.getString("status"),
+        rs.getBoolean("low_confidence"),
+        rs.getString("message"),
+        rs.getString("feedback_status"),
+        parseTopResults(rs.getString("top_results_json")),
+        rs.getTimestamp("created_at").toLocalDateTime()), userId, safeLimit);
+  }
+
+  public List<SearchResult> topResults(Long searchRecordId) {
+    String json = jdbcTemplate.queryForObject(
+        "SELECT top_results_json FROM search_record WHERE id = ?",
+        String.class,
+        searchRecordId);
+    return parseTopResults(json);
+  }
+
+  public List<SearchResult> parseTopResults(String json) {
+    if (json == null || json.isBlank()) {
+      return List.of();
+    }
+    try {
+      return objectMapper.readValue(json, new TypeReference<List<SearchResult>>() {});
+    } catch (JsonProcessingException ex) {
+      return List.of();
+    }
   }
 
   private String toJson(List<SearchResult> results) {

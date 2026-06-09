@@ -16,6 +16,10 @@ class Config:
     DATASETS_DIR = Path(os.getenv("DATASETS_DIR", BASE_DIR.parent / "datasets" / "landmarks"))
     FAISS_INDEX_DIR = Path(os.getenv("FAISS_INDEX_DIR", BASE_DIR / "data" / "faiss_index"))
     FEATURES_CACHE_DIR = Path(os.getenv("FEATURES_CACHE_DIR", BASE_DIR / "data" / "features"))
+    CORRECTION_SAMPLES_MANIFEST = Path(os.getenv(
+        "CORRECTION_SAMPLES_MANIFEST",
+        BASE_DIR / "data" / "adaptation" / "correction_samples.jsonl"
+    ))
     
     DINO_MODEL_PATH = os.getenv("DINO_MODEL_PATH", str(BASE_DIR / "models" / "dinov2_model.pth"))
     DEVICE = os.getenv("DEVICE", "auto")  # auto, cpu, or cuda
@@ -33,6 +37,7 @@ class Config:
     def ensure_directories(cls):
         cls.FAISS_INDEX_DIR.mkdir(parents=True, exist_ok=True)
         cls.FEATURES_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cls.CORRECTION_SAMPLES_MANIFEST.parent.mkdir(parents=True, exist_ok=True)
     
     @classmethod
     def validate_config(cls):

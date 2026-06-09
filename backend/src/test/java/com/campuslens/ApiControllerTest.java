@@ -1,5 +1,6 @@
 package com.campuslens;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -10,10 +11,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.campuslens.service.AlgorithmSearchClient;
+import com.campuslens.service.AlgorithmSearchClient.AdaptationRequest;
+import com.campuslens.service.AlgorithmSearchClient.AdaptationResponse;
 import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResponse;
 import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResult;
 import com.campuslens.service.AlgorithmSearchException;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -111,7 +116,7 @@ class ApiControllerTest {
         .andReturn()
         .getResponse()
         .getContentAsString();
-    long searchRecordId = Long.parseLong(searchResponse.replaceAll(".*\"searchRecordId\":(\\d+).*", "$1"));
+    long searchRecordId = extractLong(searchResponse, "searchRecordId");
 
     mockMvc.perform(post("/api/feedback")
             .contentType(MediaType.APPLICATION_JSON)
@@ -185,7 +190,7 @@ class ApiControllerTest {
         .andReturn()
         .getResponse()
         .getContentAsString();
-    long id = Long.parseLong(createResponse.replaceAll(".*\"id\":(\\d+),\"code\":\"L99\".*", "$1"));
+    long id = extractLong(createResponse, "id");
 
     mockMvc.perform(put("/api/admin/landmarks/" + id)
             .header("Authorization", "Bearer " + token)
@@ -206,6 +211,135 @@ class ApiControllerTest {
                 """))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.name").value("测试地标更新"));
+  }
+
+  @Test
+  void userCanOnlyReadOwnSearchHistory() throws Exception {
+    when(algorithmSearchClient.search(any())).thenReturn(new AlgorithmSearchResponse(
+        List.of(new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12)),
+        false,
+        "Search successful"));
+
+    String firstToken = register("history01", "password123");
+    String secondToken = register("history02", "password123");
+    uploadWithToken(firstToken);
+
+    mockMvc.perform(get("/api/me/search-records")
+            .header("Authorization", "Bearer " + firstToken))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(1))
+        .andExpect(jsonPath("$[0].topResults[0].landmarkCode").value("L01"));
+
+    mockMvc.perform(get("/api/me/search-records")
+            .header("Authorization", "Bearer " + secondToken))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(0));
+
+    mockMvc.perform(get("/api/me/search-records"))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void checkInBoardSupportsPostLikeAndReply() throws Exception {
+    String createResponse = mockMvc.perform(post("/api/check-ins")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "landmarkId": 1,
+                  "message": "图书馆门口完成打卡",
+                  "guestId": "guest#88"
+                }
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.landmarkCode").value("L01"))
+        .andExpect(jsonPath("$.displayName").value("guest#88"))
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+    long checkInId = extractLong(createResponse, "id");
+
+    mockMvc.perform(post("/api/check-ins/" + checkInId + "/like")
+            .param("guestId", "guest#88"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.liked").value(true))
+        .andExpect(jsonPath("$.likeCount").value(1));
+
+    mockMvc.perform(post("/api/check-ins/" + checkInId + "/replies")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "message": "同一地点也适合夜景拍摄",
+                  "guestId": "guest#89"
+                }
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.displayName").value("guest#89"));
+
+    mockMvc.perform(get("/api/check-ins")
+            .param("guestId", "guest#88"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].likedByMe").value(true))
+        .andExpect(jsonPath("$[0].replyCount").value(1));
+  }
+
+  @Test
+  void acceptingFeedbackCreatesCorrectionSampleAndSyncsAlgorithmAdvice() throws Exception {
+    when(algorithmSearchClient.search(any())).thenReturn(new AlgorithmSearchResponse(
+        List.of(
+            new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12),
+            new AlgorithmSearchResult(2, "L02", "学术大讲堂", 0.72, "medium", 6.45)),
+        false,
+        "Search successful"));
+    when(algorithmSearchClient.submitCorrectionSample(any(AdaptationRequest.class)))
+        .thenReturn(new AdaptationResponse(true, 0.86, "用户确认地标命中 Top-5，可进入校正样本池", true, "append_to_manifest"));
+
+    long searchRecordId = uploadWithToken(register("feedback01", "password123"));
+    long feedbackId = createWrongFeedback(searchRecordId, 1, 2);
+    String adminToken = login("admin", "admin");
+
+    mockMvc.perform(post("/api/admin/feedback/" + feedbackId + "/status")
+            .header("Authorization", "Bearer " + adminToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "status": "accepted"
+                }
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("accepted"));
+
+    String detail = waitForFeedbackDetail(adminToken, feedbackId, "synced");
+    assertThat(detail).contains("\"syncStatus\":\"synced\"");
+    assertThat(detail).contains("\"suggestAccept\":true");
+    assertThat(detail).contains("\"confirmedLandmarkId\":2");
+  }
+
+  @Test
+  void algorithmNotificationFailureKeepsAcceptedFeedbackWithSyncFailedSample() throws Exception {
+    when(algorithmSearchClient.search(any())).thenReturn(new AlgorithmSearchResponse(
+        List.of(new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12)),
+        false,
+        "Search successful"));
+    when(algorithmSearchClient.submitCorrectionSample(any(AdaptationRequest.class)))
+        .thenThrow(new AlgorithmSearchException("算法接口离线"));
+
+    long searchRecordId = uploadWithToken(register("feedback02", "password123"));
+    long feedbackId = createWrongFeedback(searchRecordId, 1, 1);
+    String adminToken = login("admin", "admin");
+
+    mockMvc.perform(post("/api/admin/feedback/" + feedbackId + "/status")
+            .header("Authorization", "Bearer " + adminToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "status": "accepted"
+                }
+                """))
+        .andExpect(status().isOk());
+
+    String detail = waitForFeedbackDetail(adminToken, feedbackId, "sync_failed");
+    assertThat(detail).contains("\"syncStatus\":\"sync_failed\"");
+    assertThat(detail).contains("\"status\":\"accepted\"");
   }
 
   @Test
@@ -290,5 +424,83 @@ class ApiControllerTest {
         .getResponse()
         .getContentAsString();
     return response.replaceAll(".*\"token\":\"([^\"]+)\".*", "$1");
+  }
+
+  private String register(String username, String password) throws Exception {
+    String response = mockMvc.perform(post("/api/auth/register")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "username": "%s",
+                  "password": "%s"
+                }
+                """.formatted(username, password)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.token").isString())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+    return response.replaceAll(".*\"token\":\"([^\"]+)\".*", "$1");
+  }
+
+  private long uploadWithToken(String token) throws Exception {
+    MockMultipartFile file = new MockMultipartFile(
+        "file",
+        "sample.jpg",
+        MediaType.IMAGE_JPEG_VALUE,
+        new byte[] {1, 2, 3});
+    String response = mockMvc.perform(multipart("/api/search/upload")
+            .file(file)
+            .header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+    return extractLong(response, "searchRecordId");
+  }
+
+  private long createWrongFeedback(long searchRecordId, long predictedLandmarkId, long confirmedLandmarkId) throws Exception {
+    String response = mockMvc.perform(post("/api/feedback")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "searchRecordId": %d,
+                  "predictedLandmarkId": %d,
+                  "confirmedLandmarkId": %d,
+                  "feedbackType": "wrong",
+                  "comment": "应采纳为校正样本"
+                }
+                """.formatted(searchRecordId, predictedLandmarkId, confirmedLandmarkId)))
+        .andExpect(status().isOk())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+    return extractLong(response, "feedbackId");
+  }
+
+  private String waitForFeedbackDetail(String adminToken, long feedbackId, String expectedSyncStatus) throws Exception {
+    String detail = "";
+    for (int i = 0; i < 20; i++) {
+      detail = mockMvc.perform(get("/api/admin/feedback/" + feedbackId)
+              .header("Authorization", "Bearer " + adminToken))
+          .andExpect(status().isOk())
+          .andReturn()
+          .getResponse()
+          .getContentAsString();
+      if (detail.contains("\"syncStatus\":\"" + expectedSyncStatus + "\"")) {
+        return detail;
+      }
+      Thread.sleep(100);
+    }
+    return detail;
+  }
+
+  private long extractLong(String json, String field) {
+    Pattern pattern = Pattern.compile("\"" + Pattern.quote(field) + "\"\\s*:\\s*(\\d+)");
+    Matcher matcher = pattern.matcher(json);
+    if (!matcher.find()) {
+      throw new IllegalArgumentException("JSON field not found: " + field);
+    }
+    return Long.parseLong(matcher.group(1));
   }
 }

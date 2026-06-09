@@ -95,12 +95,48 @@ Content-Type: application/json
   "comment": "照片角度较偏，无法确认候选地标"
 }
 
+### 当前登录用户个人历史
+GET {{backend}}/api/me/search-records?limit=20
+Authorization: Bearer {{userToken}}
+
+### 查询打卡留言
+GET {{backend}}/api/check-ins?limit=50&guestId={{guestId}}
+
+### 发布打卡留言
+POST {{backend}}/api/check-ins
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+{
+  "landmarkId": 1,
+  "message": "图书馆门口完成打卡，入口角度适合拍摄识别样本。",
+  "guestId": "{{guestId}}"
+}
+
+### 点赞或取消点赞
+POST {{backend}}/api/check-ins/1/like?guestId={{guestId}}
+Authorization: Bearer {{userToken}}
+
+### 回复打卡留言
+POST {{backend}}/api/check-ins/1/replies
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+{
+  "message": "同一位置傍晚光线也比较稳定。",
+  "guestId": "{{guestId}}"
+}
+
 ### 查看最近检索记录
 GET {{backend}}/api/admin/search-records
 Authorization: Bearer {{adminToken}}
 
 ### 查看反馈记录
 GET {{backend}}/api/admin/feedback
+Authorization: Bearer {{adminToken}}
+
+### 查看反馈详情
+GET {{backend}}/api/admin/feedback/1
 Authorization: Bearer {{adminToken}}
 
 ### 处理反馈状态
@@ -153,3 +189,22 @@ GET {{algorithm}}/api/v1/index/stats
 
 ### 算法服务健康检查
 GET {{algorithm}}/api/v1/health
+
+### 算法服务校正样本接收接口
+POST {{algorithm}}/api/v1/adaptation/correction-samples
+Content-Type: application/json
+
+{
+  "sampleId": 1,
+  "feedbackId": 1,
+  "searchRecordId": 1,
+  "imageUrl": "/uploads/20260608/sample.jpg",
+  "confirmedLandmarkCode": "L02",
+  "predictedLandmarkCode": "L01",
+  "feedbackType": "wrong",
+  "comment": "实际是学术大讲堂",
+  "topResults": [
+    { "rank": 1, "landmarkCode": "L01", "score": 0.91, "mahalanobisDistance": 3.12 },
+    { "rank": 2, "landmarkCode": "L02", "score": 0.72, "mahalanobisDistance": 6.45 }
+  ]
+}

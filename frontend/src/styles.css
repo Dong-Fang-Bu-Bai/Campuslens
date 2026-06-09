@@ -2223,3 +2223,349 @@ h3 {
 ::-webkit-scrollbar-thumb:active {
   background-color: rgba(59, 130, 246, 0.85); /* 拖动时点亮为高饱和深蓝 */
 }
+
+/* ==========================================
+   13. V3 历史、留言板、偏好与反馈详情
+   ========================================= */
+.theme-light {
+  --bg-main: #eef3f8;
+  --bg-card: rgba(255, 255, 255, 0.86);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+}
+
+.theme-contrast {
+  --bg-main: #020617;
+  --bg-card: rgba(2, 6, 23, 0.94);
+  --color-accent-light: #f8fafc;
+}
+
+.backdrop-map .content-area {
+  background-image: linear-gradient(rgba(8, 13, 28, 0.82), rgba(8, 13, 28, 0.92)), url('/campus-map.png');
+  background-size: cover;
+  background-position: center;
+}
+
+.backdrop-plain .content-area {
+  background-image: none;
+}
+
+.preferences-dock {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.52);
+  backdrop-filter: blur(14px);
+}
+
+.preferences-dock button,
+.ghost-btn {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.preferences-dock button:hover,
+.ghost-btn:hover {
+  border-color: rgba(96, 165, 250, 0.55);
+  background: rgba(96, 165, 250, 0.12);
+}
+
+.pref-icon {
+  margin-right: 5px;
+  color: var(--color-accent-light);
+}
+
+.v3-panel {
+  background: var(--bg-card);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: var(--shadow-soft);
+}
+
+.v3-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.v3-page-head h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 22px;
+}
+
+.v3-loading,
+.empty-state.compact {
+  min-height: 180px;
+  display: grid;
+  place-content: center;
+  text-align: center;
+}
+
+.history-page {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.timeline-list {
+  display: grid;
+  gap: 14px;
+}
+
+.timeline-card {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(15, 23, 42, 0.34);
+}
+
+.timeline-main {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 14px;
+  align-items: center;
+}
+
+.timeline-thumb {
+  width: 92px;
+  aspect-ratio: 4 / 3;
+  border-radius: 12px;
+  background-size: cover;
+  background-position: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.timeline-title-row,
+.checkin-card-head,
+.checkin-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.timeline-title-row strong {
+  color: var(--text-primary);
+}
+
+.history-chip-row,
+.checkin-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.history-chip-row span,
+.checkin-meta span,
+.checkin-meta button {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 99px;
+  padding: 5px 9px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+}
+
+.checkin-meta button {
+  cursor: pointer;
+}
+
+.checkin-meta button.active {
+  color: #bfdbfe;
+  border-color: rgba(96, 165, 250, 0.45);
+}
+
+.mini-rank-strip,
+.top-snapshot-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin-top: 12px;
+  padding-bottom: 4px;
+}
+
+.mini-rank-strip button,
+.top-snapshot-list button {
+  min-width: 150px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  border-radius: 12px;
+  padding: 9px 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mini-rank-strip span,
+.top-snapshot-list span {
+  color: var(--color-accent-light);
+  font-weight: 900;
+  margin-right: 6px;
+}
+
+.checkin-page {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.checkin-form {
+  display: grid;
+  gap: 14px;
+}
+
+.checkin-form label,
+.reply-form {
+  display: grid;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.checkin-form select,
+.checkin-form textarea,
+.reply-form input {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.48);
+  color: var(--text-primary);
+  padding: 11px 12px;
+}
+
+.checkin-list {
+  display: grid;
+  gap: 14px;
+}
+
+.checkin-card {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 16px;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.34);
+}
+
+.checkin-place {
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-weight: 900;
+  cursor: pointer;
+  padding: 0;
+}
+
+.checkin-place span {
+  color: var(--color-accent-light);
+  margin-right: 8px;
+}
+
+.reply-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.reply-list div {
+  display: flex;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.reply-form {
+  grid-template-columns: 1fr auto;
+}
+
+.reply-form button {
+  border: 0;
+  border-radius: 10px;
+  padding: 0 14px;
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 800;
+}
+
+.result-carousel-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.result-carousel-toolbar button {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  border-radius: 10px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.result-carousel .result-card {
+  transition: transform 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+}
+
+.feedback-admin-item.selected {
+  border-color: rgba(96, 165, 250, 0.52);
+}
+
+.feedback-detail-card {
+  grid-column: 1 / -1;
+}
+
+.feedback-detail-body {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.feedback-image {
+  min-height: 170px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.5);
+  background-size: cover;
+  background-position: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.admin-detail-grid {
+  margin: 0;
+}
+
+.admin-detail-note {
+  grid-column: 1 / -1;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(96, 165, 250, 0.08);
+  color: var(--text-secondary);
+}
+
+@media (max-width: 980px) {
+  .checkin-page,
+  .feedback-detail-body {
+    grid-template-columns: 1fr;
+  }
+
+  .preferences-dock {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

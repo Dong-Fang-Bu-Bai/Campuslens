@@ -37,7 +37,7 @@
           </div>
         </div>
         <div class="feedback-admin-list">
-          <div v-for="item in feedbackRecords" :key="item.id" class="feedback-admin-item">
+          <div v-for="item in feedbackRecords" :key="item.id" class="feedback-admin-item" :class="{ selected: selectedFeedbackDetail?.id === item.id }">
             <div>
               <strong>#{{ item.id }} {{ feedbackTypeLabel(item.feedbackType) }}</strong>
               <p>检索 #{{ item.searchRecordId }} · 用户：{{ item.username || 'guest' }} · 预测：{{ item.predictedLandmarkName || '-' }} · 确认：{{ item.confirmedLandmarkName || '-' }}</p>
@@ -45,10 +45,41 @@
             </div>
             <div class="admin-actions">
               <span :class="['status-badge', item.status]">{{ feedbackStatusLabel(item.status) }}</span>
+              <button type="button" @click="$emit('view-detail', item.id)">详情</button>
               <button type="button" @click="$emit('update-status', item.id, 'accepted')">采纳</button>
               <button type="button" @click="$emit('update-status', item.id, 'ignored')">忽略</button>
             </div>
           </div>
+        </div>
+      </article>
+
+      <article class="admin-card feedback-detail-card">
+        <div class="admin-card-head">
+          <div>
+            <p class="eyebrow">Feedback Detail</p>
+            <h3>反馈详情</h3>
+          </div>
+        </div>
+        <div v-if="!selectedFeedbackDetail" class="empty-state compact">
+          <h3>请选择反馈记录</h3>
+          <p>详情会展示上传图片、Top-5 快照、算法采纳建议和校正样本同步状态。</p>
+        </div>
+        <div v-else class="feedback-detail-body">
+          <div class="feedback-image" :style="{ backgroundImage: `url(${selectedFeedbackDetail.uploadImageUrl || ''})` }"></div>
+          <div class="detail-grid admin-detail-grid">
+            <span>检索记录</span><strong>#{{ selectedFeedbackDetail.searchRecordId }}</strong>
+            <span>反馈状态</span><strong>{{ feedbackStatusLabel(selectedFeedbackDetail.status) }}</strong>
+            <span>校正同步</span><strong>{{ syncStatusLabel(selectedFeedbackDetail.correctionSample?.syncStatus) }}</strong>
+            <span>采纳建议</span><strong>{{ adviceLabel(selectedFeedbackDetail.correctionSample) }}</strong>
+          </div>
+          <div class="top-snapshot-list">
+            <button v-for="item in selectedFeedbackDetail.topResults" :key="item.landmarkId" type="button">
+              <span>#{{ item.rank }}</span>
+              <strong>{{ item.landmarkCode }} {{ item.name }}</strong>
+              <small>{{ Math.round(Number(item.score) * 100) }}%</small>
+            </button>
+          </div>
+          <p class="admin-detail-note">{{ selectedFeedbackDetail.correctionSample?.reason || selectedFeedbackDetail.comment || '暂无补充说明' }}</p>
         </div>
       </article>
     </div>
@@ -59,10 +90,11 @@
 defineProps({
   isAdmin: { type: Boolean, required: true },
   searchRecords: { type: Array, default: () => [] },
-  feedbackRecords: { type: Array, default: () => [] }
+  feedbackRecords: { type: Array, default: () => [] },
+  selectedFeedbackDetail: { type: Object, default: null }
 })
 
-defineEmits(['refresh', 'update-status'])
+defineEmits(['refresh', 'update-status', 'view-detail'])
 
 function recordStatusLabel(status) {
   return {
@@ -91,5 +123,19 @@ function feedbackStatusLabel(value) {
 
 function scoreLabel(value) {
   return value == null ? '' : `匹配分 ${Math.round(Number(value) * 100)}%`
+}
+
+function syncStatusLabel(value) {
+  return {
+    sync_pending: '同步中',
+    synced: '已同步',
+    sync_failed: '同步失败'
+  }[value] || '未生成'
+}
+
+function adviceLabel(sample) {
+  if (!sample) return '待生成'
+  if (sample.reviewScore == null) return '等待算法建议'
+  return `${sample.suggestAccept ? '建议采纳' : '建议复核'} · ${Math.round(Number(sample.reviewScore) * 100)}%`
 }
 </script>

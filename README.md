@@ -204,6 +204,7 @@ git push origin main --tags
 - [初始阶段 M1/M2/M4/M5 完成记录](docs/07_initial_stage_m1_m2_m4_m5.md)
 - [前端界面原型说明](docs/08_frontend_prototype.md)
 - [接口联调说明](docs/09_interface_runbook.md)
+- [第四周 V3 M1/M2/M4/M5 实施记录](docs/11_v3_m1_m2_m4_m5.md)
 
 ## 接口契约
 
