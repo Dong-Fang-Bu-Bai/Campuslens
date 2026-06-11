@@ -32,6 +32,7 @@ class Config:
 
     MATCH_SCORE_CENTER_DISTANCE = float(os.getenv("MATCH_SCORE_CENTER_DISTANCE", "700.0"))
     MATCH_SCORE_SLOPE = float(os.getenv("MATCH_SCORE_SLOPE", "5.0"))
+    SIGMOID_STABILITY_THRESHOLD = float(os.getenv("SIGMOID_STABILITY_THRESHOLD", "700.0"))
 
     SAR_MARGIN = float(os.getenv("SAR_MARGIN", "0.4500"))
     SAR_ENTROPY_TOP_K = int(os.getenv("SAR_ENTROPY_TOP_K", "5"))

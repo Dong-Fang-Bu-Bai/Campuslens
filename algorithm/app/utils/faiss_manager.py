@@ -259,32 +259,33 @@ class FAISSManager:
         基于马氏距离计算置信度评分（Sigmoid 归一化）
         
         核心思想：
-        - 观察到同类地标马氏距离 < 900，不同类 > 900
-        - 使用对数变换压缩范围，再用 Sigmoid 映射到 [0, 1]
-        - score 接近 1.0 → 很可能是同类地标
-        - score 接近 0.0 → 很可能不是同类地标
+        - 使用对数变换压缩马氏距离范围
+        - 再用 Sigmoid 映射到 [0, 1]
+        - score 接近 1.0 → 查询点接近地标分布中心
+        - score 接近 0.0 → 查询点偏离地标分布
         
         优势：
-        - 区分度好：在900附近有陡峭的过渡
+        - 区分度好：在 CENTER 附近有陡峭的过渡
         - 平滑过渡：没有突然的跳变
-        - 可调节：通过 slope 参数控制区分度
+        - 可调节：通过配置参数控制中心点和斜率
         - 不受绝对距离影响：即使距离很大也有非零分数
         """
         mahalanobis_dist = self._compute_mahalanobis_distance(query_vector, stats)
         
-        # 对数变换：压缩大范围
-        log_dist = np.log(mahalanobis_dist + 1)  # +1 避免 log(0)
+        # 使用配置参数计算经验匹配分
+        log_dist = np.log(mahalanobis_dist + 1.0)
+        center = np.log(Config.MATCH_SCORE_CENTER_DISTANCE + 1.0)
+        exponent = Config.MATCH_SCORE_SLOPE * (log_dist - center)
         
-        # Sigmoid 中心点（以900为分界线）
-        center = np.log(900 + 1)  # ≈ 6.8
-        
-        # 斜率参数（控制过渡的陡峭程度）
-        # 由于同类和不同类的分界在900附近，需要较陡的过渡
-        # slope 越大 → 过渡越陡峭，区分度越高
-        slope = 3.0
+        # 数值稳定性处理（防止 np.exp 溢出）
+        threshold = Config.SIGMOID_STABILITY_THRESHOLD
+        if exponent > threshold:
+            return 0.0
+        if exponent < -threshold:
+            return 1.0
         
         # Sigmoid 映射（反向，因为距离越小分数越高）
-        score = 1.0 / (1.0 + np.exp(slope * (log_dist - center)))
+        score = 1.0 / (1.0 + np.exp(exponent))
         
         return float(score)
     

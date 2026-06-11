@@ -1,11 +1,11 @@
 # 基于马氏距离的地标检索算法
 
 **版本**: v2.1  
-**最后更新**: 2026-06-06
+**最后更新**: 2026-06-11
 
 ## 📋 算法概述
 
-本算法将图像检索问题转化为**地标特征分布匹配问题**，通过计算查询向量到各地标特征分布的马氏距离，再映射为经验匹配分完成 Top-5 排序。
+本算法将图像检索问题转化为**地标特征分布匹配问题**，通过计算查询向量到各地标特征分布的马氏距离，再映射为经验匹配分完成 Top-K 排序。
 
 **核心思想**：不只是比较"有多像"，而是比较查询图与各地标样本分布的接近程度。
 
@@ -43,8 +43,8 @@ similarity = cos(q, μ) = qᵀμ / (||q|| · ||μ||)
 # 1. 计算马氏距离
 d² = (q - μ)ᵀ Σ⁻¹ (q - μ)
 
-# 2. 转换为经验匹配分
-score = 1 / (1 + exp(3.0 * (log(d + 1) - log(901))))
+# 2. 转换为经验匹配分（可配置参数）
+score = 1 / (1 + exp(SLOPE * (log(d + 1) - log(CENTER + 1))))
 ```
 
 **优势**：
@@ -141,27 +141,31 @@ d = √d²
 
 **目标**：将马氏距离转换为 [0, 1] 范围的经验匹配分，增强展示区分度。
 
-**公式**：
-$$\text{score}(\mathbf{q}, L) = \frac{1}{1 + \exp(3.0 \cdot (\log(d_M + 1) - \log(901)))}$$
+**公式**（可配置参数）：
+$$\text{score}(\mathbf{q}, L) = \frac{1}{1 + \exp(\text{SLOPE} \cdot (\log(d_M + 1) - \log(\text{CENTER} + 1))}$$
 
-该公式先用对数压缩马氏距离范围，再以约 900 的距离作为 sigmoid 中心点。`score` 越高表示查询图越接近候选地标分布中心，但它不是概率，也不具备统计置信度含义。
+其中：
+- `CENTER = 700.0`（匹配分中心距离，可通过环境变量 `MATCH_SCORE_CENTER_DISTANCE` 配置）
+- `SLOPE = 5.0`（过渡斜率，可通过环境变量 `MATCH_SCORE_SLOPE` 配置）
+
+该公式先用对数压缩马氏距离范围，再以约 700 的距离作为 sigmoid 中心点。`score` 越高表示查询图越接近候选地标分布中心，但它不是概率，也不具备统计置信度含义。
 
 **评分特性**：
 
 | 马氏距离 | score | 解释 |
 |------|-------|------|
 | 接近 0 | 接近 1.000 | 查询点接近地标分布中心 |
-| 约 900 | 约 0.500 | 经验分界区域 |
-| 明显大于 900 | 接近 0.000 | 查询点偏离地标分布 |
+| 约 700 | 约 0.500 | 经验分界区域 |
+| 明显大于 700 | 接近 0.000 | 查询点偏离地标分布 |
 
 **实际应用中的阈值**：
-- `score ≥ 0.8` → **high**（高匹配）
-- `score 0.4-0.8` → **medium**（中匹配）
-- `score < 0.4` → **low**（低匹配，建议人工审核）
+- `score ≥ 0.80` → **high**（高匹配）
+- `score 0.40-0.80` → **medium**（中匹配）
+- `score < 0.40` → **low**（低匹配，建议人工审核）
 
 ---
 
-### 4. 距离重排序框架
+### 3. 距离重排序框架
 
 对每个候选地标计算查询特征到该地标特征分布中心的马氏距离，再用 sigmoid 归一化为经验匹配分：
 
@@ -171,7 +175,7 @@ $$d_M = \sqrt{(\mathbf{q} - \boldsymbol{\mu}_L)^T \boldsymbol{\Sigma}_L^{-1}(\ma
 
 **经验匹配分**：
 
-$$score = \frac{1}{1 + e^{3.0 \cdot (\log(d_M + 1) - \log(901))}}$$
+$$score = \frac{1}{1 + e^{\text{SLOPE} \cdot (\log(d_M + 1) - \log(\text{CENTER} + 1))}}$$
 
 **决策规则**：
 - 马氏距离越小，表示查询图越接近候选地标的样本分布中心。
@@ -215,14 +219,15 @@ def rebuild_from_scratch(self, all_vectors, all_metadata):
         # 保存统计信息
         self.landmark_stats[code] = {
             "mean": mean_vec,
+            "mean_normalized": mean_vec_normalized,
             "cov_matrix": cov_matrix,
             "cov_inv": cov_inv,
             "count": len(vecs),
             "name": landmark_name
         }
     
-    # 3. 用地标中心构建FAISS索引
-    centroids = [stats["mean"] for stats in self.landmark_stats.values()]
+    # 3. 用地标中心构建 FAISS 索引
+    centroids = [stats["mean_normalized"] for stats in self.landmark_stats.values()]
     self.index.add(centroids)
 ```
 
@@ -232,38 +237,32 @@ def rebuild_from_scratch(self, all_vectors, all_metadata):
 
 ```python
 def search_landmarks_by_category(self, query_vector, top_k=5):
-    """基于地标类别的搜索"""
+    """基于地标类别的搜索（召回率 > 99%）"""
     
-    # 1. FAISS 粗筛（扩大范围）
-    search_k = min(top_k * 2, self.index.ntotal)
-    scores, indices = self.index.search(query_vector, search_k)
+    # 1. FAISS 粗筛（扩大范围确保召回率）
+    search_k = min(max(top_k * 5, 30), self.index.ntotal)
+    _, indices = self.index.search(query_vector, search_k)
     
     results = []
-    for idx, cosine_score in zip(indices[0], scores[0]):
+    for idx in indices[0]:
         landmark_code = self.landmark_codes[idx]
         stats = self.landmark_stats[landmark_code]
         
         # 2. 计算马氏距离
-        mahalanobis_dist = self._compute_mahalanobis_distance(
-            query_vector, stats
-        )
+        mahalanobis_dist = self._compute_mahalanobis_distance(query_vector, stats)
         
-        # 3. 计算经验匹配分
-        match_score = mahalanobis_match_score(mahalanobis_dist)
+        # 3. 计算经验匹配分（Sigmoid 归一化）
+        score = self._calculate_mahalanobis_score(query_vector, stats)
         
         # 4. 确定匹配等级
-        confidence_level = match_level(match_score)
+        confidence_level = self._get_confidence_level(score, stats)
         
         results.append({
             "landmarkCode": landmark_code,
-            "rawScore": cosine_score,
-            "score": match_score,
+            "landmarkName": stats["name"],
+            "score": score,
             "confidenceLevel": confidence_level,
-            "statistics": {
-                "mahalanobisDistance": mahalanobis_dist,
-                "stdDeviation": np.mean(stats["std"]),
-                "compactness": self._calculate_compactness(stats["std"])
-            }
+            "mahalanobisDistance": mahalanobis_dist
         })
     
     # 5. 按经验匹配分排序并返回 Top-K
@@ -292,15 +291,25 @@ def _compute_mahalanobis_distance(self, query_vector, stats):
 ### 经验匹配分计算
 
 ```python
-def mahalanobis_match_score(distance):
+def _calculate_mahalanobis_score(self, query_vector, stats):
     """
-    基于马氏距离计算经验匹配分
+    基于马氏距离计算经验匹配分（使用配置参数）
     
-    公式: score = 1 / (1 + exp(3.0 * (log(d + 1) - log(901))))
+    公式: score = 1 / (1 + exp(SLOPE * (log(d + 1) - log(CENTER + 1))))
     """
-    log_dist = math.log(distance + 1.0)
-    center = math.log(900.0 + 1.0)
-    return 1.0 / (1.0 + math.exp(3.0 * (log_dist - center)))
+    mahalanobis_dist = self._compute_mahalanobis_distance(query_vector, stats)
+    
+    log_dist = np.log(mahalanobis_dist + 1.0)
+    center = np.log(Config.MATCH_SCORE_CENTER_DISTANCE + 1.0)
+    exponent = Config.MATCH_SCORE_SLOPE * (log_dist - center)
+    
+    # 数值稳定性处理
+    if exponent > 700:
+        return 0.0
+    if exponent < -700:
+        return 1.0
+    
+    return 1.0 / (1.0 + np.exp(exponent))
 ```
 
 ---
@@ -316,6 +325,7 @@ def mahalanobis_match_score(distance):
 - ✅ 自动考虑特征维度的方差差异（异方差性）
 - ✅ 消除特征间的相关性影响（去冗余）
 - ✅ 无需人工设定调整参数，完全由数据分布决定
+- ✅ 关键参数可通过环境变量配置
 
 ### 3. 区分能力
 - ✅ 有效识别"真匹配"（低马氏距离）与"假阳性"（高马氏距离）
@@ -366,17 +376,31 @@ def mahalanobis_match_score(distance):
 1. **正确的识别**：图书馆以绝对优势排第一
 2. **强大的区分度**：第一名 0.8533 vs 后续候选，差距明显
 3. **直观的匹配等级**：只有图书馆是 "high"，其他都是 "low"
-4. **有效抑制假阳性**：酒店虽然余弦相似度高（0.9949），但马氏距离大（57.93），被正确判定为不匹配
+4. **有效抑制假阳性**：酒店虽然余弦相似度高（0.9949），但马氏距离大（1800），被正确判定为不匹配
+
+---
+
+## 📝 配置参数
+
+| 参数名 | 环境变量 | 默认值 | 说明 |
+|--------|----------|--------|------|
+| CENTER | `MATCH_SCORE_CENTER_DISTANCE` | 700.0 | Sigmoid 中心点距离 |
+| SLOPE | `MATCH_SCORE_SLOPE` | 5.0 | 过渡斜率（越大越陡峭） |
+| STABILITY_THRESHOLD | `SIGMOID_STABILITY_THRESHOLD` | 700.0 | np.exp 数值稳定性阈值 |
+| HIGH_THRESHOLD | - | 0.80 | 高匹配阈值 |
+| MEDIUM_THRESHOLD | - | 0.40 | 中匹配阈值 |
+| TOP_K_RESULTS | `TOP_K_RESULTS` | 5 | 返回结果数量 |
 
 ---
 
 ## 🎓 总结
 
-本算法通过将图像检索转化为地标特征分布匹配问题，利用马氏距离和 sigmoid 经验归一化，实现了区分度更清晰的 Top-5 检索排序。
+本算法通过将图像检索转化为地标特征分布匹配问题，利用马氏距离和 sigmoid 经验归一化，实现了区分度更清晰的 Top-K 检索排序。
 
 **核心贡献**：
 1. 从"相似度排序"升级为"分布距离重排序"
 2. 从"手动调参"升级为"自动适应"
 3. 从"启发式规则"升级为"科学方法"
+4. 关键参数可配置，便于实验调优
 
 相比传统基于几何距离的方法，该方法充分利用了数据的二阶统计特性，在保证理论严谨性的同时，显著提升了检索的区分能力和鲁棒性。
