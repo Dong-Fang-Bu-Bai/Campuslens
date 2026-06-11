@@ -17,12 +17,14 @@ where docker >nul 2>nul
 if not errorlevel 1 (
   call :ensure_windows_docker
   if errorlevel 1 exit /b 1
-  echo [CampusLens] Starting MySQL database with Windows Docker Compose...
-  docker compose up -d mysql
+  echo [CampusLens] Starting MySQL and Redis with Windows Docker Compose...
+  docker compose up -d mysql redis
   if errorlevel 1 exit /b 1
   call :wait_mysql_windows
   if errorlevel 1 exit /b 1
   call :wait_mysql_windows_query
+  if errorlevel 1 exit /b 1
+  call :wait_redis_windows
   if errorlevel 1 exit /b 1
   if exist "%DB_ENV%" del "%DB_ENV%" >nul 2>nul
   goto :started
@@ -66,12 +68,14 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [CampusLens] Starting MySQL database with WSL Docker Compose...
-wsl.exe -d %WSL_DISTRO% --cd "%ROOT%" -- docker compose up -d mysql
+echo [CampusLens] Starting MySQL and Redis with WSL Docker Compose...
+wsl.exe -d %WSL_DISTRO% --cd "%ROOT%" -- docker compose up -d mysql redis
 if errorlevel 1 exit /b 1
 call :wait_mysql_wsl
 if errorlevel 1 exit /b 1
 call :wait_mysql_wsl_query
+if errorlevel 1 exit /b 1
+call :wait_redis_wsl
 if errorlevel 1 exit /b 1
 
 if not exist "%PID_DIR%" mkdir "%PID_DIR%"
@@ -99,6 +103,7 @@ echo [CampusLens] WSL Docker detected. Backend database URL saved to %DB_ENV%.
 :started
 echo [CampusLens] MySQL startup check finished.
 echo [CampusLens] Database: campuslens, user: campuslens
+echo [CampusLens] Redis queue: localhost:6379
 endlocal
 exit /b 0
 
@@ -139,6 +144,15 @@ for /l %%I in (1,1,20) do (
 echo [CampusLens] MySQL did not accept queries in time.
 exit /b 1
 
+:wait_redis_windows
+echo [CampusLens] Waiting for Redis health check...
+for /l %%I in (1,1,30) do (
+  for /f "delims=" %%H in ('docker inspect -f "{{.State.Health.Status}}" campuslens-redis 2^>nul') do if "%%H"=="healthy" exit /b 0
+  powershell -NoProfile -Command "Start-Sleep -Seconds 2" >nul
+)
+echo [CampusLens] Redis did not become healthy in time.
+exit /b 1
+
 :wait_mysql_wsl
 echo [CampusLens] Waiting for WSL MySQL health check...
 for /l %%I in (1,1,30) do (
@@ -156,6 +170,15 @@ for /l %%I in (1,1,20) do (
   powershell -NoProfile -Command "Start-Sleep -Seconds 2" >nul
 )
 echo [CampusLens] WSL MySQL did not accept queries in time.
+exit /b 1
+
+:wait_redis_wsl
+echo [CampusLens] Waiting for WSL Redis health check...
+for /l %%I in (1,1,30) do (
+  for /f "delims=" %%H in ('wsl.exe -d %WSL_DISTRO% -- docker inspect -f "{{.State.Health.Status}}" campuslens-redis 2^>nul') do if "%%H"=="healthy" exit /b 0
+  powershell -NoProfile -Command "Start-Sleep -Seconds 2" >nul
+)
+echo [CampusLens] WSL Redis did not become healthy in time.
 exit /b 1
 
 :wait_mysql_wsl_bridge

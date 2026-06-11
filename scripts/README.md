@@ -4,7 +4,7 @@
 
 | 脚本 | 使用时机 |
 | --- | --- |
-| `1_check-env.cmd` | 开发前检查 Java、Maven、Node、npm、Docker、Python 3.10、算法虚拟环境、模型文件和 `.env` 是否可用；会自动识别本机 `D:\Tools\Docker\Docker\resources\bin`。 |
+| `1_check-env.cmd` | 开发前检查 Java、Maven、Node、npm、Docker、算法 Python、模型文件和 `.env` 是否可用；算法 Python 按 `CAMPUSLENS_ALGORITHM_PYTHON`、D 盘 Conda 环境、项目 `.venv` 的顺序选择。 |
 | `2_start-dev.cmd` | 一键启动本地联调环境：默认先用本机 Docker Desktop 启动 MySQL，再启动后端、前端、算法服务。页面访问 `http://localhost:5173`。 |
 | `3_stop-dev.cmd` | 停止由本项目脚本启动的后端、前端和算法服务窗口；不会扫描端口或结束手动启动的进程。 |
 | `4_verify-dev.cmd` | 使用 MySQL profile 启动/检查 MySQL、后端、前端和算法服务，并等待三个 HTTP 健康地址成功响应。 |
@@ -33,9 +33,10 @@ scripts\4_verify-dev.cmd
 scripts\3_stop-dev.cmd
 ```
 
-算法服务依赖本地文件：
+算法服务依赖本地环境和文件：
 
-- `algorithm\.venv\Scripts\python.exe`
+- `CAMPUSLENS_ALGORITHM_PYTHON` 指定的解释器，未设置时默认使用 `D:\AnaConda\envs\campuslens-gpu\python.exe`
+- `algorithm\.venv\Scripts\python.exe` 仅作为迁移期回退
 - `algorithm\.env`
 - `algorithm\models\dinov2_model.pth`
 - `algorithm\data\faiss_index\landmark_index.faiss`

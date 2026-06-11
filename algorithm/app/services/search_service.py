@@ -25,3 +25,12 @@ class SearchService:
             raise ValueError("No similar landmarks found")
         
         return results
+
+    def search_batch(self, images: List[Image.Image], top_k: int = 5) -> List[List[Dict]]:
+        if not images:
+            return []
+        vectors = self.extractor.extract_batch(images)
+        return [
+            self.faiss_manager.search_landmarks_by_category(vector, top_k=top_k)
+            for vector in vectors
+        ]

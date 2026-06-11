@@ -10,3 +10,9 @@ spring:
   flyway:
     enabled: true
     locations: filesystem:../database/migration
+
+campuslens:
+  search:
+    worker-delay-ms: 10
+    recovery-delay-ms: 1000
+    max-attempts: 1

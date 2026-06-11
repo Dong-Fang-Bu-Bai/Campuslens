@@ -21,8 +21,8 @@
           <strong>{{ selectedFile ? selectedFile.name : '选择校园照片' }}</strong>
           <small>支持 JPG、PNG、WebP，不超过 8MB</small>
         </label>
-        <button class="primary-btn" :disabled="loading" :class="{ 'is-loading': loading }">
-          <span class="btn-text">{{ loading ? '算法检索中...' : '上传并检索' }}</span>
+        <button class="primary-btn" :disabled="loading || jobPending" :class="{ 'is-loading': loading }">
+          <span class="btn-text">{{ loading ? jobStatusLabel : '上传并检索' }}</span>
           <span class="btn-shine"></span>
         </button>
         <p v-if="error" class="error-text">
@@ -129,6 +129,13 @@
             <p v-if="searchMeta.lowConfidence" class="warning-text">
               {{ searchMeta.message }}
             </p>
+            <div v-if="jobState.status === 'queued' || jobState.status === 'processing'" class="job-progress" role="status">
+              <div>
+                <strong>{{ jobStatusLabel }}</strong>
+                <span>任务 #{{ jobState.searchRecordId }} · 已尝试 {{ jobState.attemptCount }} 次</span>
+              </div>
+              <button v-if="!loading" type="button" class="ghost-btn" @click="resumeSearchJob">继续查询</button>
+            </div>
 
             <div v-if="results.length" class="result-carousel-toolbar">
               <button type="button" @click="cycleResults(-1)">上一项</button>
@@ -158,7 +165,7 @@
                   <div class="result-actions">
                     <span class="result-meta">{{ confidenceLabel(item.confidenceLevel) }}<template v-if="item.mahalanobisDistance != null"> · D={{ Number(item.mahalanobisDistance).toFixed(2) }}</template></span>
                     <button @click.stop="openModal(item)">详情</button>
-                    <button @click.stop="openFeedback(item)">反馈</button>
+                    <button :disabled="!feedbackEligible" @click.stop="openFeedback(item)">反馈</button>
                   </div>
                 </div>
               </div>
@@ -478,8 +485,18 @@ const results = ref(demoLandmarks.slice(0, 5).map((item, index) => ({
 })))
 const selectedId = ref(1)
 const selectedFile = ref(null)
+const uploadIdempotencyKey = ref('')
 const loading = ref(false)
+const polling = ref(false)
 const error = ref('')
+const jobState = reactive({
+  jobId: '',
+  jobToken: '',
+  searchRecordId: null,
+  status: '',
+  attemptCount: 0,
+  startedAt: 0
+})
 const initialView = new URLSearchParams(window.location.search).get('view')
 const availableViews = ['results', 'map', 'feedback', 'history', 'checkins', 'auth', 'admin']
 const activeView = ref(availableViews.includes(initialView) ? initialView : 'results')
@@ -491,7 +508,8 @@ const searchMeta = reactive({
   searchRecordId: 1,
   uploadImageUrl: '',
   lowConfidence: false,
-  message: '尚未上传图片'
+  message: '尚未上传图片',
+  status: ''
 })
 const feedback = reactive({
   searchRecordId: 1,
@@ -513,6 +531,13 @@ const adminFeedbackRecords = ref([])
 const selectedFeedbackDetail = ref(null)
 const userSearchRecords = ref([])
 const historyLoading = ref(false)
+const jobStatusLabel = computed(() => ({
+  queued: '任务排队中...',
+  processing: '任务识别中...',
+  failed: '检索失败'
+}[jobState.status] || '提交任务中...'))
+const jobPending = computed(() => Boolean(jobState.jobId) && ['queued', 'processing'].includes(jobState.status))
+const feedbackEligible = computed(() => ['success', 'low_confidence'].includes(searchMeta.status))
 const checkIns = ref([])
 const activeResultIndex = ref(0)
 const preferences = reactive(loadPreferences())
@@ -725,6 +750,8 @@ onMounted(async () => {
   } catch {
     landmarks.value = demoLandmarks
   }
+
+  restoreSearchJob()
 })
 
 function dismissWelcome() {
@@ -734,6 +761,7 @@ function dismissWelcome() {
 
 function onFileChange(event) {
   selectedFile.value = event.target.files?.[0] || null
+  uploadIdempotencyKey.value = selectedFile.value ? crypto.randomUUID() : ''
   error.value = ''
 }
 
@@ -748,18 +776,52 @@ async function submitSearch() {
   form.append('file', selectedFile.value)
   form.append('guestId', guestId.value)
   try {
+    if (!uploadIdempotencyKey.value) uploadIdempotencyKey.value = crypto.randomUUID()
     const response = await fetch('/api/search/upload', {
       method: 'POST',
-      headers: authHeaders(),
+      headers: {
+        ...authHeaders(),
+        'Idempotency-Key': uploadIdempotencyKey.value
+      },
       body: form
     })
     if (!response.ok) {
       const body = await response.json().catch(() => ({}))
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('Retry-After') || '5'
+        throw new Error(`${body.message || '检索队列已满'}，请在 ${retryAfter} 秒后重试`)
+      }
+      if (response.status === 503) {
+        throw new Error(body.message || '任务队列暂不可用，请稍后重试')
+      }
       throw new Error(body.message || '检索请求失败')
     }
     const data = await response.json()
-    saveGuestId(data.guestId)
-    results.value = data.results.map((item) => {
+    uploadIdempotencyKey.value = ''
+    Object.assign(jobState, {
+      jobId: data.jobId,
+      jobToken: data.jobToken,
+      searchRecordId: data.searchRecordId,
+      status: data.status,
+      attemptCount: 0,
+      startedAt: Date.now()
+    })
+    persistSearchJob()
+    searchMeta.searchRecordId = data.searchRecordId
+    searchMeta.status = data.status
+    searchMeta.message = '任务已进入检索队列'
+    navigateToView('results')
+    await pollSearchJob()
+  } catch (err) {
+    error.value = err.message
+    searchMeta.lowConfidence = true
+    searchMeta.message = err.message
+    loading.value = false
+  }
+}
+
+function applySearchResult(data) {
+    results.value = (data.results || []).map((item) => {
       const matched = landmarks.value.find(l => l.id === item.landmarkId)
       let imgUrl = item.coverImageUrl || item.cover_image_url || item.imageUrl
       if (!imgUrl || (!imgUrl.startsWith('http') && !imgUrl.startsWith('data:'))) {
@@ -772,22 +834,91 @@ async function submitSearch() {
         score: Math.max(0, Math.min(1, Number(item.score || 0)))
       }
     })
+    saveGuestId(data.guestId)
     searchMeta.searchRecordId = data.searchRecordId
     searchMeta.uploadImageUrl = data.uploadImageUrl || ''
     searchMeta.lowConfidence = Boolean(data.lowConfidence)
     searchMeta.message = data.message || '检索完成'
+    searchMeta.status = data.status
     feedback.searchRecordId = data.searchRecordId
     activeResultIndex.value = 0
     
-    // 自动推送历史
     navigateToView('results')
     selectedId.value = results.value[0]?.landmarkId || 1
-  } catch (err) {
-    error.value = err.message
-    searchMeta.lowConfidence = true
-    searchMeta.message = err.message
+}
+
+async function pollSearchJob() {
+  if (polling.value) return
+  polling.value = true
+  try {
+    while (jobState.jobId && ['queued', 'processing'].includes(jobState.status)) {
+      const elapsed = Date.now() - jobState.startedAt
+      const delay = elapsed < 10000 ? 1000 : elapsed < 30000 ? 2000 : 5000
+      await new Promise(resolve => setTimeout(resolve, delay))
+      const headers = { ...authHeaders() }
+      if (!currentUser.value && jobState.jobToken) {
+        headers['X-Search-Job-Token'] = jobState.jobToken
+      }
+      try {
+        const response = await fetch(`/api/search/jobs/${jobState.jobId}`, { headers })
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}))
+          throw new Error(body.message || '查询任务状态失败')
+        }
+        const data = await response.json()
+        jobState.status = data.status
+        searchMeta.status = data.status
+        jobState.attemptCount = data.attemptCount || 0
+        persistSearchJob()
+        if (data.status === 'success' || data.status === 'low_confidence') {
+          applySearchResult(data)
+          clearSearchJob()
+          loading.value = false
+        } else if (data.status === 'failed') {
+          error.value = data.message || '检索任务失败'
+          searchMeta.message = error.value
+          searchMeta.lowConfidence = true
+          clearSearchJob()
+          loading.value = false
+        }
+      } catch (err) {
+        error.value = `${err.message}，任务仍在服务端运行，可刷新页面后继续查看`
+        loading.value = false
+        return
+      }
+    }
   } finally {
-    loading.value = false
+    polling.value = false
+  }
+}
+
+async function resumeSearchJob() {
+  if (!jobPending.value || loading.value) return
+  error.value = ''
+  loading.value = true
+  await pollSearchJob()
+}
+
+function persistSearchJob() {
+  localStorage.setItem('campuslens.pendingSearchJob', JSON.stringify(jobState))
+}
+
+function clearSearchJob() {
+  localStorage.removeItem('campuslens.pendingSearchJob')
+  jobState.jobId = ''
+  jobState.jobToken = ''
+}
+
+function restoreSearchJob() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('campuslens.pendingSearchJob') || 'null')
+    if (saved?.jobId) {
+      Object.assign(jobState, saved, { startedAt: saved.startedAt || Date.now() })
+      loading.value = true
+      pollSearchJob()
+    }
+  } catch {
+    localStorage.removeItem('campuslens.pendingSearchJob')
   }
 }
 
@@ -825,6 +956,10 @@ function jumpModalToMap() {
 }
 
 function openFeedback(item) {
+  if (!feedbackEligible.value) {
+    error.value = '只有成功或低置信度检索任务允许提交反馈'
+    return
+  }
   feedback.predictedLandmarkId = item.landmarkId
   feedback.confirmedLandmarkId = item.landmarkId
   feedback.feedbackType = 'correct'
@@ -834,6 +969,10 @@ function openFeedback(item) {
 
 async function submitFeedback() {
   feedbackMessage.value = ''
+  if (!feedbackEligible.value) {
+    feedbackMessage.value = '只有成功或低置信度检索任务允许提交反馈'
+    return
+  }
   const payload = { ...feedback, guestId: guestId.value }
   try {
     const response = await fetch('/api/feedback', {
@@ -1004,7 +1143,9 @@ async function loadUserHistory() {
 }
 
 function openHistoryFeedback(record, item) {
+  if (!['success', 'low_confidence'].includes(record.status)) return
   searchMeta.searchRecordId = record.id
+  searchMeta.status = record.status
   searchMeta.uploadImageUrl = record.uploadImageUrl || ''
   feedback.searchRecordId = record.id
   feedback.predictedLandmarkId = item.landmarkId
@@ -1132,8 +1273,9 @@ function loadGuestId() {
   if (/^guest#[1-9]\d*$/.test(existing || '')) {
     return existing
   }
-  localStorage.removeItem(key)
-  return 'guest'
+  const generated = `guest#${Date.now()}${Math.floor(100 + Math.random() * 900)}`
+  localStorage.setItem(key, generated)
+  return generated
 }
 
 function saveGuestId(value) {

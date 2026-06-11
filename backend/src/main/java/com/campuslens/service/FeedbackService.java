@@ -37,8 +37,8 @@ public class FeedbackService {
   }
 
   public FeedbackResponse submit(FeedbackRequest request, SessionUser user) {
-    validate(request);
     Long userId = user == null ? null : activeUserId(user.userId());
+    validate(request, userId);
     KeyHolder keyHolder = new GeneratedKeyHolder();
     jdbcTemplate.update(connection -> {
       PreparedStatement ps = connection.prepareStatement("""
@@ -146,12 +146,20 @@ public class FeedbackService {
     return rows.get(0);
   }
 
-  private void validate(FeedbackRequest request) {
+  private void validate(FeedbackRequest request, Long userId) {
     if (!FEEDBACK_TYPES.contains(request.feedbackType())) {
       throw new IllegalArgumentException("feedbackType 只能为 correct、wrong 或 uncertain");
     }
-    if (!searchRecordService.exists(request.searchRecordId())) {
-      throw new IllegalArgumentException("searchRecordId 对应的检索记录不存在");
+    SearchRecordService.FeedbackTarget target = searchRecordService.feedbackTarget(request.searchRecordId());
+    if (!Set.of("success", "low_confidence").contains(target.status())) {
+      throw new IllegalArgumentException("只有成功或低置信度任务允许提交反馈");
+    }
+    if (target.userId() != null && !target.userId().equals(userId)) {
+      throw new AuthRequiredException("无权对该检索任务提交反馈");
+    }
+    if (target.userId() == null
+        && (request.guestId() == null || !target.guestId().equals(request.guestId().trim()))) {
+      throw new AuthRequiredException("游客身份与检索任务不匹配");
     }
     if (("correct".equals(request.feedbackType()) || "wrong".equals(request.feedbackType()))
         && request.predictedLandmarkId() == null) {

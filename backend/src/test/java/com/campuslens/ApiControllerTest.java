@@ -13,10 +13,13 @@ import static org.mockito.Mockito.when;
 import com.campuslens.service.AlgorithmSearchClient;
 import com.campuslens.service.AlgorithmSearchClient.AdaptationRequest;
 import com.campuslens.service.AlgorithmSearchClient.AdaptationResponse;
+import com.campuslens.service.AlgorithmSearchClient.AlgorithmBatchItem;
 import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResponse;
 import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResult;
 import com.campuslens.service.AlgorithmSearchException;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
@@ -55,7 +58,7 @@ class ApiControllerTest {
 
   @Test
   void uploadReturnsAlgorithmTopFive() throws Exception {
-    when(algorithmSearchClient.search(any())).thenReturn(new AlgorithmSearchResponse(
+    mockSearch(new AlgorithmSearchResponse(
         List.of(
             new AlgorithmSearchResult(1, "L03", "文雍广场", 0.91, "high", 3.12),
             new AlgorithmSearchResult(2, "L01", "图书馆", 0.82, "medium", 5.34),
@@ -71,19 +74,23 @@ class ApiControllerTest {
         MediaType.IMAGE_JPEG_VALUE,
         new byte[] {1, 2, 3});
 
-    mockMvc.perform(multipart("/api/search/upload").file(file))
-        .andExpect(status().isOk())
+    String submission = mockMvc.perform(multipart("/api/search/upload").file(file)
+            .header("Idempotency-Key", UUID.randomUUID().toString()))
+        .andExpect(status().isAccepted())
         .andExpect(jsonPath("$.searchRecordId").isNumber())
-        .andExpect(jsonPath("$.message").value("算法服务检索成功"))
-        .andExpect(jsonPath("$.results.length()").value(5))
-        .andExpect(jsonPath("$.results[0].landmarkCode").value("L03"))
-        .andExpect(jsonPath("$.results[0].confidenceLevel").value("high"))
-        .andExpect(jsonPath("$.results[0].mahalanobisDistance").value(3.12));
+        .andExpect(jsonPath("$.status").value("queued"))
+        .andReturn().getResponse().getContentAsString();
+
+    String result = waitForJob(submission, null);
+    assertThat(result).contains("\"status\":\"success\"");
+    assertThat(result).contains("\"landmarkCode\":\"L03\"");
+    assertThat(result).contains("\"confidenceLevel\":\"high\"");
+    assertThat(result).contains("\"mahalanobisDistance\":3.12");
   }
 
   @Test
   void uploadFallsBackWhenAlgorithmUnavailable() throws Exception {
-    when(algorithmSearchClient.search(any())).thenThrow(new AlgorithmSearchException("连接失败"));
+    when(algorithmSearchClient.searchBatch(any())).thenThrow(new AlgorithmSearchException("连接失败"));
 
     MockMultipartFile file = new MockMultipartFile(
         "file",
@@ -91,16 +98,161 @@ class ApiControllerTest {
         MediaType.IMAGE_JPEG_VALUE,
         new byte[] {1, 2, 3});
 
-    mockMvc.perform(multipart("/api/search/upload").file(file))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.lowConfidence").value(true))
-        .andExpect(jsonPath("$.message").value("算法服务暂不可用，未生成候选地标。原因：连接失败"))
-        .andExpect(jsonPath("$.results.length()").value(0));
+    String submission = mockMvc.perform(multipart("/api/search/upload").file(file)
+            .header("Idempotency-Key", UUID.randomUUID().toString()))
+        .andExpect(status().isAccepted())
+        .andReturn().getResponse().getContentAsString();
+    String result = waitForJob(submission, null);
+    assertThat(result).contains("\"status\":\"failed\"");
+    assertThat(result).contains("\"lowConfidence\":true");
+    assertThat(result).contains("\"errorCode\":\"algorithm_unavailable\"");
+    assertThat(result).contains("\"results\":[]");
+  }
+
+  @Test
+  void searchJobRequiresGuestTokenAndUserOwnership() throws Exception {
+    mockSearch(new AlgorithmSearchResponse(
+        List.of(new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12)),
+        false,
+        "Search successful"));
+    MockMultipartFile guestFile = new MockMultipartFile(
+        "file", "guest.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {1, 2, 3});
+    String guestSubmission = mockMvc.perform(multipart("/api/search/upload").file(guestFile)
+            .header("Idempotency-Key", UUID.randomUUID().toString()))
+        .andExpect(status().isAccepted())
+        .andReturn().getResponse().getContentAsString();
+    String guestJobId = extractString(guestSubmission, "jobId");
+
+    mockMvc.perform(get("/api/search/jobs/" + guestJobId))
+        .andExpect(status().isUnauthorized());
+    mockMvc.perform(get("/api/search/jobs/" + guestJobId)
+            .header("X-Search-Job-Token", "invalid-token"))
+        .andExpect(status().isUnauthorized());
+
+    String ownerToken = register("jobowner01", "password123");
+    String otherToken = register("jobowner02", "password123");
+    MockMultipartFile userFile = new MockMultipartFile(
+        "file", "user.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {4, 5, 6});
+    String userSubmission = mockMvc.perform(multipart("/api/search/upload")
+            .file(userFile)
+            .header("Idempotency-Key", UUID.randomUUID().toString())
+            .header("Authorization", "Bearer " + ownerToken))
+        .andExpect(status().isAccepted())
+        .andReturn().getResponse().getContentAsString();
+
+    mockMvc.perform(get("/api/search/jobs/" + extractString(userSubmission, "jobId"))
+            .header("Authorization", "Bearer " + otherToken))
+        .andExpect(status().isUnauthorized());
+    waitForJob(userSubmission, ownerToken);
+  }
+
+  @Test
+  void uploadIdempotencyReturnsOriginalJobAndRejectsDifferentFile() throws Exception {
+    mockSearch(new AlgorithmSearchResponse(
+        List.of(new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12)),
+        false,
+        "Search successful"));
+    String key = "same-upload-key";
+    MockMultipartFile first = new MockMultipartFile(
+        "file", "first.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {1, 2, 3});
+    String firstSubmission = mockMvc.perform(multipart("/api/search/upload")
+            .file(first)
+            .header("Idempotency-Key", key))
+        .andExpect(status().isAccepted())
+        .andReturn().getResponse().getContentAsString();
+    waitForJob(firstSubmission, null);
+
+    MockMultipartFile same = new MockMultipartFile(
+        "file", "same.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {1, 2, 3});
+    String duplicate = mockMvc.perform(multipart("/api/search/upload")
+            .file(same)
+            .header("Idempotency-Key", key))
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.status").value("success"))
+        .andReturn().getResponse().getContentAsString();
+    assertThat(extractString(duplicate, "jobId")).isEqualTo(extractString(firstSubmission, "jobId"));
+
+    MockMultipartFile different = new MockMultipartFile(
+        "file", "different.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {9, 8, 7});
+    mockMvc.perform(multipart("/api/search/upload")
+            .file(different)
+            .header("Idempotency-Key", key))
+        .andExpect(status().isConflict());
+  }
+
+  @Test
+  void idempotencyKeyIsScopedToTaskOwner() throws Exception {
+    mockSearch(new AlgorithmSearchResponse(
+        List.of(new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12)),
+        false,
+        "Search successful"));
+    String firstToken = register("scopeowner01", "password123");
+    String secondToken = register("scopeowner02", "password123");
+    String key = "owner-scoped-key";
+
+    MockMultipartFile first = new MockMultipartFile(
+        "file", "first.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {1, 2, 3});
+    String firstSubmission = mockMvc.perform(multipart("/api/search/upload").file(first)
+            .header("Idempotency-Key", key)
+            .header("Authorization", "Bearer " + firstToken))
+        .andExpect(status().isAccepted())
+        .andReturn().getResponse().getContentAsString();
+
+    MockMultipartFile second = new MockMultipartFile(
+        "file", "second.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {9, 8, 7});
+    String secondSubmission = mockMvc.perform(multipart("/api/search/upload").file(second)
+            .header("Idempotency-Key", key)
+            .header("Authorization", "Bearer " + secondToken))
+        .andExpect(status().isAccepted())
+        .andReturn().getResponse().getContentAsString();
+
+    assertThat(extractString(firstSubmission, "jobId"))
+        .isNotEqualTo(extractString(secondSubmission, "jobId"));
+    waitForJob(firstSubmission, firstToken);
+    waitForJob(secondSubmission, secondToken);
+  }
+
+  @Test
+  void feedbackRequiresTerminalTaskAndOwner() throws Exception {
+    AlgorithmSearchResponse algorithmResponse = new AlgorithmSearchResponse(
+        List.of(new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12)),
+        false,
+        "Search successful");
+    when(algorithmSearchClient.searchBatch(any())).thenAnswer(invocation -> {
+      Thread.sleep(300);
+      List<Path> paths = invocation.getArgument(0);
+      return paths.stream()
+          .map(path -> new AlgorithmBatchItem(true, algorithmResponse, null, null, false))
+          .toList();
+    });
+    String ownerToken = register("feedbackowner01", "password123");
+    String otherToken = register("feedbackowner02", "password123");
+    MockMultipartFile file = new MockMultipartFile(
+        "file", "pending.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {6, 6, 6});
+    String submission = mockMvc.perform(multipart("/api/search/upload").file(file)
+            .header("Idempotency-Key", UUID.randomUUID().toString())
+            .header("Authorization", "Bearer " + ownerToken))
+        .andExpect(status().isAccepted())
+        .andReturn().getResponse().getContentAsString();
+    long recordId = extractLong(submission, "searchRecordId");
+
+    mockMvc.perform(post("/api/feedback")
+            .header("Authorization", "Bearer " + ownerToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(feedbackJson(recordId)))
+        .andExpect(status().isBadRequest());
+
+    waitForJob(submission, ownerToken);
+    mockMvc.perform(post("/api/feedback")
+            .header("Authorization", "Bearer " + otherToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(feedbackJson(recordId)))
+        .andExpect(status().isUnauthorized());
   }
 
   @Test
   void feedbackReturnsPending() throws Exception {
-    when(algorithmSearchClient.search(any())).thenReturn(new AlgorithmSearchResponse(
+    mockSearch(new AlgorithmSearchResponse(
         List.of(new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12)),
         false,
         "Search successful"));
@@ -111,12 +263,16 @@ class ApiControllerTest {
         MediaType.IMAGE_JPEG_VALUE,
         new byte[] {1, 2, 3});
 
-    String searchResponse = mockMvc.perform(multipart("/api/search/upload").file(file))
-        .andExpect(status().isOk())
+    MockMultipartFile guestIdPart = new MockMultipartFile(
+        "guestId", "", MediaType.TEXT_PLAIN_VALUE, "guest#701".getBytes());
+    String searchResponse = mockMvc.perform(multipart("/api/search/upload").file(file).file(guestIdPart)
+            .header("Idempotency-Key", UUID.randomUUID().toString()))
+        .andExpect(status().isAccepted())
         .andReturn()
         .getResponse()
         .getContentAsString();
     long searchRecordId = extractLong(searchResponse, "searchRecordId");
+    waitForJob(searchResponse, null);
 
     mockMvc.perform(post("/api/feedback")
             .contentType(MediaType.APPLICATION_JSON)
@@ -125,6 +281,7 @@ class ApiControllerTest {
                   "searchRecordId": %d,
                   "predictedLandmarkId": 1,
                   "confirmedLandmarkId": 1,
+                  "guestId": "guest#701",
                   "feedbackType": "correct",
                   "comment": "识别正确"
                 }
@@ -215,7 +372,7 @@ class ApiControllerTest {
 
   @Test
   void userCanOnlyReadOwnSearchHistory() throws Exception {
-    when(algorithmSearchClient.search(any())).thenReturn(new AlgorithmSearchResponse(
+    mockSearch(new AlgorithmSearchResponse(
         List.of(new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12)),
         false,
         "Search successful"));
@@ -284,7 +441,7 @@ class ApiControllerTest {
 
   @Test
   void acceptingFeedbackCreatesCorrectionSampleAndSyncsAlgorithmAdvice() throws Exception {
-    when(algorithmSearchClient.search(any())).thenReturn(new AlgorithmSearchResponse(
+    mockSearch(new AlgorithmSearchResponse(
         List.of(
             new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12),
             new AlgorithmSearchResult(2, "L02", "学术大讲堂", 0.72, "medium", 6.45)),
@@ -293,8 +450,9 @@ class ApiControllerTest {
     when(algorithmSearchClient.submitCorrectionSample(any(AdaptationRequest.class)))
         .thenReturn(new AdaptationResponse(true, 0.86, "用户确认地标命中 Top-5，可进入校正样本池", true, "append_to_manifest"));
 
-    long searchRecordId = uploadWithToken(register("feedback01", "password123"));
-    long feedbackId = createWrongFeedback(searchRecordId, 1, 2);
+    String userToken = register("feedback01", "password123");
+    long searchRecordId = uploadWithToken(userToken);
+    long feedbackId = createWrongFeedback(searchRecordId, 1, 2, userToken);
     String adminToken = login("admin", "admin");
 
     mockMvc.perform(post("/api/admin/feedback/" + feedbackId + "/status")
@@ -316,15 +474,16 @@ class ApiControllerTest {
 
   @Test
   void algorithmNotificationFailureKeepsAcceptedFeedbackWithSyncFailedSample() throws Exception {
-    when(algorithmSearchClient.search(any())).thenReturn(new AlgorithmSearchResponse(
+    mockSearch(new AlgorithmSearchResponse(
         List.of(new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12)),
         false,
         "Search successful"));
     when(algorithmSearchClient.submitCorrectionSample(any(AdaptationRequest.class)))
         .thenThrow(new AlgorithmSearchException("算法接口离线"));
 
-    long searchRecordId = uploadWithToken(register("feedback02", "password123"));
-    long feedbackId = createWrongFeedback(searchRecordId, 1, 1);
+    String userToken = register("feedback02", "password123");
+    long searchRecordId = uploadWithToken(userToken);
+    long feedbackId = createWrongFeedback(searchRecordId, 1, 1, userToken);
     String adminToken = login("admin", "admin");
 
     mockMvc.perform(post("/api/admin/feedback/" + feedbackId + "/status")
@@ -451,16 +610,56 @@ class ApiControllerTest {
         new byte[] {1, 2, 3});
     String response = mockMvc.perform(multipart("/api/search/upload")
             .file(file)
+            .header("Idempotency-Key", UUID.randomUUID().toString())
             .header("Authorization", "Bearer " + token))
-        .andExpect(status().isOk())
+        .andExpect(status().isAccepted())
         .andReturn()
         .getResponse()
         .getContentAsString();
+    waitForJob(response, token);
     return extractLong(response, "searchRecordId");
   }
 
-  private long createWrongFeedback(long searchRecordId, long predictedLandmarkId, long confirmedLandmarkId) throws Exception {
+  private void mockSearch(AlgorithmSearchResponse response) {
+    when(algorithmSearchClient.searchBatch(any())).thenAnswer(invocation -> {
+      List<Path> paths = invocation.getArgument(0);
+      return paths.stream()
+          .map(path -> new AlgorithmBatchItem(true, response, null, null, false))
+          .toList();
+    });
+  }
+
+  private String waitForJob(String submission, String bearerToken) throws Exception {
+    String jobId = extractString(submission, "jobId");
+    String jobToken = extractString(submission, "jobToken");
+    String detail = "";
+    for (int i = 0; i < 50; i++) {
+      var request = get("/api/search/jobs/" + jobId);
+      if (bearerToken == null) {
+        request.header("X-Search-Job-Token", jobToken);
+      } else {
+        request.header("Authorization", "Bearer " + bearerToken);
+      }
+      detail = mockMvc.perform(request)
+          .andExpect(status().isOk())
+          .andReturn().getResponse().getContentAsString();
+      if (detail.contains("\"status\":\"success\"")
+          || detail.contains("\"status\":\"low_confidence\"")
+          || detail.contains("\"status\":\"failed\"")) {
+        return detail;
+      }
+      Thread.sleep(20);
+    }
+    throw new AssertionError("检索任务未在测试时限内完成: " + detail);
+  }
+
+  private long createWrongFeedback(
+      long searchRecordId,
+      long predictedLandmarkId,
+      long confirmedLandmarkId,
+      String userToken) throws Exception {
     String response = mockMvc.perform(post("/api/feedback")
+            .header("Authorization", "Bearer " + userToken)
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
@@ -476,6 +675,18 @@ class ApiControllerTest {
         .getResponse()
         .getContentAsString();
     return extractLong(response, "feedbackId");
+  }
+
+  private String feedbackJson(long searchRecordId) {
+    return """
+        {
+          "searchRecordId": %d,
+          "predictedLandmarkId": 1,
+          "confirmedLandmarkId": 1,
+          "feedbackType": "correct",
+          "comment": "识别正确"
+        }
+        """.formatted(searchRecordId);
   }
 
   private String waitForFeedbackDetail(String adminToken, long feedbackId, String expectedSyncStatus) throws Exception {
@@ -502,5 +713,14 @@ class ApiControllerTest {
       throw new IllegalArgumentException("JSON field not found: " + field);
     }
     return Long.parseLong(matcher.group(1));
+  }
+
+  private String extractString(String json, String field) {
+    Pattern pattern = Pattern.compile("\"" + Pattern.quote(field) + "\"\\s*:\\s*\"([^\"]+)\"");
+    Matcher matcher = pattern.matcher(json);
+    if (!matcher.find()) {
+      throw new IllegalArgumentException("JSON field not found: " + field);
+    }
+    return matcher.group(1);
   }
 }

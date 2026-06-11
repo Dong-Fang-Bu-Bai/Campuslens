@@ -3,6 +3,8 @@
 @adminToken = 请先执行管理员登录并复制返回 token
 @userToken = 请先执行用户登录并复制返回 token
 @guestId = guest-local-demo
+@jobId = 请复制上传接口返回的 jobId
+@jobToken = 请复制上传接口返回的 jobToken
 
 ### 后端健康检查
 GET {{backend}}/api/health
@@ -41,9 +43,10 @@ Content-Type: application/json
   "password": "admin"
 }
 
-### 上传图片并检索 Top-5
+### 提交异步图片检索任务
 POST {{backend}}/api/search/upload
 Authorization: Bearer {{userToken}}
+Idempotency-Key: local-demo-upload-001
 Content-Type: multipart/form-data; boundary=CampusLensBoundary
 
 --CampusLensBoundary
@@ -56,6 +59,14 @@ Content-Disposition: form-data; name="guestId"
 
 {{guestId}}
 --CampusLensBoundary--
+
+### 登录用户查询检索任务
+GET {{backend}}/api/search/jobs/{{jobId}}
+Authorization: Bearer {{userToken}}
+
+### 游客查询检索任务
+GET {{backend}}/api/search/jobs/{{jobId}}
+X-Search-Job-Token: {{jobToken}}
 
 ### 提交识别反馈：正确
 # searchRecordId 需使用上一步上传接口返回的数据库记录 ID。
@@ -80,6 +91,7 @@ Content-Type: application/json
   "searchRecordId": 1,
   "predictedLandmarkId": 1,
   "confirmedLandmarkId": 2,
+  "guestId": "{{guestId}}",
   "feedbackType": "wrong",
   "comment": "实际是学术大讲堂"
 }
@@ -180,6 +192,22 @@ Content-Type: image/jpeg
 
 < ./sample.jpg
 --CampusLensAlgorithmBoundary--
+
+### 算法服务批量检索接口（最多 2 张）
+POST {{algorithm}}/api/v1/search/batch
+Content-Type: multipart/form-data; boundary=CampusLensBatchBoundary
+
+--CampusLensBatchBoundary
+Content-Disposition: form-data; name="files"; filename="sample-1.jpg"
+Content-Type: image/jpeg
+
+< ./sample.jpg
+--CampusLensBatchBoundary
+Content-Disposition: form-data; name="files"; filename="sample-2.jpg"
+Content-Type: image/jpeg
+
+< ./sample.jpg
+--CampusLensBatchBoundary--
 
 ### 算法服务重建统计参数
 POST {{algorithm}}/api/v1/index/rebuild

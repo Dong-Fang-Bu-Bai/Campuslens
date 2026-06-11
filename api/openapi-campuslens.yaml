@@ -20,11 +20,19 @@ paths:
                 $ref: "#/components/schemas/HealthResponse"
   /api/search/upload:
     post:
-      summary: 上传图片并检索 Top-5 地标
+      summary: 提交异步图片检索任务
       tags: [Search]
       security:
         - bearerAuth: []
         - {}
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+          description: 在同一登录用户或游客作用域内，同键同文件返回原任务；同键不同文件返回 409
       requestBody:
         required: true
         content:
@@ -40,14 +48,51 @@ paths:
                   type: string
                   description: 未登录游客标识；登录用户身份由 Bearer token 解析
       responses:
-        "200":
-          description: 检索成功；若算法服务暂不可用，返回空候选结果、lowConfidence=true 并在 message 中说明原因
+        "202":
+          description: 任务已进入 Redis 队列
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SearchResponse"
+                $ref: "#/components/schemas/SearchJobSubmission"
         "400":
           description: 图片格式或参数错误
+        "409":
+          description: 同一幂等键用于不同图片
+        "429":
+          description: 队列容量已满，并返回 Retry-After
+        "503":
+          description: Redis 队列不可用，且不会保留伪成功记录
+  /api/search/jobs/{jobId}:
+    get:
+      summary: 查询异步图片检索任务状态
+      tags: [Search]
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: X-Search-Job-Token
+          in: header
+          required: false
+          schema:
+            type: string
+          description: 游客任务必须携带；登录任务使用 Bearer token 校验所有权
+      responses:
+        "200":
+          description: 当前任务状态及完成后的 Top-5
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchJobStatus"
+        "401":
+          description: 登录用户无权访问，或游客任务令牌无效
+        "404":
+          description: 任务不存在
   /api/landmarks:
     get:
       summary: 获取地标列表
@@ -85,6 +130,9 @@ paths:
     post:
       summary: 提交识别反馈
       tags: [Feedback]
+      security:
+        - bearerAuth: []
+        - {}
       requestBody:
         required: true
         content:
@@ -440,6 +488,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FeedbackResponse"
+        "400":
+          description: 任务尚未成功完成，或候选地标不属于本次 Top-5
+        "401":
+          description: 登录用户或游客标识与检索任务所有者不一致
 components:
   securitySchemes:
     bearerAuth:
@@ -447,6 +499,66 @@ components:
       scheme: bearer
       description: 登录或注册接口返回的服务端会话 token。后台接口要求 role=admin。
   schemas:
+    SearchJobSubmission:
+      type: object
+      required: [jobId, searchRecordId, status, jobToken, pollAfterMs]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        searchRecordId:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [queued, processing, success, low_confidence, failed]
+        jobToken:
+          type: string
+          description: 游客轮询令牌；数据库仅保存 SHA-256 哈希
+        pollAfterMs:
+          type: integer
+          example: 1000
+    SearchJobStatus:
+      type: object
+      required: [jobId, searchRecordId, status, attemptCount, lowConfidence, results]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        searchRecordId:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [queued, processing, success, low_confidence, failed]
+        attemptCount:
+          type: integer
+        uploadImageUrl:
+          type: string
+        guestId:
+          type: string
+        lowConfidence:
+          type: boolean
+        message:
+          type: string
+        errorCode:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+        queuedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        finishedAt:
+          type: string
+          format: date-time
+          nullable: true
     SearchResponse:
       type: object
       required: [searchRecordId, results]
@@ -581,7 +693,7 @@ components:
         guestId:
           type: string
           nullable: true
-          description: 未登录游客标识；登录用户身份由 Bearer token 解析
+          description: 未登录游客标识，必须与检索任务一致；登录用户身份由 Bearer token 解析
         feedbackType:
           type: string
           enum: [correct, wrong, uncertain]
@@ -761,7 +873,7 @@ components:
           type: boolean
         token:
           type: string
-          description: 服务端会话 token，调用需登录接口时放入 Authorization: Bearer
+          description: "服务端会话 token，调用需登录接口时放入 Authorization: Bearer"
         message:
           type: string
     AdminLoginRequest:
@@ -804,7 +916,7 @@ components:
           nullable: true
         status:
           type: string
-          enum: [success, low_confidence, empty_result, algorithm_unavailable]
+          enum: [queued, processing, success, low_confidence, failed]
         lowConfidence:
           type: boolean
         message:

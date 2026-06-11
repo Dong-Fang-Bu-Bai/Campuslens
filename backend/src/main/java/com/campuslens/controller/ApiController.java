@@ -22,6 +22,8 @@ import com.campuslens.model.LandmarkSummary;
 import com.campuslens.model.LandmarkUpsertRequest;
 import com.campuslens.model.LikeResponse;
 import com.campuslens.model.SearchResponse;
+import com.campuslens.model.SearchJobStatus;
+import com.campuslens.model.SearchJobSubmission;
 import com.campuslens.model.SessionUser;
 import com.campuslens.model.UserSearchRecord;
 import com.campuslens.service.AdminService;
@@ -31,6 +33,7 @@ import com.campuslens.service.FeedbackService;
 import com.campuslens.service.LandmarkService;
 import com.campuslens.service.SearchRecordService;
 import com.campuslens.service.SearchService;
+import com.campuslens.service.SearchJobService;
 import com.campuslens.service.SessionService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -52,6 +55,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class ApiController {
   private final LandmarkService landmarkService;
   private final SearchService searchService;
+  private final SearchJobService searchJobService;
   private final FeedbackService feedbackService;
   private final SearchRecordService searchRecordService;
   private final AdminService adminService;
@@ -62,6 +66,7 @@ public class ApiController {
   public ApiController(
       LandmarkService landmarkService,
       SearchService searchService,
+      SearchJobService searchJobService,
       FeedbackService feedbackService,
       SearchRecordService searchRecordService,
       AdminService adminService,
@@ -70,6 +75,7 @@ public class ApiController {
       CheckInService checkInService) {
     this.landmarkService = landmarkService;
     this.searchService = searchService;
+    this.searchJobService = searchJobService;
     this.feedbackService = feedbackService;
     this.searchRecordService = searchRecordService;
     this.adminService = adminService;
@@ -96,12 +102,22 @@ public class ApiController {
   }
 
   @PostMapping("/search/upload")
-  public SearchResponse upload(
+  public ResponseEntity<SearchJobSubmission> upload(
       @RequestPart("file") MultipartFile file,
       @RequestPart(value = "guestId", required = false) String guestId,
+      @RequestHeader("Idempotency-Key") String idempotencyKey,
       @RequestHeader(value = "Authorization", required = false) String authorization) {
     SessionUser user = sessionService.find(authorization).orElse(null);
-    return searchService.search(file, user, guestId);
+    return ResponseEntity.accepted().body(searchJobService.submit(file, user, guestId, idempotencyKey));
+  }
+
+  @GetMapping("/search/jobs/{jobId}")
+  public SearchJobStatus searchJob(
+      @PathVariable String jobId,
+      @RequestHeader(value = "X-Search-Job-Token", required = false) String jobToken,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.find(authorization).orElse(null);
+    return searchJobService.status(jobId, user, jobToken);
   }
 
   @PostMapping("/feedback")

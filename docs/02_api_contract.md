@@ -4,13 +4,13 @@
 
 ## 调用关系
 
-用户端调用 Spring Boot 后端接口；后端负责文件校验、业务记录和数据组装。图像特征提取与检索由后端调用 Python FastAPI 算法服务完成。第三周 V2 主流程已将上传接口接到算法服务，并通过 MySQL `landmark`、`search_record` 和 `feedback` 表保存可追溯记录。
+用户端调用 Spring Boot 后端接口；后端负责文件校验、任务持久化、Redis 排队和结果组装。独立任务消费者按小批次调用 Python FastAPI 算法服务，MySQL 保存权威状态，Redis 只负责分发和容量准入。
 
 ```text
-Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
-                  |
-                  v
-                MySQL + 图片目录 + 特征/统计参数文件
+Vue 前端 -> Spring Boot 提交接口 -> MySQL + Redis ready/processing/delayed
+                                   |
+                                   v
+                         后端任务消费者 -> FastAPI GPU
 ```
 
 ## 用户端核心接口
@@ -18,7 +18,8 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 | 接口 | 说明 | 负责人 |
 | --- | --- | --- |
 | `GET /api/health` | 后端健康检查 | M1 马启凡 |
-| `POST /api/search/upload` | 上传图片并返回 Top-5 地标结果；登录用户身份由 Bearer token 解析，未登录时携带 `guestId` | M1 马启凡，依赖 M3 |
+| `POST /api/search/upload` | 携带 `Idempotency-Key` 提交异步检索，返回 `202`、`jobId`、`jobToken` 和 `searchRecordId` | M1 马启凡，依赖 M3 |
+| `GET /api/search/jobs/{jobId}` | 登录用户按 Bearer token、游客按 `X-Search-Job-Token` 查询任务状态和 Top-5 | M1 马启凡，依赖 M3 |
 | `GET /api/landmarks` | 获取地标列表 | M2 叶炳良 |
 | `GET /api/landmarks/{id}` | 获取地标详情 | M2 叶炳良，M4 洪传凯 |
 | `POST /api/feedback` | 提交识别纠错反馈 | M5 庄子杰 |
@@ -53,6 +54,7 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 | 接口 | 说明 | 负责人 |
 | --- | --- | --- |
 | `POST /api/v1/search` | 接收上传图片文件，返回 Top-5 候选地标 | M3 周子栋 |
+| `POST /api/v1/search/batch` | 按上传顺序接收最多 2 张图片，逐项返回结果或可重试错误 | M3 周子栋 |
 | `POST /api/v1/index/rebuild` | 根据样本库重建地标统计参数 | M3 周子栋 |
 | `GET /api/v1/index/stats` | 查看当前统计参数状态、样本数量和维度 | M3 周子栋 |
 | `GET /api/v1/health` | 算法服务健康检查 | M3 周子栋 |
@@ -72,15 +74,19 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 - Top-5 按 `score` 从高到低排序；`score` 越高，表示查询图越接近该地标特征分布。该分数用于排序和展示区分度，不具备概率或统计置信度含义。
 - 后端对外返回字段至少包含：`rank`、`landmarkId`、`landmarkCode`、`name`、`score`、`confidenceLevel`、`mahalanobisDistance`、`coverImageUrl`、`summary`、`locationText`、`mapX`、`mapY`。
 - 算法服务内部返回字段至少包含：`rank`、`landmarkCode`、`landmarkName`、`score`、`confidenceLevel`、`mahalanobisDistance`，由 Spring Boot 后端根据 `landmarkCode` 补齐数据库中的 `landmarkId`、中文名称、简介、代表图和地图坐标等信息。
-- 如果算法返回的候选均为低匹配等级，后端保留兼容字段 `lowConfidence=true` 并由前端提示需要人工核验；如果算法服务暂不可用，后端返回空候选结果、`lowConfidence=true` 和明确 `message`，不再伪造演示 Top-5。
-- 每次上传都会写入 `search_record`。记录状态取值为 `success`、`low_confidence`、`empty_result`、`algorithm_unavailable`，并保存上传图路径、Top-5 快照、最高分候选、最高分、提示信息和用户归属。未登录时记录前端持久化生成的 `guestId`；登录用户通过 Bearer token 解析 `userId` 并关联 `app_user`。
+- 如果算法返回的候选均为低匹配等级，终态为 `low_confidence`；算法或任务处理失败时终态为 `failed`，并返回 `errorCode` 和明确 `message`，不伪造演示 Top-5。
+- 状态统一为 `queued -> processing -> success|low_confidence|failed`。任务最多尝试 3 次，使用 90 秒 lease；重试时间写入 MySQL `next_attempt_at`，退避为 2、5、15 秒，不阻塞消费者线程。
+- Redis 使用活跃任务 Set 做容量准入，ready List 分发任务，processing ZSet 保存带凭证的领取记录，delayed ZSet 保存等待重试任务。终态确认后才释放容量。
+- 每次新任务先写入未确认准入的 `search_record`，Redis 原子准入成功后写入 `queued_at`。Redis 不可用时返回 `503`；队列满时返回 `429` 和 `Retry-After: 5`，未准入记录不会伪装成已接收任务。
+- `Idempotency-Key` 按登录用户或游客标识划分作用域，并与文件 SHA-256 共同保证幂等：同一所有者同键同文件返回原任务，同键不同文件返回 `409`；不同所有者可使用相同键。
+- worker 完成、失败和重试更新均校验 `worker_id + attempt_count`。过期 worker 的晚到结果不能覆盖已由新 worker 恢复的任务。
 
 ## 图片上传规则
 
 - 当前上传接口限制上传图片类型为 JPG、PNG、WebP。
 - 单张图片大小上限为 8MB。
-- 后端保存上传图后返回 `uploadImageUrl`，运行目录下的 `uploads/` 不提交到 Git。
-- 当前版本优先调用算法服务返回 Top-5 地标，并按 `landmarkCode` 补齐展示信息。
+- 后端保存上传图后先返回任务编号，任务完成时由轮询接口返回 `uploadImageUrl` 和 Top-5。
+- 正式任务消费者调用批量算法接口，并按 `landmarkCode` 补齐展示信息；单图算法接口保留用于诊断。
 - 地标样本图片由成员手动采集并整理到本地数据目录；原图按 `.gitignore` 排除，不直接提交 Git。当前样本数量记录见 `datasets/landmarks/sample_inventory.md`。
 
 ## 反馈规则
@@ -93,7 +99,7 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 
 `correct` 和 `wrong` 反馈必须带 `predictedLandmarkId`，用于关联本次 SearchResponse 中的预测地标；`wrong` 必须额外带 `confirmedLandmarkId`。
 
-反馈提交前会校验 `searchRecordId` 是否存在，并校验 `predictedLandmarkId` 是否来自本次 Top-5 结果。登录用户提交反馈时由 Bearer token 解析当前用户，后端不再信任前端传入的 `userId`；未登录用户仍可按游客身份反馈，并可携带 `guestId` 与检索记录保持一致。反馈提交后写入 `feedback` 表，默认状态为 `pending`。后台可将状态更新为 `accepted` 或 `ignored`，第四周再扩展采纳后的样本更新、统计和审核记录。
+反馈提交前会校验任务已进入 `success` 或 `low_confidence` 终态，并校验 `predictedLandmarkId` 来自本次 Top-5。登录任务必须由同一 Bearer 用户提交反馈；游客任务必须携带与检索记录一致的 `guestId`。反馈写入后默认为 `pending`，后台可更新为 `accepted` 或 `ignored`。
 
 第四周 V3 已扩展反馈采纳闭环：管理员将反馈更新为 `accepted` 后，后端会创建 `correction_sample` 记录，并通过异步任务通知算法服务 `/api/v1/adaptation/correction-samples`。算法服务返回 `suggestAccept`、`reviewScore`、`reason`、`sarEligible` 和 `nextAction` 后，后端将校正样本标记为 `synced`；若算法服务不可用或超时，校正样本保留为 `sync_failed`，管理员采纳动作不回滚。
 
@@ -110,7 +116,7 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 
 ## 数据库迁移口径
 
-第三周 V2 引入 Flyway，迁移脚本位于 `database/migration/`。Spring Boot 启动时从该目录执行版本化迁移，`schema.sql` 和 `seed_landmarks.sql` 保留为手工初始化和文档核对用脚本。Git 同步迁移脚本和基础种子数据，不同步本机 Docker MySQL volume 中的运行记录。
+第三周 V2 引入 Flyway，迁移脚本位于 `database/migration/`。Spring Boot 启动时从该目录执行版本化迁移。Docker Compose 不再挂载 `schema.sql` 或独立种子脚本，避免与 Flyway 重复建表；这些文件仅保留作结构核对。Git 不同步本机 Docker MySQL volume 中的运行记录。
 
 ## 错误码口径
 
@@ -120,6 +126,7 @@ Vue 前端 -> Spring Boot 后端 -> Python FastAPI 算法服务
 | `401` | 未登录或 token 缺失 |
 | `403` | 已登录但不是管理员 |
 | `404` | 地标不存在、检索记录不存在 |
-| `409` | 数据冲突，例如重复地标编号 |
+| `409` | 数据冲突，例如幂等键对应不同图片 |
+| `429` | Redis 队列达到容量上限，响应含 `Retry-After` |
+| `503` | Redis 不可用，任务未被接受 |
 | `500` | 后端内部错误 |
-| `502` | 预留给强依赖算法服务时使用；当前 V1 默认返回 `200`、空候选结果、`lowConfidence=true` 和明确 `message` |

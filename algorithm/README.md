@@ -19,6 +19,14 @@
 - 模型文件需要手动放到 `algorithm/models/dinov2_model.pth`
 - FAISS 索引和地标统计文件由 `POST /api/v1/index/rebuild` 根据本地数据集生成
 
+**核心特性**:
+- ✅ **纯离线运行**: 无需网络连接，所有资源本地加载
+- ✅ **地标级别检索**: 返回 Top-5 地标类别而非单张图片
+- ✅ **经验匹配分**: 基于马氏距离和 sigmoid 归一化提供稳定区分度
+- ✅ **匹配等级**: 返回 high/medium/low 等级辅助人工核验，不解释为概率置信度
+- ✅ **CPU/GPU 双模式**: `DEVICE=auto` 优先 CUDA，启动时不可用则回退 CPU
+- ✅ **有界 GPU 推理**: 单执行信号量、批量上限 2、CUDA OOM 自动拆为单图重试
+
 ## 当前版本能力
 
 当前 `algorithm/` 的能力不是单纯的基础检索，而是三条并行能力：
@@ -96,8 +104,16 @@ datasets/landmarks/
 
 ```bash
 cd algorithm
-pip install -r requirements.txt
+install_cpu.bat
 ```
+
+RTX 4060 本机推荐把环境和缓存放在 D 盘：
+
+```powershell
+create_gpu_env.bat
+```
+
+该脚本创建 `D:\AnaConda\envs\campuslens-gpu`，安装 `torch 2.1.2+cu121`、`torchvision 0.16.2+cu121`，并保留 `faiss-cpu==1.7.4`。Windows 不安装 `faiss-gpu`，安装版本依据 PyTorch 官方历史版本说明。
 
 默认安装 CPU 版本依赖。GPU 运行请参考 `GPU_SUPPORT.md`。
 
@@ -113,10 +129,14 @@ python verify_model.py ./models/dinov2_model.pth
 cp .env.example .env
 ```
 
-常用配置：
-- `DEVICE=auto|cpu|cuda`
-- `IMAGE_SIZE=518`
-- `BATCH_SIZE=32`
+编辑 `.env` 文件可配置：
+- `DEVICE`: 计算设备 (`auto`/`cpu`/`cuda`)，默认 `auto` 自动检测
+- `IMAGE_SIZE`: 输入图片尺寸，默认 `518`
+- `BATCH_SIZE`: 批处理大小，默认 `32`
+- `SEARCH_BATCH_SIZE`: 在线批量接口上限，默认 `2`
+- `MIXED_PRECISION`: 混合精度开关，默认 `false`
+
+后端消费者通过 `CAMPUSLENS_SEARCH_BATCH_WAIT_MS` 控制聚合等待时间，默认最多等待 100ms 后调用本批量接口。
 
 ### 4. 启动服务
 
@@ -167,7 +187,13 @@ GET /api/v1/health
   "status": "healthy",
   "service": "CampusLens AI Search",
   "version": "1.0.0",
-  "sarAvailable": true
+  "sarAvailable": true,
+  "device": "cuda",
+  "gpuName": "NVIDIA GeForce RTX 4060 Laptop GPU",
+  "cudaVersion": "12.1",
+  "modelReady": true,
+  "maxBatchSize": 2,
+  "activeInference": 0
 }
 ```
 
@@ -245,7 +271,19 @@ Content-Type: multipart/form-data
 - `0.35 <= entropy < 0.60`：`uncertain`
 - `entropy >= 0.60`：`untrusted`
 
-### 4. 用户反馈分流
+### 4. 批量地标检索
+
+```bash
+POST /api/v1/search/batch
+Content-Type: multipart/form-data
+
+files: <image_file_1>
+files: <image_file_2>
+```
+
+响应中的 `items` 与上传顺序一致。单项坏图返回 `success=false` 和不可重试的 `invalid_image`；推理异常返回可重试错误。CUDA OOM 时先清理缓存并拆为单图重试一次，不会静默切换 CPU。
+
+### 5. 用户反馈分流
 
 ```text
 POST /api/v1/feedback
@@ -276,7 +314,7 @@ Content-Type: multipart/form-data
 - 系统会结合当前模型预测、模型熵和马氏距离做分流
 - 典型分流结果：`accepted` / `review` / `pending`
 
-### 5. 重置 SAR 状态
+### 6. 重置 SAR 状态
 
 ```text
 POST /api/v1/sar/reset
@@ -286,7 +324,7 @@ POST /api/v1/sar/reset
 - 重置 SAR 适配器状态
 - 便于重复实验和调试
 
-### 6. 重建索引
+### 7. 重建索引
 
 ```text
 POST /api/v1/index/rebuild
@@ -297,7 +335,7 @@ POST /api/v1/index/rebuild
 - 重建 FAISS 索引
 - 重建 `metadata.pkl` 和 `landmark_stats.pkl`
 
-### 7. 查询索引状态
+### 8. 查询索引状态
 
 ```text
 GET /api/v1/index/stats
@@ -378,6 +416,13 @@ python debug_sar.py --image ..datasets编号11_琴湖及湖心岛_19.jpg
    - `ema history`
    - `feature drift`
 
+#### Linux（NVIDIA GPU）
+
+```bash
+# 安装 PyTorch CUDA 12.1 与公共依赖；FAISS 保持 CPU 版本
+pip install -r requirements-gpu.txt -r requirements-test.txt
+```
+
 ### 如何判断当前 SAR 是否生效
 
 可参考这些现象：
@@ -387,6 +432,12 @@ python debug_sar.py --image ..datasets编号11_琴湖及湖心岛_19.jpg
 - `param delta total` 为非零
 - `ema` 会随迭代更新
 - `feature drift` 会逐步累积
+
+macOS 不支持 CUDA，使用 `requirements-cpu.txt`。Windows 不安装 `faiss-gpu`。
+
+### 验证结果
+
+当前 RTX 4060 环境使用 GPU 执行 DINOv2 特征提取，FAISS 继续在 CPU 上检索。CPU/GPU Top-5 一致性、批量推理显存和异步并发结果见 [GPU 与异步队列测试记录](../docs/13_gpu_async_queue_test.md)。
 
 ## 当前实现边界
 

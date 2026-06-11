@@ -48,7 +48,8 @@ class FeatureService:
                     sar_steps=1,
                     landmark_means=landmark_means,
                     landmark_cov_invs=landmark_cov_invs,
-                    num_classes=num_landmarks if num_landmarks > 0 else 1000
+                    num_classes=num_landmarks if num_landmarks > 0 else 1000,
+                    mixed_precision=Config.MIXED_PRECISION,
                 )
                 print("[OK] SAR-DINOv2 extractor initialized")
             except ImportError as e:
@@ -57,13 +58,15 @@ class FeatureService:
                 from app.models.dinov2_extractor import DINOv2Extractor
                 self.extractor = DINOv2Extractor(
                     model_path=Config.DINO_MODEL_PATH,
-                    device=Config.DEVICE
+                    device=Config.DEVICE,
+                    mixed_precision=Config.MIXED_PRECISION,
                 )
         else:
             from app.models.dinov2_extractor import DINOv2Extractor
             self.extractor = DINOv2Extractor(
                 model_path=Config.DINO_MODEL_PATH,
-                device=Config.DEVICE
+                device=Config.DEVICE,
+                mixed_precision=Config.MIXED_PRECISION,
             )
         
         # Initialize proper FAISS manager with correct dimension
