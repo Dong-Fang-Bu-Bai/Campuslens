@@ -1,5 +1,6 @@
 package com.campuslens.controller;
 
+import com.campuslens.model.AdminFeedbackDetail;
 import com.campuslens.model.AdminFeedbackRecord;
 import com.campuslens.model.AdminLoginRequest;
 import com.campuslens.model.AdminLoginResponse;
@@ -7,6 +8,10 @@ import com.campuslens.model.AdminSearchRecord;
 import com.campuslens.model.AuthLoginRequest;
 import com.campuslens.model.AuthRegisterRequest;
 import com.campuslens.model.AuthResponse;
+import com.campuslens.model.CheckInRecord;
+import com.campuslens.model.CheckInReply;
+import com.campuslens.model.CheckInReplyRequest;
+import com.campuslens.model.CheckInRequest;
 import com.campuslens.model.FeedbackRequest;
 import com.campuslens.model.FeedbackResponse;
 import com.campuslens.model.FeedbackStatusRequest;
@@ -15,10 +20,13 @@ import com.campuslens.model.LandmarkDetail;
 import com.campuslens.model.LandmarkImage;
 import com.campuslens.model.LandmarkSummary;
 import com.campuslens.model.LandmarkUpsertRequest;
+import com.campuslens.model.LikeResponse;
 import com.campuslens.model.SearchResponse;
 import com.campuslens.model.SessionUser;
+import com.campuslens.model.UserSearchRecord;
 import com.campuslens.service.AdminService;
 import com.campuslens.service.AuthService;
+import com.campuslens.service.CheckInService;
 import com.campuslens.service.FeedbackService;
 import com.campuslens.service.LandmarkService;
 import com.campuslens.service.SearchRecordService;
@@ -32,6 +40,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -48,6 +57,7 @@ public class ApiController {
   private final AdminService adminService;
   private final AuthService authService;
   private final SessionService sessionService;
+  private final CheckInService checkInService;
 
   public ApiController(
       LandmarkService landmarkService,
@@ -56,7 +66,8 @@ public class ApiController {
       SearchRecordService searchRecordService,
       AdminService adminService,
       AuthService authService,
-      SessionService sessionService) {
+      SessionService sessionService,
+      CheckInService checkInService) {
     this.landmarkService = landmarkService;
     this.searchService = searchService;
     this.feedbackService = feedbackService;
@@ -64,6 +75,7 @@ public class ApiController {
     this.adminService = adminService;
     this.authService = authService;
     this.sessionService = sessionService;
+    this.checkInService = checkInService;
   }
 
   @GetMapping("/health")
@@ -110,6 +122,50 @@ public class ApiController {
     return authService.login(request);
   }
 
+  @GetMapping("/me/search-records")
+  public List<UserSearchRecord> mySearchRecords(
+      @RequestParam(value = "limit", defaultValue = "20") int limit,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.requireUser(authorization);
+    return searchRecordService.listForUser(user.userId(), limit);
+  }
+
+  @GetMapping("/check-ins")
+  public List<CheckInRecord> checkIns(
+      @RequestParam(value = "landmarkId", required = false) Long landmarkId,
+      @RequestParam(value = "limit", defaultValue = "50") int limit,
+      @RequestParam(value = "guestId", required = false) String guestId,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.find(authorization).orElse(null);
+    return checkInService.list(landmarkId, limit, user, guestId);
+  }
+
+  @PostMapping("/check-ins")
+  public CheckInRecord createCheckIn(
+      @Valid @RequestBody CheckInRequest request,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.find(authorization).orElse(null);
+    return checkInService.create(request, user);
+  }
+
+  @PostMapping("/check-ins/{id}/like")
+  public LikeResponse toggleCheckInLike(
+      @PathVariable Long id,
+      @RequestParam(value = "guestId", required = false) String guestId,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.find(authorization).orElse(null);
+    return checkInService.toggleLike(id, user, guestId);
+  }
+
+  @PostMapping("/check-ins/{id}/replies")
+  public CheckInReply addCheckInReply(
+      @PathVariable Long id,
+      @Valid @RequestBody CheckInReplyRequest request,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.find(authorization).orElse(null);
+    return checkInService.addReply(id, request, user);
+  }
+
   @PostMapping("/admin/auth/login")
   public AdminLoginResponse adminLogin(@Valid @RequestBody AdminLoginRequest request) {
     return adminService.login(request);
@@ -127,6 +183,14 @@ public class ApiController {
       @RequestHeader(value = "Authorization", required = false) String authorization) {
     sessionService.requireAdmin(authorization);
     return feedbackService.listRecent();
+  }
+
+  @GetMapping("/admin/feedback/{id}")
+  public AdminFeedbackDetail adminFeedbackDetail(
+      @PathVariable Long id,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    sessionService.requireAdmin(authorization);
+    return feedbackService.detail(id);
   }
 
   @PostMapping("/admin/feedback/{id}/status")

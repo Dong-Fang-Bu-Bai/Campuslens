@@ -5,6 +5,7 @@ import com.campuslens.model.SearchResult;
 import com.campuslens.model.SessionUser;
 import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResponse;
 import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResult;
+import com.campuslens.service.SearchRecordService.SearchRecordCreation;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -57,16 +58,18 @@ public class SearchService {
       }
       boolean lowConfidence = algorithmResponse.lowConfidence();
       String message = normalizeMessage(algorithmResponse.message());
-      return new SearchResponse(
-          searchRecordService.create(
-              uploadUrl,
-              results,
-              lowConfidence,
-              message,
-              lowConfidence ? "low_confidence" : "success",
-              activeUserId,
-              guestId),
+      SearchRecordCreation record = searchRecordService.create(
           uploadUrl,
+          results,
+          lowConfidence,
+          message,
+          lowConfidence ? "low_confidence" : "success",
+          activeUserId,
+          guestId);
+      return new SearchResponse(
+          record.id(),
+          uploadUrl,
+          record.guestId(),
           lowConfidence,
           message,
           results);
@@ -163,9 +166,11 @@ public class SearchService {
       List<SearchResult> results,
       Long userId,
       String guestId) {
+    SearchRecordCreation record = searchRecordService.create(uploadUrl, results, lowConfidence, message, status, userId, guestId);
     return new SearchResponse(
-        searchRecordService.create(uploadUrl, results, lowConfidence, message, status, userId, guestId),
+        record.id(),
         uploadUrl,
+        record.guestId(),
         lowConfidence,
         message,
         results);

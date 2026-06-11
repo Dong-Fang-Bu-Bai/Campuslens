@@ -31,8 +31,8 @@ class Particle {
       this.y = Math.random() * height
       this.vx = (Math.random() - 0.5) * 0.4
       this.vy = (Math.random() - 0.5) * 0.4
-      this.radius = Math.random() * 1.2 + 0.5
-      this.alpha = Math.random() * 0.4 + 0.15
+      this.radius = Math.random() * 1.5 + 0.8
+      this.alpha = Math.random() * 0.4 + 0.45
     }
   }
 
@@ -183,12 +183,12 @@ onMounted(() => {
         const dist = Math.sqrt(dx * dx + dy * dy)
 
         if (dist < maxLinkDist) {
-          const alpha = (1 - dist / maxLinkDist) * 0.12 // 连线高隐秘度
+          const alpha = (1 - dist / maxLinkDist) * 0.38 // 再次提升连线明度
           ctx.beginPath()
           ctx.moveTo(p1.x, p1.y)
           ctx.lineTo(p2.x, p2.y)
-          ctx.strokeStyle = `rgba(147, 197, 253, ${alpha})` // 淡蓝色连线
-          ctx.lineWidth = 0.8
+          ctx.strokeStyle = `rgba(240, 249, 255, ${alpha})` // 超高亮蓝白连线
+          ctx.lineWidth = 1.3
           ctx.stroke()
         }
       }
@@ -201,12 +201,12 @@ onMounted(() => {
         const mouseLinkDist = 150
 
         if (dist < mouseLinkDist) {
-          const alpha = (1 - dist / mouseLinkDist) * 0.18
+          const alpha = (1 - dist / mouseLinkDist) * 0.48
           ctx.beginPath()
           ctx.moveTo(p1.x, p1.y)
           ctx.lineTo(mouse.x, mouse.y)
-          ctx.strokeStyle = `rgba(96, 165, 250, ${alpha})` // 稍微亮点的蓝色鼠标连线
-          ctx.lineWidth = 1.0
+          ctx.strokeStyle = `rgba(224, 242, 254, ${alpha})` // 更加醒目的天空蓝白连线
+          ctx.lineWidth = 1.5
           ctx.stroke()
         }
       }
@@ -235,7 +235,7 @@ onMounted(() => {
   left: 0;
   width: 100vw;
   height: 100vh;
-  z-index: 0;
+  z-index: 1;
   pointer-events: none;
   background-color: transparent;
   overflow: hidden;

@@ -1,6 +1,8 @@
 package com.campuslens.service;
 
+import com.campuslens.model.AdminFeedbackDetail;
 import com.campuslens.model.AdminFeedbackRecord;
+import com.campuslens.model.CorrectionSampleInfo;
 import com.campuslens.model.FeedbackRequest;
 import com.campuslens.model.FeedbackResponse;
 import com.campuslens.model.FeedbackStatusRequest;
@@ -21,14 +23,17 @@ public class FeedbackService {
   private final JdbcTemplate jdbcTemplate;
   private final SearchRecordService searchRecordService;
   private final AuthService authService;
+  private final CorrectionSampleService correctionSampleService;
 
   public FeedbackService(
       JdbcTemplate jdbcTemplate,
       SearchRecordService searchRecordService,
-      AuthService authService) {
+      AuthService authService,
+      CorrectionSampleService correctionSampleService) {
     this.jdbcTemplate = jdbcTemplate;
     this.searchRecordService = searchRecordService;
     this.authService = authService;
+    this.correctionSampleService = correctionSampleService;
   }
 
   public FeedbackResponse submit(FeedbackRequest request, SessionUser user) {
@@ -94,7 +99,51 @@ public class FeedbackService {
     if (updated == 0) {
       throw new IllegalArgumentException("反馈记录不存在");
     }
+    if ("accepted".equals(request.status())) {
+      correctionSampleService.createAndNotify(id);
+      return new FeedbackResponse(id, request.status(), "反馈已采纳，校正样本已进入同步队列");
+    }
     return new FeedbackResponse(id, request.status(), "反馈状态已更新");
+  }
+
+  public AdminFeedbackDetail detail(Long id) {
+    List<AdminFeedbackDetail> rows = jdbcTemplate.query("""
+        SELECT f.id, f.search_record_id, sr.upload_image_url, sr.top_results_json, sr.guest_id,
+               f.predicted_landmark_id, p.name AS predicted_name,
+               f.confirmed_landmark_id, c.name AS confirmed_name, f.user_id,
+               u.username, f.feedback_type,
+               f.comment, f.status, f.created_at, f.updated_at
+        FROM feedback f
+        JOIN search_record sr ON f.search_record_id = sr.id
+        LEFT JOIN landmark p ON f.predicted_landmark_id = p.id
+        LEFT JOIN landmark c ON f.confirmed_landmark_id = c.id
+        LEFT JOIN app_user u ON f.user_id = u.id
+        WHERE f.id = ?
+        """, (rs, rowNum) -> {
+      CorrectionSampleInfo sample = correctionSampleService.findByFeedbackId(rs.getLong("id"));
+      return new AdminFeedbackDetail(
+          rs.getLong("id"),
+          rs.getLong("search_record_id"),
+          rs.getString("upload_image_url"),
+          rs.getObject("predicted_landmark_id") == null ? null : rs.getLong("predicted_landmark_id"),
+          rs.getString("predicted_name"),
+          rs.getObject("confirmed_landmark_id") == null ? null : rs.getLong("confirmed_landmark_id"),
+          rs.getString("confirmed_name"),
+          rs.getObject("user_id") == null ? null : rs.getLong("user_id"),
+          rs.getString("username"),
+          rs.getString("guest_id"),
+          rs.getString("feedback_type"),
+          rs.getString("comment"),
+          rs.getString("status"),
+          searchRecordService.parseTopResults(rs.getString("top_results_json")),
+          sample,
+          rs.getTimestamp("created_at").toLocalDateTime(),
+          rs.getTimestamp("updated_at").toLocalDateTime());
+    }, id);
+    if (rows.isEmpty()) {
+      throw new IllegalArgumentException("反馈记录不存在");
+    }
+    return rows.get(0);
   }
 
   private void validate(FeedbackRequest request) {

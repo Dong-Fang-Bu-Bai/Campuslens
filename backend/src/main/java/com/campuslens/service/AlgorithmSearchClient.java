@@ -28,12 +28,14 @@ public class AlgorithmSearchClient {
   public AlgorithmSearchClient(
       ObjectMapper objectMapper,
       RestTemplateBuilder restTemplateBuilder,
-      @Value("${campuslens.algorithm.base-url:http://localhost:8000}") String baseUrl) {
+      @Value("${campuslens.algorithm.base-url:http://localhost:8000}") String baseUrl,
+      @Value("${campuslens.algorithm.connect-timeout-ms:3000}") long connectTimeoutMs,
+      @Value("${campuslens.algorithm.read-timeout-ms:20000}") long readTimeoutMs) {
     this.objectMapper = objectMapper;
     this.baseUrl = baseUrl.replaceAll("/+$", "");
     this.restTemplate = restTemplateBuilder
-        .setConnectTimeout(Duration.ofSeconds(3))
-        .setReadTimeout(Duration.ofSeconds(20))
+        .setConnectTimeout(Duration.ofMillis(connectTimeoutMs))
+        .setReadTimeout(Duration.ofMillis(readTimeoutMs))
         .build();
   }
 
@@ -62,6 +64,27 @@ public class AlgorithmSearchClient {
           "算法服务返回 HTTP " + ex.getStatusCode().value() + ": " + ex.getResponseBodyAsString(), ex);
     } catch (RestClientException ex) {
       throw new AlgorithmSearchException("调用算法服务失败：" + ex.getMessage(), ex);
+    }
+  }
+
+  public AdaptationResponse submitCorrectionSample(AdaptationRequest payload) {
+    try {
+      ResponseEntity<String> response = restTemplate.postForEntity(
+          baseUrl + "/api/v1/adaptation/correction-samples",
+          payload,
+          String.class);
+      if (!response.getStatusCode().is2xxSuccessful()) {
+        throw new AlgorithmSearchException(
+            "算法服务返回 HTTP " + response.getStatusCode().value() + ": " + response.getBody());
+      }
+      return objectMapper.readValue(response.getBody(), AdaptationResponse.class);
+    } catch (IOException ex) {
+      throw new AlgorithmSearchException("解析算法校正响应失败", ex);
+    } catch (HttpStatusCodeException ex) {
+      throw new AlgorithmSearchException(
+          "算法服务返回 HTTP " + ex.getStatusCode().value() + ": " + ex.getResponseBodyAsString(), ex);
+    } catch (RestClientException ex) {
+      throw new AlgorithmSearchException("调用算法校正接口失败：" + ex.getMessage(), ex);
     }
   }
 
@@ -106,5 +129,32 @@ public class AlgorithmSearchClient {
       double score,
       String confidenceLevel,
       Double mahalanobisDistance) {
+  }
+
+  public record AdaptationRequest(
+      Long sampleId,
+      Long feedbackId,
+      Long searchRecordId,
+      String imageUrl,
+      String confirmedLandmarkCode,
+      String predictedLandmarkCode,
+      String feedbackType,
+      String comment,
+      List<AdaptationTopResult> topResults) {
+  }
+
+  public record AdaptationTopResult(
+      int rank,
+      String landmarkCode,
+      double score,
+      Double mahalanobisDistance) {
+  }
+
+  public record AdaptationResponse(
+      boolean suggestAccept,
+      double reviewScore,
+      String reason,
+      boolean sarEligible,
+      String nextAction) {
   }
 }

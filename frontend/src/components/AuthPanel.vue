@@ -1,6 +1,11 @@
 <template>
   <section class="auth-page">
     <article class="auth-card">
+      <div class="auth-brand-header">
+        <img src="/logo.png" alt="CampusLens" class="auth-brand-logo" />
+        <h2>CampusLens</h2>
+        <p>校园地标智能检索与导览系统</p>
+      </div>
       <div class="auth-tabs">
         <button type="button" :class="{ active: mode === 'login' }" @click="$emit('switch-mode', 'login')">登录</button>
         <button type="button" :class="{ active: mode === 'register' }" @click="$emit('switch-mode', 'register')">注册</button>

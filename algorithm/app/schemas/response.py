@@ -23,3 +23,30 @@ class IndexStatsResponse(BaseModel):
     totalVectors: Optional[int] = None
     dimension: Optional[int] = None
     indexedLandmarks: Optional[int] = None
+
+
+class AdaptationTopResult(BaseModel):
+    rank: int
+    landmarkCode: str
+    score: float
+    mahalanobisDistance: Optional[float] = None
+
+
+class CorrectionSampleRequest(BaseModel):
+    sampleId: int
+    feedbackId: int
+    searchRecordId: int
+    imageUrl: str
+    confirmedLandmarkCode: str
+    predictedLandmarkCode: Optional[str] = None
+    feedbackType: str
+    comment: Optional[str] = None
+    topResults: List[AdaptationTopResult]
+
+
+class CorrectionSampleResponse(BaseModel):
+    suggestAccept: bool
+    reviewScore: float
+    reason: str
+    sarEligible: bool
+    nextAction: str

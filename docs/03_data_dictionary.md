@@ -89,6 +89,72 @@
 
 `feedbackType` 对外接口取值为 `correct`、`wrong`、`uncertain`。数据库可先保存同名字符串，后续如需要中文展示由前端或后台管理页面转换。
 
+## CheckIn 打卡留言
+
+第四周 V3 新增。用于校园留言板，复用 `landmark` 作为打卡地点来源。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | Long | 主键 |
+| `landmarkId` | Long | 打卡地标 |
+| `userId` | Long | 登录用户 ID，游客为空 |
+| `guestId` | String | 游客编号 |
+| `displayName` | String | 前端展示名，登录用户为用户名，游客为 `guest#number` |
+| `message` | String | 留言内容，最长 500 字符 |
+| `likeCount` | Integer | 点赞数量缓存 |
+| `replyCount` | Integer | 一级回复数量缓存 |
+| `status` | String | 当前为 `visible`，为后续后台删除/隐藏预留 |
+| `createdAt` | DateTime | 发布时间 |
+| `updatedAt` | DateTime | 更新时间 |
+
+## CheckInLike 打卡点赞
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | Long | 主键 |
+| `checkInId` | Long | 关联打卡留言 |
+| `userId` | Long | 登录用户 ID，游客为空 |
+| `guestId` | String | 游客编号 |
+| `createdAt` | DateTime | 点赞时间 |
+
+## CheckInReply 打卡回复
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | Long | 主键 |
+| `checkInId` | Long | 关联打卡留言 |
+| `userId` | Long | 登录用户 ID，游客为空 |
+| `guestId` | String | 游客编号 |
+| `displayName` | String | 展示名 |
+| `message` | String | 回复内容，最长 500 字符 |
+| `status` | String | 当前为 `visible` |
+| `createdAt` | DateTime | 回复时间 |
+
+## CorrectionSample 校正样本
+
+第四周 V3 新增。管理员采纳反馈后先写入该表，不直接污染正式地标样本库。算法服务接收元数据后写入 JSONL manifest，用于后续自适应或人工复核。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | Long | 主键 |
+| `feedbackId` | Long | 来源反馈 |
+| `searchRecordId` | Long | 来源检索记录 |
+| `uploadImageUrl` | String | 用户上传图路径 |
+| `predictedLandmarkId` | Long | 原预测地标 |
+| `confirmedLandmarkId` | Long | 管理员采纳后的确认地标 |
+| `confirmedLandmarkCode` | String | 确认地标编号，如 `L02` |
+| `sourceFeedbackType` | String | 来源反馈类型 |
+| `topResultsJson` | Text | 来源检索 Top-5 快照 |
+| `syncStatus` | String | `sync_pending`、`synced` 或 `sync_failed` |
+| `suggestAccept` | Boolean | 算法是否建议采纳 |
+| `reviewScore` | Decimal | 基于 Top-5 分数构造的伪概率评估分 |
+| `reason` | String | 算法建议或失败原因 |
+| `sarEligible` | Boolean | 是否满足 SAR 思路下的可靠样本门槛 |
+| `nextAction` | String | 建议动作，如 `append_to_manifest` 或 `manual_review` |
+| `algorithmResponseJson` | Text | 算法接口原始响应 |
+| `createdAt` | DateTime | 创建时间 |
+| `updatedAt` | DateTime | 更新时间 |
+
 ## 地图坐标口径
 
 `mapX` 和 `mapY` 当前采用校园平面图百分比坐标，取值范围为 0-100。前端展示时以图片左上角为原点，`mapX` 表示横向百分比，`mapY` 表示纵向百分比。该口径适合初始阶段静态标注，后续若更换底图或接入 GIS 数据，需要同步修订地标元数据。
@@ -123,3 +189,4 @@
 | `V3__seed_landmarks_and_admin.sql` | 写入 L01-L10 地标元数据和 `admin/admin` 演示账号 |
 | `V4__app_user_auth_and_record_owner.sql` | 创建 `app_user`，为检索记录和反馈记录补充登录用户归属字段 |
 | `V5__hash_admin_passwords.sql` | 将管理员演示账号密码升级为 PBKDF2 哈希 |
+| `V10__v3_check_in_and_correction_sample.sql` | 创建打卡留言、点赞、回复和校正样本表 |

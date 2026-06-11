@@ -1,9 +1,9 @@
 <template>
-  <main class="app-shell" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
+  <main class="app-shell" :class="shellClasses">
     <aside class="side-panel" :class="{ 'collapsed': isSidebarCollapsed }">
       <div class="brand-header">
         <div class="brand-logo">
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+          <img src="/logo.png" alt="CampusLens" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />
         </div>
         <div>
           <p class="eyebrow">CampusLens</p>
@@ -45,6 +45,14 @@
           <span class="active-line"></span>
           反馈纠错
         </button>
+        <button :class="{ active: activeView === 'history' }" @click="openHistory">
+          <span class="active-line"></span>
+          个人历史
+        </button>
+        <button :class="{ active: activeView === 'checkins' }" @click="openCheckIns">
+          <span class="active-line"></span>
+          打卡留言
+        </button>
         <button v-if="isAdmin" :class="{ active: activeView === 'admin' }" @click="openAdmin">
           <span class="active-line"></span>
           管理后台
@@ -65,7 +73,7 @@
             </button>
           </div>
           <div>
-          <p class="eyebrow">V2 细化阶段</p>
+          <p class="eyebrow">V3 构造阶段</p>
             <h2>{{ viewTitle }}</h2>
           </div>
         </div>
@@ -84,6 +92,15 @@
             </div>
           </template>
         </div>
+        <PreferencesDock
+          :theme-label="themeLabel"
+          :backdrop-label="backdropLabel"
+          :language-label="languageLabel"
+          :labels="preferenceLabels"
+          @cycle-theme="cycleTheme"
+          @cycle-backdrop="cycleBackdrop"
+          @toggle-language="toggleLanguage"
+        />
       </header>
 
       <!-- 引入 Vue 极致渐入垂直淡滑过渡 -->
@@ -113,8 +130,13 @@
               {{ searchMeta.message }}
             </p>
 
-            <article v-if="results.length" class="result-list">
-              <div v-for="item in results" :key="item.landmarkId" class="result-card" :class="{ active: item.landmarkId === selectedId }" @click="selectLandmark(item.landmarkId)">
+            <div v-if="results.length" class="result-carousel-toolbar">
+              <button type="button" @click="cycleResults(-1)">上一项</button>
+              <span>{{ activeResultIndex + 1 }} / {{ results.length }}</span>
+              <button type="button" @click="cycleResults(1)">下一项</button>
+            </div>
+            <article v-if="results.length" class="result-list result-carousel" @wheel.prevent="cycleResults($event.deltaY > 0 ? 1 : -1)">
+              <div v-for="item in displayedResults" :key="item.landmarkId" class="result-card" :class="{ active: item.landmarkId === selectedId }" @click="selectLandmark(item.landmarkId)">
                 <div class="rank">{{ item.rank }}</div>
                 <div class="result-body">
                   <div class="result-heading">
@@ -300,14 +322,41 @@
           @update-form="updateAuthForm"
         />
 
+        <HistoryView
+          v-else-if="activeView === 'history'"
+          key="history"
+          :current-user="currentUser"
+          :records="userSearchRecords"
+          :loading="historyLoading"
+          :labels="historyLabels"
+          :fallback-image="demoLandmarks[0].imageUrl"
+          @refresh="loadUserHistory"
+          @open-feedback="openHistoryFeedback"
+        />
+
+        <CheckInBoard
+          v-else-if="activeView === 'checkins'"
+          key="checkins"
+          :landmarks="landmarks"
+          :items="checkIns"
+          :labels="checkInLabels"
+          @refresh="loadCheckIns"
+          @create="createCheckIn"
+          @like="toggleCheckInLike"
+          @reply="replyCheckIn"
+          @select-landmark="selectMapLandmark"
+        />
+
         <AdminPanel
           v-else-if="activeView === 'admin'"
           key="admin"
           :is-admin="isAdmin"
           :search-records="adminSearchRecords"
           :feedback-records="adminFeedbackRecords"
+          :selected-feedback-detail="selectedFeedbackDetail"
           @refresh="loadAdminData"
           @update-status="updateFeedbackStatus"
+          @view-detail="loadFeedbackDetail"
         />
       </Transition>
     </section>
@@ -336,7 +385,7 @@
           <div class="welcome-bg-image" style="background-image: url('/welcome-bg.png');"></div>
           <div class="welcome-card-content">
             <div class="welcome-logo-badge">
-              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+              <img src="/logo.png" alt="CampusLens" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />
             </div>
             <p class="welcome-eyebrow">CampusLens</p>
             <h2 class="welcome-title">欢迎使用 CampusLens 校园慧眼</h2>
@@ -349,7 +398,9 @@
             </div>
             
             <div class="welcome-poem-box">
-              <p class="poem-text">“{{ welcomePoem }}”</p>
+              <p class="poem-text">
+                <span style="color: var(--color-accent-light); opacity: 0.5; font-family: Georgia, serif; font-size: 1.2em; vertical-align: -0.1em; margin-right: 4px;">“</span>{{ welcomePoem }}<span style="color: var(--color-accent-light); opacity: 0.5; font-family: Georgia, serif; font-size: 1.2em; vertical-align: -0.2em; margin-left: 4px;">”</span>
+              </p>
             </div>
             
             <button type="button" class="primary-btn welcome-enter-btn" @click="dismissWelcome">
@@ -367,8 +418,11 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import AdminPanel from './components/AdminPanel.vue'
 import AuthPanel from './components/AuthPanel.vue'
+import CheckInBoard from './components/CheckInBoard.vue'
+import HistoryView from './components/HistoryView.vue'
 import LandmarkModal from './components/LandmarkModal.vue'
 import InteractiveBackground from './components/InteractiveBackground.vue'
+import PreferencesDock from './components/PreferencesDock.vue'
 import { getLunarDateString } from './utils/lunar.js'
 
 const isSidebarCollapsed = ref(false)
@@ -427,7 +481,9 @@ const selectedFile = ref(null)
 const loading = ref(false)
 const error = ref('')
 const initialView = new URLSearchParams(window.location.search).get('view')
-const activeView = ref(['results', 'map', 'feedback', 'auth', 'admin'].includes(initialView) ? initialView : 'results')
+const availableViews = ['results', 'map', 'feedback', 'history', 'checkins', 'auth', 'admin']
+const activeView = ref(availableViews.includes(initialView) ? initialView : 'results')
+isSidebarCollapsed.value = (activeView.value === 'auth')
 const feedbackMessage = ref('')
 const authMessage = ref('')
 const authError = ref(false)
@@ -454,6 +510,12 @@ const currentUser = ref(loadStoredUser())
 const guestId = ref(loadGuestId())
 const adminSearchRecords = ref([])
 const adminFeedbackRecords = ref([])
+const selectedFeedbackDetail = ref(null)
+const userSearchRecords = ref([])
+const historyLoading = ref(false)
+const checkIns = ref([])
+const activeResultIndex = ref(0)
+const preferences = reactive(loadPreferences())
 
 // 地图缩放与拖拽状态
 const zoomScale = ref(1.0)
@@ -569,13 +631,59 @@ function endDrag() {
 
 const selectedLandmark = computed(() => landmarks.value.find((item) => item.id === selectedId.value))
 const isAdmin = computed(() => currentUser.value?.role === 'admin')
+const shellClasses = computed(() => ({
+  'sidebar-collapsed': isSidebarCollapsed.value,
+  [`theme-${preferences.theme}`]: true,
+  [`backdrop-${preferences.backdrop}`]: true
+}))
 const viewTitle = computed(() => ({
-  results: '图片检索结果',
-  map: '校园地图导览',
-  feedback: '用户反馈纠错',
-  auth: authMode.value === 'login' ? '用户登录' : '用户注册',
-  admin: '管理员后台'
+  results: t('图片检索结果', 'Image Search Results'),
+  map: t('校园地图导览', 'Campus Map'),
+  feedback: t('用户反馈纠错', 'Feedback'),
+  history: t('个人历史记录', 'My History'),
+  checkins: t('打卡留言板', 'Check-in Board'),
+  auth: authMode.value === 'login' ? t('用户登录', 'Login') : t('用户注册', 'Register'),
+  admin: t('管理员后台', 'Admin Console')
 }[activeView.value]))
+const displayedResults = computed(() => {
+  if (!results.value.length) return []
+  return results.value.map((_, index) => results.value[(activeResultIndex.value + index) % results.value.length])
+})
+const preferenceLabels = computed(() => ({
+  theme: t('主题', 'Theme'),
+  backdrop: t('背景', 'Backdrop'),
+  language: t('语言', 'Language')
+}))
+const themeLabel = computed(() => ({ dark: '曜黑', light: '明亮', contrast: '高对比' }[preferences.theme]))
+const backdropLabel = computed(() => ({ aurora: '极光', map: '地图', plain: '纯净' }[preferences.backdrop]))
+const languageLabel = computed(() => preferences.language === 'zh' ? '中文' : 'EN')
+const historyLabels = computed(() => ({
+  title: t('个人历史记录', 'My Search History'),
+  refresh: t('刷新', 'Refresh'),
+  needLogin: t('需要登录', 'Login required'),
+  needLoginDesc: t('登录后可查看自己的服务端检索记录。', 'Sign in to view server-side records.'),
+  loading: t('正在读取历史记录...', 'Loading history...'),
+  empty: t('暂无历史记录', 'No records'),
+  emptyDesc: t('上传图片后，记录会出现在这里。', 'Upload an image and records will appear here.'),
+  noCandidate: t('无候选', 'No candidate'),
+  noMessage: t('无提示信息', 'No message'),
+  score: t('匹配分', 'Score')
+}))
+const checkInLabels = computed(() => ({
+  title: t('校园打卡留言板', 'Campus Check-in Board'),
+  refresh: t('刷新', 'Refresh'),
+  landmark: t('打卡地点', 'Landmark'),
+  message: t('留言内容', 'Message'),
+  placeholder: t('记录当前地标的观察、路线提醒或拍照建议', 'Share an observation, route note, or photo tip'),
+  submit: t('发布打卡', 'Post'),
+  empty: t('暂无留言', 'No posts yet'),
+  emptyDesc: t('选择地标并发布第一条打卡留言。', 'Choose a landmark and post the first note.'),
+  like: t('点赞', 'Like'),
+  liked: t('已赞', 'Liked'),
+  reply: t('回复', 'Reply'),
+  replyPlaceholder: t('写一条一级回复', 'Write a reply'),
+  replyCount: t('回复', 'Replies')
+}))
 
 function confidenceLabel(value) {
   return {
@@ -591,8 +699,9 @@ onMounted(async () => {
   if (!dismissed) {
     welcomePoem.value = poems[Math.floor(Math.random() * poems.length)]
     const today = new Date()
-    const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }
-    welcomeDate.value.solar = today.toLocaleDateString('zh-CN', options)
+    const dateStr = today.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
+    const weekdayStr = today.toLocaleDateString('zh-CN', { weekday: 'long' })
+    welcomeDate.value.solar = `${dateStr}  ${weekdayStr}`
     welcomeDate.value.lunar = getLunarDateString(today)
     showWelcomeModal.value = true
   }
@@ -649,6 +758,7 @@ async function submitSearch() {
       throw new Error(body.message || '检索请求失败')
     }
     const data = await response.json()
+    saveGuestId(data.guestId)
     results.value = data.results.map((item) => {
       const matched = landmarks.value.find(l => l.id === item.landmarkId)
       let imgUrl = item.coverImageUrl || item.cover_image_url || item.imageUrl
@@ -667,6 +777,7 @@ async function submitSearch() {
     searchMeta.lowConfidence = Boolean(data.lowConfidence)
     searchMeta.message = data.message || '检索完成'
     feedback.searchRecordId = data.searchRecordId
+    activeResultIndex.value = 0
     
     // 自动推送历史
     navigateToView('results')
@@ -763,6 +874,9 @@ function switchAuthMode(mode) {
 watch(activeView, (newView) => {
   if (newView === 'auth') {
     clearAuth()
+    isSidebarCollapsed.value = true
+  } else {
+    isSidebarCollapsed.value = false
   }
 })
 
@@ -843,6 +957,9 @@ async function loadAdminData() {
   if (feedbackResponse.ok) {
     adminFeedbackRecords.value = await feedbackResponse.json()
   }
+  if (selectedFeedbackDetail.value?.id) {
+    await loadFeedbackDetail(selectedFeedbackDetail.value.id)
+  }
 }
 
 async function updateFeedbackStatus(id, status) {
@@ -853,7 +970,121 @@ async function updateFeedbackStatus(id, status) {
   })
   if (response.ok) {
     await loadAdminData()
+    await loadFeedbackDetail(id)
   }
+}
+
+async function loadFeedbackDetail(id) {
+  const response = await fetch(`/api/admin/feedback/${id}`, { headers: authHeaders() })
+  if (response.ok) {
+    selectedFeedbackDetail.value = await response.json()
+  }
+}
+
+async function openHistory() {
+  if (!currentUser.value) {
+    openAuth()
+    return
+  }
+  await loadUserHistory()
+  navigateToView('history')
+}
+
+async function loadUserHistory() {
+  if (!currentUser.value) return
+  historyLoading.value = true
+  try {
+    const response = await fetch('/api/me/search-records?limit=20', { headers: authHeaders() })
+    if (response.ok) {
+      userSearchRecords.value = await response.json()
+    }
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+function openHistoryFeedback(record, item) {
+  searchMeta.searchRecordId = record.id
+  searchMeta.uploadImageUrl = record.uploadImageUrl || ''
+  feedback.searchRecordId = record.id
+  feedback.predictedLandmarkId = item.landmarkId
+  feedback.confirmedLandmarkId = item.landmarkId
+  feedback.feedbackType = 'correct'
+  feedback.comment = ''
+  results.value = record.topResults || []
+  selectedId.value = item.landmarkId
+  navigateToView('feedback')
+}
+
+async function openCheckIns() {
+  await loadCheckIns()
+  navigateToView('checkins')
+}
+
+async function loadCheckIns() {
+  const response = await fetch(`/api/check-ins?limit=50&guestId=${encodeURIComponent(guestId.value)}`, { headers: authHeaders() })
+  if (response.ok) {
+    checkIns.value = await response.json()
+  }
+}
+
+async function createCheckIn(payload) {
+  const response = await fetch('/api/check-ins', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ ...payload, guestId: guestId.value })
+  })
+  if (response.ok) {
+    await loadCheckIns()
+  }
+}
+
+async function toggleCheckInLike(item) {
+  const response = await fetch(`/api/check-ins/${item.id}/like?guestId=${encodeURIComponent(guestId.value)}`, {
+    method: 'POST',
+    headers: authHeaders()
+  })
+  if (response.ok) {
+    await loadCheckIns()
+  }
+}
+
+async function replyCheckIn(item, message) {
+  const response = await fetch(`/api/check-ins/${item.id}/replies`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ message, guestId: guestId.value })
+  })
+  if (response.ok) {
+    await loadCheckIns()
+  }
+}
+
+function cycleResults(step) {
+  if (!results.value.length) return
+  activeResultIndex.value = (activeResultIndex.value + step + results.value.length) % results.value.length
+  selectedId.value = results.value[activeResultIndex.value]?.landmarkId || selectedId.value
+}
+
+function cycleTheme() {
+  const values = ['dark', 'light', 'contrast']
+  preferences.theme = values[(values.indexOf(preferences.theme) + 1) % values.length]
+  savePreferences()
+}
+
+function cycleBackdrop() {
+  const values = ['aurora', 'map', 'plain']
+  preferences.backdrop = values[(values.indexOf(preferences.backdrop) + 1) % values.length]
+  savePreferences()
+}
+
+function toggleLanguage() {
+  preferences.language = preferences.language === 'zh' ? 'en' : 'zh'
+  savePreferences()
+}
+
+function t(zh, en) {
+  return preferences.language === 'zh' ? zh : en
 }
 
 function imageForLandmark(item, index = 0) {
@@ -878,14 +1109,37 @@ function loadStoredUser() {
   }
 }
 
+function loadPreferences() {
+  try {
+    return {
+      theme: 'dark',
+      backdrop: 'aurora',
+      language: 'zh',
+      ...(JSON.parse(localStorage.getItem('campuslens.preferences') || '{}'))
+    }
+  } catch {
+    return { theme: 'dark', backdrop: 'aurora', language: 'zh' }
+  }
+}
+
+function savePreferences() {
+  localStorage.setItem('campuslens.preferences', JSON.stringify(preferences))
+}
+
 function loadGuestId() {
   const key = 'campuslens.guestId'
   const existing = localStorage.getItem(key)
-  if (existing) {
+  if (/^guest#[1-9]\d*$/.test(existing || '')) {
     return existing
   }
-  const generated = `guest-${crypto.randomUUID()}`
-  localStorage.setItem(key, generated)
-  return generated
+  localStorage.removeItem(key)
+  return 'guest'
+}
+
+function saveGuestId(value) {
+  if (/^guest#[1-9]\d*$/.test(value || '')) {
+    guestId.value = value
+    localStorage.setItem('campuslens.guestId', value)
+  }
 }
 </script>
