@@ -1,484 +1,238 @@
-# SAR 算法集成实现说明
+# SAR 算法集成说明
 
 ## 概述
 
-SAR (Sharpness-Aware and Reliable entropy minimization) 是一种测试时自适应算法，通过熵最小化和 Sharpness-Aware 优化实现模型在测试阶段的自适应调整，增强对噪声图像的识别能力。
+当前 `algorithm/` 中的 SAR 集成已经完成从“检索侧熵门控”到“模型侧在线更新”的闭环验证，但它的定位仍然是**检索式测试时自适应**，不是标准分类器上的完整监督训练框架。
 
-本项目将 SAR 算法集成到 CampusLens AI 图像检索服务中，支持：
-- 无标签上传时的纯 SAR 熵最小化自适应
-- 用户反馈时的标签引导 SAR 自适应
-- 基于用户反馈的持续学习机制
+当前技术路线分为两条链路：
 
----
+- 搜索链路：DINOv2 特征提取 -> FAISS 地标召回 -> 马氏距离经验匹配分 -> Top-K 分数归一化熵 -> 信任度门控
+- 模型链路：DINOv2 归一化 CLS 特征 -> 与搜索侧一致的马氏距离熵构造 -> SARAdapter -> SAM 更新归一化层参数
 
-## 技术架构
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      SAR 集成架构                               │
-├─────────────────────────────────────────────────────────────────┤
-│  用户层                                                         │
-│  ┌─────────────────┐  ┌─────────────────┐                      │
-│  │  无标签上传搜索  │  │  用户反馈       │                      │
-│  └────────┬────────┘  └────────┬────────┘                      │
-│           │                    │                               │
-├───────────┼────────────────────┼───────────────────────────────┤
-│  API 层   │                    │                               │
-│  ┌────────▼────────┐  ┌────────▼────────┐                      │
-│  │ /search/sar     │  │ /feedback       │                      │
-│  └────────┬────────┘  └────────┬────────┘                      │
-│           │                    │                               │
-├───────────┼────────────────────┼───────────────────────────────┤
-│  服务层   │                    │                               │
-│  ┌────────▼────────────────────▼────────┐                      │
-│  │        SARSearchService              │                      │
-│  │  - SAR 自适应搜索                    │                      │
-│  │  - 用户反馈处理                       │                      │
-│  └──────────────────┬───────────────────┘                      │
-│                     │                                          │
-├─────────────────────┼───────────────────────────────────────────┤
-│  模型层             │                                          │
-│  ┌──────────────────▼──────────────────┐                      │
-│  │        SARDINOv2Extractor           │                      │
-│  │  ┌──────────────────────────────┐   │                      │
-│  │  │     DINOv2 特征提取器        │   │                      │
-│  │  └──────────────────┬───────────┘   │                      │
-│  │                     │               │                      │
-│  │  ┌──────────────────▼───────────┐   │                      │
-│  │  │     SARAdapter (测试时自适应) │   │                      │
-│  │  │  - 熵最小化                    │   │                      │
-│  │  │  - SAM 优化器                  │   │                      │
-│  │  └──────────────────────────────┘   │                      │
-│  └─────────────────────────────────────┘                      │
-├─────────────────────────────────────────────────────────────────┤
-│  数据层                                                         │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │                    FAISS 向量索引                        │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-```
+本次实现的关键修正是：**模型侧熵计算所用特征，已经对齐到搜索侧的 L2 归一化 CLS 向量空间**。这一步解决了早期模型侧马氏距离量级失真、匹配分接近 0、熵恒为 1 的问题。
 
 ---
 
-## 核心组件
+## 当前代码结构
 
-### 1. SAM 优化器 (`app/utils/sam_optimizer.py`)
+### 特征提取器
 
-Sharpness-Aware Minimization 优化器，通过参数扰动和两次梯度更新寻找更平坦的极小值。
+- `app/models/dinov2_extractor.py`
+- `app/models/sar_dinov2_extractor.py`
 
-**关键特性：**
-- 支持自适应扰动缩放（adaptive=True）
-- 支持自定义扰动半径（rho 参数）
-- 兼容标准 PyTorch 优化器接口
+职责：
 
-### 2. SAR 适配器 (`app/models/sar_adapter.py`)
+- 加载本地 DINOv2 模型
+- 提取 768 维 CLS 特征
+- 在 SAR 模式下执行测试时自适应
+- 对外保持统一的特征提取接口
 
-实现 SAR 算法的核心逻辑：
+### 检索与统计
 
-**自适应流程：**
-1. **熵计算**：计算模型输出的 softmax 熵
-2. **可靠样本筛选**：根据熵阈值过滤可靠样本
-3. **SAM 更新**：使用 SAM 优化器进行参数更新
-4. **模型恢复**：当 EMA 低于阈值时重置模型
+- `app/utils/faiss_manager.py`
+- `app/utils/scoring.py`
 
-**标签引导自适应：**
-- 结合用户反馈的标签信息
-- 根据标签置信度动态调整标签权重
-- 实现标签引导的熵最小化
+职责：
 
-### 3. SAR-DINOv2 提取器 (`app/models/sar_dinov2_extractor.py`)
+- 构建地标中心 FAISS 索引
+- 保存每个地标的均值、协方差和协方差逆矩阵
+- 计算马氏距离与经验匹配分
+- 根据 Top-K 分数构造归一化熵
+- 输出 `entropy`、`trustLevel`、`trustScore`
 
-集成 SAR 的 DINOv2 特征提取器：
+### SAR 适配层
 
-**功能特性：**
-- 支持 SAR 自适应特征提取
-- 支持标签引导的特征提取
-- 兼容原有 DINOv2 接口
+- `app/models/sar_adapter.py`
 
-### 4. SAR 搜索服务 (`app/services/sar_search_service.py`)
+职责：
 
-提供 SAR 增强的搜索能力：
+- 将模型输出特征转换为与搜索侧一致的归一化特征
+- 根据马氏距离构造归一化熵
+- 对低熵样本执行 SAR 更新
+- 维护 EMA 与重置逻辑
 
-**主要方法：**
-| 方法 | 功能 |
-|------|------|
-| `search_similar_landmarks()` | SAR 自适应搜索 |
-| `feedback_update()` | 用户反馈处理（自动计算标签置信度） |
-| `reset_sar()` | 重置 SAR 适配器 |
+### SAR 搜索服务
 
----
+- `app/services/sar_search_service.py`
 
-## API 接口
+职责：
 
-### 1. SAR 增强搜索
+- `search_similar_landmarks()`：SAR 增强搜索
+- `feedback_update()`：反馈可信度分流
+- `reset_sar()`：重置适配器状态
 
-**POST** `/api/v1/search/sar`
+### API 层
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `file` | File | 是 | 查询图像文件 |
-| `use_sar` | bool | 否 | 是否启用 SAR（默认 True） |
+- `app/api/routes.py`
 
-**响应示例：**
-```json
-{
-  "results": [
-    {
-      "rank": 1,
-      "landmarkCode": "L01",
-      "score": 0.95,
-      "confidenceLevel": "high",
-      "mahalanobisDistance": 1.2
-    }
-  ],
-  "lowConfidence": false,
-  "sarEnabled": true,
-  "message": "Search successful"
-}
-```
+接口：
 
-### 2. 用户反馈
-
-**POST** `/api/v1/feedback`
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `file` | File | 是 | 反馈图像文件 |
-| `landmark_code` | string | 是 | 确认的地标代码 |
-| `update_index` | bool | 否 | 是否更新索引（默认 True） |
-
-**响应示例：**
-```json
-{
-  "success": true,
-  "message": "Feedback processed successfully",
-  "landmarkCode": "L01",
-  "mahalanobisDistance": 150.5,
-  "labelConfidence": 0.7865,
-  "index_updated": true,
-  "sar_ema": 0.35
-}
-```
-
-**响应字段说明：**
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `landmarkCode` | string | 用户确认的地标代码 |
-| `mahalanobisDistance` | float | 查询图像到该地标分布的马氏距离 |
-| `labelConfidence` | float | 自动计算的标签置信度（0-1） |
-| `index_updated` | bool | 是否更新了索引 |
-
-**标签置信度计算规则（指数衰减）：**
-
-```
-labelConfidence = exp(-ln(10)/1000 * mahalanobisDistance)
-```
-
-| 马氏距离 | 置信度 | 说明 |
-|----------|--------|------|
-| 0 | 100% | 完美匹配 |
-| 100 | 78.5% | 高置信度 |
-| 500 | 30.8% | 中等置信度 |
-| 1000 | 10% | 低置信度 |
-| 2000 | 1% | 极低置信度 |
-| ∞ | 0% | 无匹配 |
-
-### 3. 重置 SAR 适配器
-
-**POST** `/api/v1/sar/reset`
-
-**响应示例：**
-```json
-{
-  "success": true,
-  "message": "SAR adapter reset"
-}
-```
+- `POST /api/v1/search`
+- `POST /api/v1/search/sar`
+- `POST /api/v1/feedback`
+- `POST /api/v1/sar/reset`
+- `POST /api/v1/index/rebuild`
+- `GET /api/v1/index/stats`
+- `GET /api/v1/health`
 
 ---
 
-## 使用流程
+## 熵的统一定义
 
-### 场景一：用户正常上传搜索（无标签）
+### 搜索侧熵
 
-```
-用户上传图像 → /search/sar → SAR 熵最小化自适应 → 特征提取 → FAISS 搜索 → 返回结果
-```
+搜索侧不使用分类 logits 熵，而是使用**检索分数归一化熵**。
 
-### 场景二：用户反馈（带标签）
+计算步骤：
 
-```
-用户上传反馈图像+标签 → /feedback → 标签引导 SAR 自适应 → 提取特征 → 更新 FAISS 索引 → 模型微调
-```
+1. 取得 Top-K 候选的 `score`
+2. 对 `score` 做温度 softmax
+3. 计算 Shannon entropy
+4. 使用 `log(K)` 归一化到 `[0, 1]`
 
----
+解释：
 
-## 持续学习策略
+- 熵越低，候选分布越集中，样本越可信
+- 熵越高，候选分布越分散，样本越不可信
 
-### 1. 模型微调
-- 仅微调归一化层参数
-- 使用 SAM 优化器进行更新
-- 保持特征提取器主体不变
+默认门控阈值：
 
-### 2. 索引更新
-- 高置信度反馈自动添加到 FAISS 索引
-- 支持动态索引扩展
-- 定期重建索引优化
+- `entropy < 0.35`：`trusted`
+- `0.35 <= entropy < 0.60`：`uncertain`
+- `entropy >= 0.60`：`untrusted`
 
-### 3. 统计更新
-- 更新地标统计特征
-- 自适应调整匹配阈值
-- 维护马氏距离统计量
+### 模型侧熵
 
-### 4. 模型恢复
-- 监控 EMA（指数移动平均）
-- 当 EMA 过低时自动重置模型
-- 防止模型过度适应噪声
+模型侧现在也使用与搜索侧一致的思路：
 
----
+1. 从模型输出中提取 CLS 特征
+2. 对 CLS 特征执行 `L2 normalize`
+3. 使用与搜索侧同源的地标统计量计算马氏距离
+4. 将马氏距离映射为经验匹配分
+5. 对 Top-K 匹配分做温度 softmax
+6. 计算归一化熵并作为 SAR 门控依据
 
-## 配置参数
-
-| 参数 | 环境变量 | 默认值 | 说明 |
-|------|----------|--------|------|
-| SAR 步数 | SAR_STEPS | 1 | 每批次自适应步数 |
-| 熵阈值 | SAR_MARGIN | 0.4*log(1000) | 可靠样本筛选阈值 |
-| 重置阈值 | SAR_RESET_EM | 0.2 | EMA 重置阈值 |
-| SAM 扰动半径 | SAM_RHO | 0.05 | 参数扰动幅度 |
-| 学习率 | SAR_LR | 1e-4 | 自适应学习率 |
+这样做的目的，是让模型侧和搜索侧的熵都建立在同一特征空间和同一分数语义上。
 
 ---
 
-## 技术原理
+## 搜索阶段技术路线
 
-### SAR 算法核心
+`POST /api/v1/search/sar` 的执行流程如下：
 
-**熵最小化损失：**
-```
-loss = E[H(p(y|x))] for x where H(p(y|x)) < margin
-```
+1. 输入图片经过 DINOv2 提取特征
+2. 使用 FAISS 召回候选地标
+3. 对候选地标计算马氏距离与经验匹配分
+4. 根据 Top-K 匹配分计算归一化熵
+5. 返回：
+   - `results`
+   - `entropy`
+   - `trustLevel`
+   - `trustScore`
+6. 若样本低熵且满足门控条件，则允许 SAR 对模型参数做在线微调
 
-**SAM 优化步骤：**
-1. 计算梯度并扰动参数：`w ← w + ρ·g/||g||`
-2. 在扰动点计算梯度
-3. 在原始点更新参数
+设计目标：
 
-**标签引导自适应：**
-```
-h_fused = α·h_label + (1-α)·h_original
-其中 α = 0.5 * label_confidence
-```
-
----
-
-## 使用说明
-
-### 1. 启动服务
-
-```bash
-# 进入算法服务目录
-cd c:\programmingProjects\Campuslens\algorithm
-
-# 激活虚拟环境
-.venv\Scripts\Activate.ps1
-
-# 启动服务
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### 2. 基础测试
-
-#### 2.1 健康检查
-
-```bash
-curl.exe http://localhost:8000/api/v1/health
-```
-
-预期响应：
-```json
-{
-  "status": "healthy",
-  "service": "CampusLens AI Search",
-  "version": "1.0.0",
-  "sarAvailable": true
-}
-```
-
-#### 2.2 测试 SAR 搜索
-
-```bash
-# 无标签 SAR 搜索
-curl.exe -X POST http://localhost:8000/api/v1/search/sar `
-  -F "file=@test_image.jpg"
-
-# 禁用 SAR（使用标准搜索）
-curl.exe -X POST "http://localhost:8000/api/v1/search/sar?use_sar=false" `
-  -F "file=@test_image.jpg"
-```
-
-#### 2.3 测试用户反馈
-
-```bash
-curl.exe -X POST "http://localhost:8000/api/v1/feedback?landmark_code=L01&update_index=true" `
-  -F "file=@test_image.jpg"
-```
-
-#### 2.5 重置 SAR 适配器
-
-```bash
-curl.exe -X POST http://localhost:8000/api/v1/sar/reset
-```
-
-### 3. Python 客户端示例
-
-```python
-import requests
-
-class SARClient:
-    def __init__(self, base_url="http://localhost:8000"):
-        self.base_url = base_url
-    
-    def search_sar(self, image_path, use_sar=True):
-        """SAR 自适应搜索"""
-        url = f"{self.base_url}/api/v1/search/sar"
-        with open(image_path, "rb") as f:
-            files = {"file": f}
-            params = {"use_sar": use_sar}
-            response = requests.post(url, files=files, params=params)
-        return response.json()
-    
-    def feedback(self, image_path, landmark_code, update_index=True):
-        """用户反馈（标签置信度自动计算）"""
-        url = f"{self.base_url}/api/v1/feedback"
-        with open(image_path, "rb") as f:
-            files = {"file": f}
-            params = {
-                "landmark_code": landmark_code,
-                "update_index": update_index
-            }
-            response = requests.post(url, files=files, params=params)
-        return response.json()
-    
-    def reset_sar(self):
-        """重置 SAR 适配器"""
-        url = f"{self.base_url}/api/v1/sar/reset"
-        response = requests.post(url)
-        return response.json()
-
-# 使用示例
-if __name__ == "__main__":
-    client = SARClient()
-    
-    # 1. 无标签 SAR 搜索
-    result1 = client.search_sar("test_image.jpg", use_sar=True)
-    print("SAR 搜索结果:", result1)
-    
-    # 2. 用户反馈（标签置信度由系统自动计算）
-    result2 = client.feedback("test_image.jpg", landmark_code="L01")
-    print("反馈结果:", result2)
-    print("标签置信度:", result2.get("labelConfidence"))
-    
-    # 3. 重置 SAR
-    result3 = client.reset_sar()
-    print("重置结果:", result3)
-```
-
-### 4. 响应参数说明
-
-#### 4.1 搜索响应
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `results` | array | 匹配结果列表 |
-| `results[].rank` | int | 排名 |
-| `results[].landmarkCode` | string | 地标代码 |
-| `results[].score` | float | 匹配分数（0-1） |
-| `results[].confidenceLevel` | string | 置信度等级（high/medium/low） |
-| `results[].mahalanobisDistance` | float | 马氏距离 |
-| `lowConfidence` | bool | 是否低置信度 |
-| `sarEnabled` | bool | 是否启用 SAR |
-| `message` | string | 结果消息 |
-
-### 5. 测试场景建议
-
-| 场景 | 测试目的 | 测试步骤 |
-|------|----------|----------|
-| **噪声图像测试** | 验证 SAR 对噪声图像的鲁棒性 | 使用添加高斯噪声的图像进行搜索，比较启用/禁用 SAR 的结果差异 |
-| **低质量图像测试** | 验证 SAR 对模糊图像的处理能力 | 使用低分辨率或模糊图像进行测试 |
-| **用户反馈测试** | 验证反馈机制效果 | 上传图像并提交反馈，观察索引更新情况和后续搜索结果变化 |
-| **参数恢复测试** | 验证 SAR 可逆性 | 启用 SAR → 搜索 → 重置 → 再次搜索，比较两次结果 |
-| **持续学习测试** | 验证用户反馈机制 | 多次提交同一图像的不同反馈标签，观察索引更新效果 |
-
-### 6. 性能监控
-
-```bash
-# 监控服务状态
-curl.exe http://localhost:8000/api/v1/health
-
-# 查看 SAR 状态（需要实现状态接口）
-curl.exe http://localhost:8000/api/v1/sar/status
-```
-
-预期状态响应：
-```json
-{
-  "sar_enabled": true,
-  "ema": 0.35,
-  "adaptation_count": 15,
-  "reset_count": 3,
-  "params_modified": true
-}
-```
-
-### 7. 常见问题
-
-#### Q1: SAR 启用后响应变慢？
-
-**A:** SAR 自适应会增加约 2-3 倍推理时间，这是正常现象。可以通过 `use_sar=false` 参数选择性启用。
-
-#### Q2: 如何判断 SAR 是否生效？
-
-**A:** 检查响应中的 `sarEnabled` 字段是否为 `true`。
-
-#### Q3: 参数恢复后结果不一致？
-
-**A:** 重置 SAR 后模型参数恢复到初始状态，搜索结果可能会有差异，这是预期行为。
-
-#### Q4: 标签置信度是如何计算的？
-
-**A:** 标签置信度基于马氏距离计算，采用指数衰减公式：
-
-```
-labelConfidence = exp(-ln(10)/1000 * mahalanobisDistance)
-```
-
-- 马氏距离越小，置信度越高
-- 马氏距离 = 0 时，置信度 = 100%
-- 马氏距离 = 1000 时，置信度 = 10%
-- 马氏距离 = ∞ 时，置信度 = 0%
-- 置信度低于 0.7 时不会更新 FAISS 索引
+- 让可信样本推动测试时自适应
+- 让高风险样本只参与检索，不参与更新
+- 保持搜索结果稳定且可解释
 
 ---
 
-## 注意事项
+## 反馈阶段技术路线
 
-1. **性能影响**：SAR 自适应会增加推理时间（约 2-3 倍），建议在需要时启用
-2. **内存占用**：SAR 需要保存优化器状态，内存占用略有增加
-3. **模型恢复**：建议定期调用 `/sar/reset` 重置适配器状态
-4. **置信度阈值**：用户反馈置信度低于 0.7 时不会更新索引
+`POST /api/v1/feedback` 的作用不是直接把用户标签写进模型，而是做**反馈可信度分流**。
+
+处理步骤：
+
+1. 用当前模型对图片重新检索
+2. 取得模型 Top-1 预测及其归一化熵
+3. 计算用户标签对应地标的马氏一致性
+4. 综合：
+   - 模型预测
+   - 模型熵
+   - 马氏距离
+   - 标签一致性
+5. 输出反馈状态：
+   - `accepted`
+   - `review`
+   - `pending`
+
+当前策略：
+
+- 反馈不直接作为真值更新模型
+- 高冲突反馈默认进入 `review/pending`
+- 只有低风险反馈才允许进入索引更新路径
+
+这一步的目的，是防止用户恶意反馈或误标直接污染索引与模型。
 
 ---
 
-## 版本历史
+## 已验证的行为
 
-| 版本 | 日期 | 说明 |
-|------|------|------|
-| v1.0 | 2026-06-08 | 初始版本，支持 SAR 基本功能 |
+通过 `debug_sar.py` 的 API 检查与模型检查，当前实现已经验证了以下结论：
+
+- `search/sar` 能稳定返回 `entropy`、`trustLevel`、`trustScore`
+- `feedback` 能返回 `feedbackTrust`、`pending`、`modelEntropy`、`modelTrust`
+- 模型侧马氏距离已经与搜索侧量级对齐，不再出现数万级异常距离
+- 模型侧 `match score` 不再全为 0
+- 模型侧归一化熵不再恒为 1
+- 在放宽门限后，SAR 更新链路可以稳定产生非零参数变化
+- `ema` 可以正常更新，特征漂移也可观察到
+
+一次典型验证中可以观察到：
+
+- 模型侧马氏距离：与搜索侧同量级
+- 归一化熵：约 0.34 左右
+- `param delta total`：稳定为非零
+- `ema`：持续更新
+- `feature drift`：随迭代逐步累积
+
+这说明当前 SARAdapter 已经不只是“有门控不更新”，而是真正进入了在线适应阶段。
 
 ---
 
-## 参考资料
+## 当前实现边界
 
-- SAR 论文：https://arxiv.org/abs/2302.03011
-- SAM 论文：https://arxiv.org/abs/2010.01412
-- SAR 实现：https://github.com/mr-eggplant/SAR
+当前实现仍然有明确边界：
+
+- SAR 主要更新归一化层参数，不做全模型训练
+- 反馈分流已完成，但没有落地数据库持久化审核队列
+- 熵阈值与 score 参数仍主要依赖经验值，后续应使用验证集重新标定
+- SAR 更新对门限敏感，不同场景下需要重新选择 `margin` 与 `temperature`
+
+因此，当前实现适合：
+
+- 检索场景下的测试时自适应验证
+- 噪声图像鲁棒性增强实验
+- 用户反馈防污染策略验证
+
+不应直接视为完整的生产级在线学习系统。
+
+---
+
+## 推荐调试流程
+
+1. 启动服务：`python app/main.py`
+2. 检查健康状态：`python check_service.py`
+3. 运行 SAR 调试：`python debug_sar.py --image <path>`
+4. 重点观察：
+   - `search/sar` 的 `entropy` 与 `trustLevel`
+   - `feedback` 的 `feedbackTrust` 与 `pending`
+   - `MODEL CHECK` 中的 `Normalized entropy`
+   - `param delta total`
+   - `ema history`
+   - `feature drift`
+
+---
+
+## 结论
+
+当前 `algorithm/` 中的 SAR 技术路线已经明确：
+
+- 用归一化检索熵做搜索阶段可信度门控
+- 用与搜索侧一致的归一化 CLS 特征做模型侧熵构造
+- 用 SAR + SAM 对可信样本执行测试时自适应
+- 用反馈分流阻止错误标签直接污染索引
+
+这套方案适合当前 CampusLens 的地标检索架构，也与当前代码和调试结果保持一致。

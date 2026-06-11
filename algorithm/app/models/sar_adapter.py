@@ -10,6 +10,7 @@ import math
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 def update_ema(ema, new_data):
     """Update exponential moving average"""
     if ema is None:
@@ -19,10 +20,25 @@ def update_ema(ema, new_data):
             return 0.9 * ema + (1 - 0.9) * new_data
 
 
-@torch.jit.script
-def softmax_entropy(x: torch.Tensor) -> torch.Tensor:
-    """Entropy of softmax distribution from logits."""
-    return -(x.softmax(1) * x.log_softmax(1)).sum(1)
+def normalized_softmax_entropy(x: torch.Tensor, temperature: float = 1.0) -> torch.Tensor:
+    """
+    Normalized entropy of a score distribution.
+
+    - x is treated as retrieval scores / logits-like values
+    - temperature controls sharpness
+    - output is normalized to [0, 1]
+    """
+    if x.dim() != 2:
+        raise RuntimeError("normalized_softmax_entropy expects a 2D tensor")
+
+    temp = temperature if temperature > 1e-6 else 1e-6
+    logits = x / temp
+    logits = logits - logits.max(dim=1, keepdim=True).values
+    probs = torch.softmax(logits, dim=1)
+
+    entropy = -(probs * torch.log(probs + 1e-12)).sum(dim=1)
+    norm = math.log(float(x.size(1))) if x.size(1) > 1 else 1.0
+    return entropy / norm
 
 
 def get_entropy_from_features(outputs, landmark_means=None, landmark_cov_invs=None):
@@ -66,90 +82,72 @@ def get_entropy_from_features(outputs, landmark_means=None, landmark_cov_invs=No
     # Ensure x is 2D (batch_size, feature_dim)
     if len(x.shape) == 3:
         x = x[:, 0]  # Use CLS token
+
+    # Align SAR entropy features with retrieval-side features.
+    x = F.normalize(x, p=2, dim=-1)
     
     # If landmark statistics are provided, use Mahalanobis distance-based entropy
     if landmark_means is not None and landmark_cov_invs is not None and len(landmark_means) > 0:
-        return compute_mahalanobis_entropy(x, landmark_means, landmark_cov_invs)
-    
+        return compute_mahalanobis_entropy(x, landmark_means, landmark_cov_invs, top_k=3, temperature=0.2)
+
     # Fallback: original entropy calculation (treating features as logits)
-    return softmax_entropy(x)
+    return normalized_softmax_entropy(x)
 
 
-def compute_mahalanobis_entropy(x, landmark_means, landmark_cov_invs, top_k: int = 3):
+def compute_mahalanobis_entropy(x, landmark_means, landmark_cov_invs, top_k: int = 3, temperature: float = 0.2):
     """
-    Compute entropy based on Mahalanobis distance match score (algo.md formula).
-    
-    Formula: score = 1 / (1 + exp(3.0 * (log(d + 1) - log(901))))
-    
-    Args:
-        x: Feature tensor (batch_size, feature_dim)
-        landmark_means: List of landmark mean vectors (numpy arrays)
-        landmark_cov_invs: List of landmark covariance inverse matrices (numpy arrays)
-        top_k: Only consider top-k most similar landmarks, mask others to 0
-    
-    Returns:
-        entropy: Entropy values (batch_size,)
+    Compute normalized entropy based on Mahalanobis distance match scores.
+
+    This version is aligned with the current retrieval-side entropy logic:
+    1. Mahalanobis distance -> match score
+    2. Top-k masking
+    3. Temperature softmax over scores
+    4. Normalized entropy in [0, 1]
     """
     batch_size = x.shape[0]
     num_landmarks = len(landmark_means)
-    
-    # Convert landmark statistics to torch tensors
+
     device = x.device
     means = [torch.tensor(m, dtype=x.dtype, device=device) for m in landmark_means]
     cov_invs = [torch.tensor(ci, dtype=x.dtype, device=device) for ci in landmark_cov_invs]
-    
-    # Compute Mahalanobis distance for each sample to each landmark
+
     mahalanobis_dists = torch.zeros((batch_size, num_landmarks), dtype=x.dtype, device=device)
-    
+
     for i in range(batch_size):
         for j in range(num_landmarks):
-            # Compute Mahalanobis distance: sqrt((x-μ)^T Σ^{-1} (x-μ))
             diff = x[i] - means[j]
             dist_sq = diff @ cov_invs[j] @ diff
-            mahalanobis_dists[i, j] = torch.sqrt(dist_sq)
-    
-    # Debug: print distances
+            mahalanobis_dists[i, j] = torch.sqrt(torch.clamp(dist_sq, min=0.0))
+
     if batch_size > 0:
         print(f"[DEBUG] Mahalanobis distances: {[f'{d:.2f}' for d in mahalanobis_dists[0].tolist()]}")
-    
-    # Convert Mahalanobis distance to match score using sigmoid formula (algo.md)
-    # score = 1 / (1 + exp(3.0 * (log(d + 1) - log(901))))
-    CENTER = 901.0  # Sigmoid center from algo.md
+
+    CENTER = 901.0
     SLOPE = 3.0
-    
     log_dist = torch.log(mahalanobis_dists + 1.0)
     log_center = math.log(CENTER + 1.0)
-    
-    # Match score (higher = more confident match)
+
     match_scores = 1.0 / (1.0 + torch.exp(SLOPE * (log_dist - log_center)))
-    
-    # Debug: print match scores
+
     if batch_size > 0:
         print(f"[DEBUG] Match scores: {[f'{s:.4f}' for s in match_scores[0].tolist()]}")
-    
-    # Use negative match score as logits (higher distance = lower logit)
-    logits = match_scores  # Already in [0, 1], higher is better
-    
-    # Top-k masking: keep only top-k scores, others set to 0
-    # This means: "we are confident this sample cannot be any class outside top-k"
+
     k = min(top_k, num_landmarks)
-    masked_logits = torch.zeros_like(logits)
-    
+    masked_scores = torch.zeros_like(match_scores)
+
     for i in range(batch_size):
-        # Get indices of top-k values
-        topk_values, topk_indices = logits[i].topk(k)
-        masked_logits[i, topk_indices] = logits[i, topk_indices]
-    
-    # Debug: print masked logits
+        topk_values, topk_indices = match_scores[i].topk(k)
+        masked_scores[i, topk_indices] = match_scores[i, topk_indices]
+
     if batch_size > 0:
-        non_zero_count = (masked_logits[0] != 0).sum().item()
-        print(f"[DEBUG] After top-{k} masking: {non_zero_count} non-zero logits")
-        print(f"[DEBUG] Masked logits: {[f'{l:.4f}' if l != 0 else '0' for l in masked_logits[0].tolist()]}")
-    
-    # Compute entropy from masked logits
-    entropy = softmax_entropy(masked_logits)
-    print(f"[DEBUG] Entropy: {entropy[0].item():.6f}")
-    
+        non_zero_count = (masked_scores[0] != 0).sum().item()
+        print(f"[DEBUG] After top-{k} masking: {non_zero_count} non-zero scores")
+        print(f"[DEBUG] Masked scores: {[f'{l:.4f}' if l != 0 else '0' for l in masked_scores[0].tolist()]}")
+
+    entropy = normalized_softmax_entropy(masked_scores, temperature=temperature)
+    if batch_size > 0:
+        print(f"[DEBUG] Normalized entropy: {entropy[0].item():.6f}")
+
     return entropy
 
 
