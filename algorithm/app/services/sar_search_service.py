@@ -16,6 +16,7 @@ Feedback path:
 from typing import List, Dict
 from PIL import Image
 import math
+from app.config import Config
 from app.utils.scoring import (
     confidence_from_entropy,
     normalized_entropy_from_scores,
@@ -117,7 +118,7 @@ class SARSearchService:
             feedback_trust = "review"
             approved = False
         index_updated = False
-        if update_index and approved and label_confidence > 0.7:
+        if update_index and approved and label_confidence > Config.FEEDBACK_ACCEPT_CONFIDENCE:
             try:
                 feature = self.extractor.extract_single(
                     image,

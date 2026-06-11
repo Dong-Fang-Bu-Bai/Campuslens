@@ -14,6 +14,7 @@ import numpy as np
 from pathlib import Path
 
 from .sar_adapter import SARAdapter, configure_model, collect_params
+from app.config import Config
 
 
 class SARDINOv2Extractor:
@@ -160,7 +161,7 @@ class SARDINOv2Extractor:
         # Calculate dynamic margin based on number of classes
         # margin = 0.4 * log(num_classes)
         # This ensures the threshold adapts to the number of landmarks
-        margin_e0 = 0.4 * np.log(self.num_classes)
+        margin_e0 = Config.SAR_MARGIN
         print(f"[INFO] SAR entropy margin: {margin_e0:.4f} (based on {self.num_classes} classes)")
         
         # Create SAR adapter with landmark statistics

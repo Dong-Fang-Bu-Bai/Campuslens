@@ -11,6 +11,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from app.config import Config
 def update_ema(ema, new_data):
     """Update exponential moving average"""
     if ema is None:
@@ -88,7 +90,7 @@ def get_entropy_from_features(outputs, landmark_means=None, landmark_cov_invs=No
     
     # If landmark statistics are provided, use Mahalanobis distance-based entropy
     if landmark_means is not None and landmark_cov_invs is not None and len(landmark_means) > 0:
-        return compute_mahalanobis_entropy(x, landmark_means, landmark_cov_invs, top_k=3, temperature=0.2)
+        return compute_mahalanobis_entropy(x, landmark_means, landmark_cov_invs, top_k=Config.SAR_ENTROPY_TOP_K, temperature=Config.ENTROPY_TEMPERATURE)
 
     # Fallback: original entropy calculation (treating features as logits)
     return normalized_softmax_entropy(x)
@@ -122,8 +124,8 @@ def compute_mahalanobis_entropy(x, landmark_means, landmark_cov_invs, top_k: int
     if batch_size > 0:
         print(f"[DEBUG] Mahalanobis distances: {[f'{d:.2f}' for d in mahalanobis_dists[0].tolist()]}")
 
-    CENTER = 901.0
-    SLOPE = 3.0
+    CENTER = Config.MATCH_SCORE_CENTER_DISTANCE
+    SLOPE = Config.MATCH_SCORE_SLOPE
     log_dist = torch.log(mahalanobis_dists + 1.0)
     log_center = math.log(CENTER + 1.0)
 
@@ -185,7 +187,7 @@ def forward_and_adapt_sar(x, model, optimizer, margin, reset_constant, ema,
         raise ValueError("Model forward pass returned None")
     
     # Compute entropy using helper function that handles dict outputs
-    if labels is not None and label_confidence is not None and label_confidence > 0.3:
+    if labels is not None and label_confidence is not None and label_confidence > Config.LABEL_GUIDANCE_MIN_CONFIDENCE:
         # Label-guided entropy
         h_label = label_guided_entropy(outputs, labels, landmark_means, landmark_cov_invs)
         h_original = get_entropy_from_features(outputs, landmark_means, landmark_cov_invs)
@@ -215,7 +217,7 @@ def forward_and_adapt_sar(x, model, optimizer, margin, reset_constant, ema,
         outputs = model(x)
         
         # Recompute entropy
-        if labels is not None and label_confidence is not None and label_confidence > 0.3:
+        if labels is not None and label_confidence is not None and label_confidence > Config.LABEL_GUIDANCE_MIN_CONFIDENCE:
             h_label = label_guided_entropy(outputs, labels, landmark_means, landmark_cov_invs)
             h_original = get_entropy_from_features(outputs, landmark_means, landmark_cov_invs)
             h_fused = effective_weight * h_label + (1 - effective_weight) * h_original
