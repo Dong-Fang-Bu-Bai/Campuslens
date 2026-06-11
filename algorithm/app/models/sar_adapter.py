@@ -22,7 +22,7 @@ def update_ema(ema, new_data):
             return 0.9 * ema + (1 - 0.9) * new_data
 
 
-def normalized_softmax_entropy(x: torch.Tensor, temperature: float = 1.0) -> torch.Tensor:
+def normalized_softmax_entropy(x: torch.Tensor, temperature: float = Config.ENTROPY_TEMPERATURE) -> torch.Tensor:
     """
     Normalized entropy of a score distribution.
 
@@ -96,7 +96,7 @@ def get_entropy_from_features(outputs, landmark_means=None, landmark_cov_invs=No
     return normalized_softmax_entropy(x)
 
 
-def compute_mahalanobis_entropy(x, landmark_means, landmark_cov_invs, top_k: int = 3, temperature: float = 0.2):
+def compute_mahalanobis_entropy(x, landmark_means, landmark_cov_invs, top_k: int = Config.SAR_ENTROPY_TOP_K, temperature: float = Config.ENTROPY_TEMPERATURE):
     """
     Compute normalized entropy based on Mahalanobis distance match scores.
 

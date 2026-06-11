@@ -26,15 +26,15 @@ class Config:
     TOP_K_RESULTS = int(os.getenv("TOP_K_RESULTS", "5"))
     CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.5"))
 
-    ENTROPY_TEMPERATURE = float(os.getenv("ENTROPY_TEMPERATURE", "0.2"))
+    ENTROPY_TEMPERATURE = float(os.getenv("ENTROPY_TEMPERATURE", "0.15"))
     TRUST_LOW_THRESHOLD = float(os.getenv("TRUST_LOW_THRESHOLD", "0.35"))
-    TRUST_HIGH_THRESHOLD = float(os.getenv("TRUST_HIGH_THRESHOLD", "0.60"))
+    TRUST_HIGH_THRESHOLD = float(os.getenv("TRUST_HIGH_THRESHOLD", "0.70"))
 
-    MATCH_SCORE_CENTER_DISTANCE = float(os.getenv("MATCH_SCORE_CENTER_DISTANCE", "900.0"))
-    MATCH_SCORE_SLOPE = float(os.getenv("MATCH_SCORE_SLOPE", "3.0"))
+    MATCH_SCORE_CENTER_DISTANCE = float(os.getenv("MATCH_SCORE_CENTER_DISTANCE", "700.0"))
+    MATCH_SCORE_SLOPE = float(os.getenv("MATCH_SCORE_SLOPE", "5.0"))
 
-    SAR_MARGIN = float(os.getenv("SAR_MARGIN", "0.9210"))
-    SAR_ENTROPY_TOP_K = int(os.getenv("SAR_ENTROPY_TOP_K", "3"))
+    SAR_MARGIN = float(os.getenv("SAR_MARGIN", "0.4500"))
+    SAR_ENTROPY_TOP_K = int(os.getenv("SAR_ENTROPY_TOP_K", "5"))
 
     FEEDBACK_ACCEPT_CONFIDENCE = float(os.getenv("FEEDBACK_ACCEPT_CONFIDENCE", "0.7"))
     LABEL_GUIDANCE_MIN_CONFIDENCE = float(os.getenv("LABEL_GUIDANCE_MIN_CONFIDENCE", "0.3"))
