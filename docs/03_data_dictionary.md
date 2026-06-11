@@ -53,7 +53,7 @@
 
 ## SearchRecord 检索记录
 
-第三周 V2 已接入运行时持久化。`POST /api/search/upload` 保存上传图后调用算法服务，并将检索状态、Top-5 快照和游客身份写入该表，接口返回的 `searchRecordId` 来自数据库主键。
+V4 异步改造后，`search_record` 同时作为检索记录和任务权威状态表。提交接口先写入 `queued` 记录并返回主键，Redis 只保存待分发任务编号。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -68,11 +68,26 @@
 | `guestId` | String | 未登录用户的前端持久化游客标识；登录用户记录为 `user-{userId}` |
 | `userId` | Long | 登录用户 ID，未登录时为空 |
 | `userType` | String | `guest` 或 `user` |
+| `jobId` | String | 对外任务 UUID，唯一 |
+| `jobTokenHash` | String | 游客任务令牌 SHA-256 哈希，不保存明文 |
+| `idempotencyKey` | String | 所有者作用域与原始幂等键的 SHA-256 摘要，全局唯一且不暴露原始键 |
+| `fileSha256` | String | 上传文件摘要，用于识别同键不同文件 |
+| `queuedAt` | DateTime | Redis 容量准入确认时间；为空表示尚未完成准入 |
+| `startedAt` | DateTime | 首次开始处理时间 |
+| `finishedAt` | DateTime | 进入终态时间 |
+| `updatedAt` | DateTime | 最近状态更新时间 |
+| `attemptCount` | Integer | 已领取执行次数，最多 3 次 |
+| `errorCode` | String | 最近错误代码，可为空 |
+| `leaseUntil` | DateTime | 当前 worker 租约到期时间 |
+| `workerId` | String | 当前领取任务的消费者标识 |
+| `nextAttemptAt` | DateTime | 下次允许重试的时间；首次任务和终态为空 |
 | `createdAt` | DateTime | 检索时间 |
+
+状态取值为 `queued`、`processing`、`success`、`low_confidence`、`failed`。Top-5 快照不重复保存地标 Base64 封面，避免运行记录膨胀；展示时根据地标编号补齐封面。
 
 ## Feedback 用户反馈
 
-第三周 V2 已接入运行时持久化。提交反馈时会校验 `searchRecordId` 是否存在，并要求 `predictedLandmarkId` 来自本次检索结果，保证反馈和检索记录能闭环追踪。
+第三周 V2 已接入运行时持久化。提交反馈时要求任务状态为 `success` 或 `low_confidence`，校验提交者所有权，并要求 `predictedLandmarkId` 来自本次检索结果。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -190,3 +205,5 @@
 | `V4__app_user_auth_and_record_owner.sql` | 创建 `app_user`，为检索记录和反馈记录补充登录用户归属字段 |
 | `V5__hash_admin_passwords.sql` | 将管理员演示账号密码升级为 PBKDF2 哈希 |
 | `V10__v3_check_in_and_correction_sample.sql` | 创建打卡留言、点赞、回复和校正样本表 |
+| `V11__async_search_jobs.sql` | 为检索记录增加异步任务、幂等、lease 和错误字段 |
+| `V12__harden_async_search_queue.sql` | 增加持久化重试时间和队列到期索引 |

@@ -22,6 +22,9 @@ if errorlevel 1 exit /b 1
 call :verify_mysql
 if errorlevel 1 exit /b 1
 
+call :verify_redis
+if errorlevel 1 exit /b 1
+
 call "%~dp0start-algorithm.cmd"
 if errorlevel 1 exit /b 1
 
@@ -47,6 +50,7 @@ if errorlevel 1 exit /b 1
 echo.
 echo [CampusLens] Verification passed.
 echo [CampusLens] MySQL:    localhost:3306, database campuslens
+echo [CampusLens] Redis:    localhost:6379
 echo [CampusLens] Backend:  http://localhost:8080/api/health
 echo [CampusLens] Frontend: http://localhost:5173
 echo [CampusLens] Algorithm: http://localhost:8000/api/v1/health
@@ -67,6 +71,22 @@ if "%LANDMARK_COUNT%"=="10" (
   exit /b 0
 )
 echo [CampusLens] Unexpected landmark row count: %LANDMARK_COUNT%
+exit /b 1
+
+:verify_redis
+echo [CampusLens] Verifying Redis queue...
+set "REDIS_PONG="
+where docker >nul 2>nul
+if not errorlevel 1 (
+  for /f "tokens=*" %%C in ('docker exec campuslens-redis redis-cli PING 2^>nul') do set "REDIS_PONG=%%C"
+) else (
+  for /f "tokens=*" %%C in ('wsl.exe -d Ubuntu -- docker exec campuslens-redis redis-cli PING 2^>nul') do set "REDIS_PONG=%%C"
+)
+if /I "%REDIS_PONG%"=="PONG" (
+  echo [OK] Redis queue responded PONG.
+  exit /b 0
+)
+echo [CampusLens] Redis queue verification failed: %REDIS_PONG%
 exit /b 1
 
 :wait_http

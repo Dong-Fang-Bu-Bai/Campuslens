@@ -2,6 +2,9 @@ from fastapi import APIRouter, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 import json
 import math
+import asyncio
+import threading
+import torch
 from datetime import datetime, timezone
 from PIL import Image
 from app.utils.image_processor import ImageProcessor
@@ -17,6 +20,9 @@ router = APIRouter()
 
 search_service = None
 feature_service = None
+inference_semaphore = asyncio.Semaphore(1)
+active_inference = 0
+active_lock = threading.Lock()
 
 
 def init_services(fs, ss):
@@ -38,7 +44,14 @@ async def search_landmark(file: UploadFile = File(...)):
         if not is_valid_size:
             raise HTTPException(status_code=400, detail=size_error)
         
-        results = search_service.search_similar_landmarks(image, top_k=Config.TOP_K_RESULTS)
+        async with inference_semaphore:
+            _change_active(1)
+            try:
+                results = await asyncio.to_thread(
+                    search_service.search_similar_landmarks, image, Config.TOP_K_RESULTS
+                )
+            finally:
+                _change_active(-1)
         
         if not results:
             raise HTTPException(status_code=404, detail="No similar landmarks found")
@@ -52,7 +65,7 @@ async def search_landmark(file: UploadFile = File(...)):
         )
         
         return JSONResponse(
-            content=response_data.dict(),
+            content=response_data.model_dump(),
             status_code=200,
             media_type="application/json; charset=utf-8"
         )
@@ -61,6 +74,72 @@ async def search_landmark(file: UploadFile = File(...)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
+
+@router.post("/search/batch")
+async def search_landmark_batch(files: list[UploadFile] = File(...)):
+    if not files:
+        raise HTTPException(status_code=400, detail="files must not be empty")
+    if len(files) > Config.SEARCH_BATCH_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"batch size exceeds {Config.SEARCH_BATCH_SIZE}",
+        )
+
+    items = [None] * len(files)
+    valid_images = []
+    valid_indices = []
+    for index, file in enumerate(files):
+        is_valid, error_msg = ImageProcessor.validate_file(file)
+        if not is_valid:
+            items[index] = _batch_error("invalid_image", error_msg, False)
+            continue
+        try:
+            image = ImageProcessor.read_image(file)
+            valid_size, size_error = ImageProcessor.validate_image_size(image)
+            if not valid_size:
+                items[index] = _batch_error("invalid_image", size_error, False)
+                continue
+            valid_images.append(image)
+            valid_indices.append(index)
+        except Exception as exc:
+            items[index] = _batch_error("invalid_image", str(exc), False)
+
+    if valid_images:
+        async with inference_semaphore:
+            _change_active(1)
+            try:
+                try:
+                    batch_results = await asyncio.to_thread(
+                        search_service.search_batch, valid_images, Config.TOP_K_RESULTS
+                    )
+                    if len(batch_results) != len(valid_images):
+                        raise RuntimeError("batch result count does not match input count")
+                    for original_index, results in zip(valid_indices, batch_results):
+                        items[original_index] = _batch_success(results)
+                except torch.cuda.OutOfMemoryError:
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    for original_index, image in zip(valid_indices, valid_images):
+                        try:
+                            result = await asyncio.to_thread(
+                                search_service.search_similar_landmarks, image, Config.TOP_K_RESULTS
+                            )
+                            items[original_index] = _batch_success(result)
+                        except torch.cuda.OutOfMemoryError as exc:
+                            if torch.cuda.is_available():
+                                torch.cuda.empty_cache()
+                            items[original_index] = _batch_error("cuda_oom", str(exc), True)
+                        except Exception as exc:
+                            items[original_index] = _batch_error("inference_failed", str(exc), True)
+            except Exception as exc:
+                for original_index in valid_indices:
+                    if items[original_index] is None:
+                        items[original_index] = _batch_error("inference_failed", str(exc), True)
+            finally:
+                _change_active(-1)
+
+    return {"items": items}
 
 
 @router.post("/index/rebuild")
@@ -93,16 +172,57 @@ async def get_index_stats():
 
 @router.get("/health")
 async def health_check():
+    extractor = getattr(feature_service, "extractor", None)
+    device = getattr(extractor, "device", "uninitialized")
     response_data = {
         "status": "healthy",
         "service": "CampusLens AI Search",
-        "version": Config.APP_VERSION
+        "version": Config.APP_VERSION,
+        "device": device,
+        "gpuName": torch.cuda.get_device_name(0) if device == "cuda" and torch.cuda.is_available() else None,
+        "cudaVersion": torch.version.cuda,
+        "modelReady": extractor is not None,
+        "maxBatchSize": Config.SEARCH_BATCH_SIZE,
+        "activeInference": active_inference,
+        "mixedPrecision": bool(getattr(extractor, "mixed_precision", False)),
     }
     return JSONResponse(
         content=response_data,
         status_code=200,
         media_type="application/json; charset=utf-8"
     )
+
+
+def _batch_error(code: str, message: str, retryable: bool):
+    return {
+        "success": False,
+        "response": None,
+        "errorCode": code,
+        "message": message,
+        "retryable": retryable,
+    }
+
+
+def _batch_success(results):
+    low_confidence = all(r["confidenceLevel"] == "low" for r in results)
+    return {
+        "success": True,
+        "response": {
+            "results": results,
+            "lowConfidence": low_confidence,
+            "message": "Low match score, manual verification recommended"
+            if low_confidence else "Search successful",
+        },
+        "errorCode": None,
+        "message": None,
+        "retryable": False,
+    }
+
+
+def _change_active(delta: int):
+    global active_inference
+    with active_lock:
+        active_inference += delta
 
 
 @router.post("/adaptation/correction-samples", response_model=CorrectionSampleResponse)
@@ -132,7 +252,7 @@ async def receive_correction_sample(payload: CorrectionSampleRequest):
     )
     _append_correction_manifest(payload, response_data, best.landmarkCode)
     return JSONResponse(
-        content=response_data.dict(),
+        content=response_data.model_dump(),
         status_code=200,
         media_type="application/json; charset=utf-8"
     )
@@ -167,7 +287,7 @@ def _append_correction_manifest(
         "bestLandmarkCode": best_landmark_code,
         "feedbackType": payload.feedbackType,
         "comment": payload.comment,
-        "topResults": [item.dict() for item in payload.topResults],
+        "topResults": [item.model_dump() for item in payload.topResults],
         "suggestAccept": response.suggestAccept,
         "reviewScore": response.reviewScore,
         "reason": response.reason,

@@ -14,7 +14,8 @@
 - ✅ **地标级别检索**: 返回 Top-5 地标类别而非单张图片
 - ✅ **经验匹配分**: 基于马氏距离和 sigmoid 归一化提供稳定区分度
 - ✅ **匹配等级**: 返回 high/medium/low 等级辅助人工核验，不解释为概率置信度
-- ✅ **CPU/GPU 双模式**: 自动检测硬件，GPU 加速提升 6-7 倍性能
+- ✅ **CPU/GPU 双模式**: `DEVICE=auto` 优先 CUDA，启动时不可用则回退 CPU
+- ✅ **有界 GPU 推理**: 单执行信号量、批量上限 2、CUDA OOM 自动拆为单图重试
 
 ---
 
@@ -61,10 +62,16 @@ datasets/landmarks/
 #### Step 1: 安装依赖
 ```bash
 cd algorithm
-pip install -r requirements.txt
+install_cpu.bat
 ```
 
-**注意**：默认安装 CPU 版本。如需 GPU 加速，见下方「GPU 加速」章节。
+RTX 4060 本机推荐把环境和缓存放在 D 盘：
+
+```powershell
+create_gpu_env.bat
+```
+
+该脚本创建 `D:\AnaConda\envs\campuslens-gpu`，安装 `torch 2.1.2+cu121`、`torchvision 0.16.2+cu121`，并保留 `faiss-cpu==1.7.4`。Windows 不安装 `faiss-gpu`，安装版本依据 PyTorch 官方历史版本说明。
 
 #### Step 2: 验证模型文件
 ```bash
@@ -91,6 +98,10 @@ cp .env.example .env
 - `DEVICE`: 计算设备 (`auto`/`cpu`/`cuda`)，默认 `auto` 自动检测
 - `IMAGE_SIZE`: 输入图片尺寸，默认 `518`
 - `BATCH_SIZE`: 批处理大小，默认 `32`
+- `SEARCH_BATCH_SIZE`: 在线批量接口上限，默认 `2`
+- `MIXED_PRECISION`: 混合精度开关，默认 `false`
+
+后端消费者通过 `CAMPUSLENS_SEARCH_BATCH_WAIT_MS` 控制聚合等待时间，默认最多等待 100ms 后调用本批量接口。
 
 #### Step 4: 启动服务
 ```bash
@@ -134,7 +145,13 @@ GET /api/v1/health
 {
   "status": "healthy",
   "service": "CampusLens AI Search",
-  "version": "1.0.0"
+  "version": "1.0.0",
+  "device": "cuda",
+  "gpuName": "NVIDIA GeForce RTX 4060 Laptop GPU",
+  "cudaVersion": "12.1",
+  "modelReady": true,
+  "maxBatchSize": 2,
+  "activeInference": 0
 }
 ```
 
@@ -177,7 +194,19 @@ file: <image_file>
 - `confidenceLevel`: 兼容字段，表示匹配等级（high/medium/low）
 - `mahalanobisDistance`: 马氏距离，越小表示查询点越接近地标分布中心
 
-### 3. 重建统计参数
+### 3. 批量地标检索
+
+```bash
+POST /api/v1/search/batch
+Content-Type: multipart/form-data
+
+files: <image_file_1>
+files: <image_file_2>
+```
+
+响应中的 `items` 与上传顺序一致。单项坏图返回 `success=false` 和不可重试的 `invalid_image`；推理异常返回可重试错误。CUDA OOM 时先清理缓存并拆为单图重试一次，不会静默切换 CPU。
+
+### 4. 重建统计参数
 ```bash
 POST /api/v1/index/rebuild
 ```
@@ -321,29 +350,21 @@ python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
 python app/main.py
 ```
 
-#### Linux/Mac
+#### Linux（NVIDIA GPU）
 
 ```bash
-# 卸载 CPU 版本
-pip uninstall -y torch torchvision faiss-cpu
-
-# 安装 GPU 版本（CUDA 11.8）
-pip install torch==2.1.2+cu118 torchvision==0.16.2+cu118 --index-url https://download.pytorch.org/whl/cu118
-pip install faiss-gpu==1.7.4
+# 安装 PyTorch CUDA 12.1 与公共依赖；FAISS 保持 CPU 版本
+pip install -r requirements-gpu.txt -r requirements-test.txt
 
 # 重启服务
 python app/main.py
 ```
 
-### 性能对比
+macOS 不支持 CUDA，使用 `requirements-cpu.txt`。Windows 不安装 `faiss-gpu`。
 
-| 操作 | CPU (i7) | GPU (RTX 3060) | 加速比 |
-|------|----------|----------------|--------|
-| 单图特征提取 | ~200ms | ~30ms | **6.7x** ⚡ |
-| Top-5 检索 | ~5ms | ~2ms | 2.5x |
-| 统计参数构建 (250张) | ~60s | ~15s | **4x** ⚡ |
+### 验证结果
 
-**建议**：如果有 NVIDIA GPU，强烈建议启用 GPU 加速！
+当前 RTX 4060 环境使用 GPU 执行 DINOv2 特征提取，FAISS 继续在 CPU 上检索。CPU/GPU Top-5 一致性、批量推理显存和异步并发结果见 [GPU 与异步队列测试记录](../docs/13_gpu_async_queue_test.md)。
 
 详细 GPU 配置见：[GPU_SUPPORT.md](GPU_SUPPORT.md)
 

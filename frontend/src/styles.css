@@ -2509,6 +2509,38 @@ h3 {
   margin: 0 0 12px;
 }
 
+.job-progress {
+  min-height: 66px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.job-progress div {
+  display: grid;
+  gap: 5px;
+}
+
+.job-progress strong {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.job-progress span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.job-progress .ghost-btn {
+  flex: 0 0 auto;
+}
+
 .result-carousel-toolbar button {
   border: 1px solid rgba(148, 163, 184, 0.2);
   background: rgba(255, 255, 255, 0.04);
@@ -2567,5 +2599,12 @@ h3 {
   .preferences-dock {
     width: 100%;
     justify-content: space-between;
+  }
+}
+
+@media (max-width: 620px) {
+  .job-progress {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

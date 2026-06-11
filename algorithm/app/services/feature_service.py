@@ -17,7 +17,8 @@ class FeatureService:
         
         self.extractor = DINOv2Extractor(
             model_path=Config.DINO_MODEL_PATH,
-            device=Config.DEVICE
+            device=Config.DEVICE,
+            mixed_precision=Config.MIXED_PRECISION,
         )
         self.faiss_manager = FAISSManager(dimension=self.extractor.feature_dim)
         

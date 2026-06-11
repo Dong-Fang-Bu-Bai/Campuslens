@@ -21,8 +21,8 @@ Campuslens/
 
 - 前端：Vue
 - 后端：Spring Boot + REST API
-- 算法服务：Python FastAPI
-- 数据库：MySQL
+- 算法服务：Python FastAPI + PyTorch CUDA，CUDA 不可用时可在启动阶段回退 CPU
+- 数据与队列：MySQL 权威任务状态 + Redis 活跃任务集合、ready 列表、processing/delayed 有序集合
 - 图片与向量：本地目录、向量文件、地标统计参数文件
 - 检索策略：DINOv2 提取图像特征，按地标样本特征估计均值和协方差，使用马氏距离与 sigmoid 经验匹配分返回 Top-5
 - 地图能力：基于校园平面图做静态标注，不做实时导航和室内导航
@@ -36,7 +36,15 @@ scripts\1_check-env.cmd
 scripts\2_start-dev.cmd
 ```
 
-默认启动流程会使用本机 Docker Desktop 启动 MySQL，并以 `mysql` profile 启动后端。如果需要做完整联调验收，直接运行：
+默认启动流程会使用本机 Docker Desktop 启动 MySQL 和 Redis，并启动后端异步任务消费者。算法脚本优先读取 `CAMPUSLENS_ALGORITHM_PYTHON`，未设置时使用 `D:\AnaConda\envs\campuslens-gpu\python.exe`，再回退项目 `.venv`。
+
+首次创建 D 盘 GPU 环境可执行：
+
+```powershell
+algorithm\create_gpu_env.bat
+```
+
+如果需要做完整联调验收，直接运行：
 
 ```powershell
 scripts\4_verify-dev.cmd
@@ -61,7 +69,7 @@ algorithm/data/faiss_index/landmark_stats.pkl
 
 模型权重和 `algorithm/data/faiss_index/` 下的索引产物不提交到 GitHub。模型文件按 `algorithm/README.md` 下载到本地；索引和统计参数在算法服务启动后通过 `POST /api/v1/index/rebuild` 自动生成。
 
-MySQL 是默认启动路径，不需要额外设置 `CAMPUSLENS_BACKEND_PROFILE`。`start-database.cmd` 会优先使用 Windows 原生 Docker Desktop，并内置识别本机推荐路径 `D:\Tools\Docker\Docker\resources\bin`；如果 Docker daemon 未就绪，脚本会尝试启动 `D:\Tools\Docker\Docker\Docker Desktop.exe` 并等待就绪。如果 Windows 侧没有 Docker，但 WSL 中存在 `Ubuntu` 发行版且已配置 Docker Engine，则会自动通过 WSL 执行 `docker compose up -d mysql`。数据库首次创建容器数据卷时会自动执行 `database/schema.sql` 和 `database/seed_landmarks.sql`，初始化基础表和 L01-L10 地标数据。账号和密码仅用于本地开发，可通过 `.env` 覆盖；仓库只提交 `.env.example`。
+MySQL 和 Redis 是默认启动路径，不需要额外设置 `CAMPUSLENS_BACKEND_PROFILE`。`start-database.cmd` 会优先使用 Windows 原生 Docker Desktop；Docker Compose 为 Redis 启用 AOF 和独立数据卷。数据库结构和基础种子数据统一由 Flyway 管理，Compose 不再挂载另一套建表脚本。
 
 ```powershell
 scripts\2_start-dev.cmd
@@ -205,6 +213,8 @@ git push origin main --tags
 - [前端界面原型说明](docs/08_frontend_prototype.md)
 - [接口联调说明](docs/09_interface_runbook.md)
 - [第四周 V3 M1/M2/M4/M5 实施记录](docs/11_v3_m1_m2_m4_m5.md)
+- [运行、回归与并发测试记录](docs/12_runtime_and_concurrency_test.md)
+- [GPU 与 Redis 异步队列测试记录](docs/13_gpu_async_queue_test.md)
 
 ## 接口契约
 

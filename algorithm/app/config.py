@@ -25,12 +25,14 @@ class Config:
     DEVICE = os.getenv("DEVICE", "auto")  # auto, cpu, or cuda
     IMAGE_SIZE = int(os.getenv("IMAGE_SIZE", "518"))  # DINOv2 默认 518x518
     BATCH_SIZE = int(os.getenv("BATCH_SIZE", "32"))
+    SEARCH_BATCH_SIZE = int(os.getenv("SEARCH_BATCH_SIZE", "2"))
+    MIXED_PRECISION = os.getenv("MIXED_PRECISION", "false").lower() == "true"
     
     TOP_K_RESULTS = int(os.getenv("TOP_K_RESULTS", "5"))
     # Legacy compatibility setting. Current FAISS scoring uses app.utils.scoring thresholds.
     CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.5"))
     
-    ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png"}
+    ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
     MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", "10485760"))  # 10MB
     
     @classmethod

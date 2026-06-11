@@ -7,6 +7,9 @@ set "ALGORITHM_DIR=%ROOT%\algorithm"
 set "PID_DIR=%ROOT%\.run"
 set "PID_FILE=%PID_DIR%\algorithm.pid"
 set "RUNNER=%PID_DIR%\run-algorithm.cmd"
+set "ALGORITHM_PYTHON=%CAMPUSLENS_ALGORITHM_PYTHON%"
+if "%ALGORITHM_PYTHON%"=="" if exist "D:\AnaConda\envs\campuslens-gpu\python.exe" set "ALGORITHM_PYTHON=D:\AnaConda\envs\campuslens-gpu\python.exe"
+if "%ALGORITHM_PYTHON%"=="" set "ALGORITHM_PYTHON=%ALGORITHM_DIR%\.venv\Scripts\python.exe"
 
 if not exist "%ALGORITHM_DIR%\app\main.py" (
   echo [CampusLens] algorithm\app\main.py not found.
@@ -14,8 +17,8 @@ if not exist "%ALGORITHM_DIR%\app\main.py" (
   exit /b 1
 )
 
-if not exist "%ALGORITHM_DIR%\.venv\Scripts\python.exe" (
-  echo [CampusLens] Algorithm virtual environment not found: algorithm\.venv
+if not exist "%ALGORITHM_PYTHON%" (
+  echo [CampusLens] Algorithm Python not found: %ALGORITHM_PYTHON%
   echo [CampusLens] Run the model setup first, then retry.
   pause
   exit /b 1
@@ -65,7 +68,7 @@ echo [CampusLens] Starting algorithm service on http://localhost:8000 ...
 >> "%RUNNER%" echo title CampusLens Algorithm
 >> "%RUNNER%" echo set PYTHONUTF8=1
 >> "%RUNNER%" echo cd /d "%ALGORITHM_DIR%"
->> "%RUNNER%" echo .\.venv\Scripts\python.exe app\main.py
+>> "%RUNNER%" echo "%ALGORITHM_PYTHON%" app\main.py
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$p = Start-Process -FilePath 'cmd.exe' -ArgumentList '/k','""%RUNNER%""' -PassThru; Set-Content -Path '%PID_FILE%' -Value $p.Id -Encoding ascii"

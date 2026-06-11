@@ -30,11 +30,15 @@ if errorlevel 1 (
 )
 
 echo [CampusLens] Checking algorithm local files...
-if exist "%~dp0..\algorithm\.venv\Scripts\python.exe" (
-  echo [OK] algorithm\.venv\Scripts\python.exe
-  "%~dp0..\algorithm\.venv\Scripts\python.exe" --version
+set "ALGORITHM_PYTHON=%CAMPUSLENS_ALGORITHM_PYTHON%"
+if "%ALGORITHM_PYTHON%"=="" if exist "D:\AnaConda\envs\campuslens-gpu\python.exe" set "ALGORITHM_PYTHON=D:\AnaConda\envs\campuslens-gpu\python.exe"
+if "%ALGORITHM_PYTHON%"=="" set "ALGORITHM_PYTHON=%~dp0..\algorithm\.venv\Scripts\python.exe"
+
+if exist "%ALGORITHM_PYTHON%" (
+  echo [OK] Algorithm Python: %ALGORITHM_PYTHON%
+  "%ALGORITHM_PYTHON%" --version
 ) else (
-  echo [MISSING] algorithm\.venv\Scripts\python.exe is not available.
+  echo [MISSING] Algorithm Python is not available: %ALGORITHM_PYTHON%
 )
 
 if exist "%~dp0..\algorithm\models\dinov2_model.pth" (

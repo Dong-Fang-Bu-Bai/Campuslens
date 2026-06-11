@@ -5,15 +5,19 @@ from PIL import Image
 from typing import Union
 import numpy as np
 from pathlib import Path
+from contextlib import nullcontext
 
 
 class DINOv2Extractor:
-    def __init__(self, model_path: str, device: str = None):
+    def __init__(self, model_path: str, device: str = None, mixed_precision: bool = False):
         # 自动检测设备或使用指定设备
         if device == "auto" or device is None:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
         else:
             self.device = device
+        if self.device == "cuda" and not torch.cuda.is_available():
+            raise RuntimeError("DEVICE=cuda but CUDA is not available")
+        self.mixed_precision = bool(mixed_precision and self.device == "cuda")
         
         print(f"Loading DINOv2 model from: {model_path}")
         print(f"Using device: {self.device}")
@@ -106,7 +110,7 @@ class DINOv2Extractor:
     def get_feature_dimension(self) -> int:
         # 使用 518x518 作为测试输入（DINOv2 默认尺寸）
         dummy_input = torch.randn(1, 3, 518, 518).to(self.device)
-        with torch.no_grad():
+        with torch.inference_mode(), self._autocast():
             features = self._extract_features(dummy_input)
             if isinstance(features, dict):
                 return features['x_norm_clstoken'].shape[-1]
@@ -125,7 +129,7 @@ class DINOv2Extractor:
         
         input_tensor = self.transform(image).unsqueeze(0).to(self.device)
         
-        with torch.no_grad():
+        with torch.inference_mode(), self._autocast():
             features = self._extract_features(input_tensor)
             
             if isinstance(features, dict):
@@ -149,7 +153,7 @@ class DINOv2Extractor:
         
         batch_tensor = torch.stack(tensors).to(self.device)
         
-        with torch.no_grad():
+        with torch.inference_mode(), self._autocast():
             features = self._extract_features(batch_tensor)
             
             if isinstance(features, dict):
@@ -163,3 +167,8 @@ class DINOv2Extractor:
             feature_vectors = F.normalize(feature_vectors, p=2, dim=-1)
         
         return feature_vectors.cpu().numpy()
+
+    def _autocast(self):
+        if not self.mixed_precision:
+            return nullcontext()
+        return torch.autocast(device_type="cuda", dtype=torch.float16)

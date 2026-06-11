@@ -16,12 +16,12 @@ pip install -r requirements.txt
 install_gpu.bat
 ```
 
-**Linux/Mac:**
+**Linux（NVIDIA GPU）：**
 ```bash
-pip uninstall -y torch torchvision faiss-cpu
-pip install torch==2.1.2+cu118 torchvision==0.16.2+cu118 --index-url https://download.pytorch.org/whl/cu118
-pip install faiss-gpu==1.7.4
+pip install -r requirements-gpu.txt -r requirements-test.txt
 ```
+
+FAISS 仍使用 `faiss-cpu==1.7.4`；当前索引只有 10 个地标类别，迁移到 GPU 没有实际收益。macOS 不支持 CUDA，使用 CPU requirements。
 
 验证 GPU 是否可用：
 ```bash
