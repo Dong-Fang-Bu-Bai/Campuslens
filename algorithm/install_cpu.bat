@@ -17,7 +17,7 @@ echo Step 2: Installing CPU versions...
 
 echo.
 echo ========================================
-echo ✅ CPU installation complete!
+echo [OK] CPU installation complete!
 echo ========================================
 echo.
 echo Verifying...

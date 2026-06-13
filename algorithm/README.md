@@ -60,18 +60,30 @@ datasets/landmarks/
 ### 方式一：本地运行
 
 #### Step 1: 安装依赖
-```bash
-cd algorithm
-install_cpu.bat
-```
 
-RTX 4060 本机推荐把环境和缓存放在 D 盘：
+Windows + NVIDIA GPU 的已验证方式：
 
 ```powershell
+cd algorithm
 create_gpu_env.bat
 ```
 
-该脚本创建 `D:\AnaConda\envs\campuslens-gpu`，安装 `torch 2.1.2+cu121`、`torchvision 0.16.2+cu121`，并保留 `faiss-cpu==1.7.4`。Windows 不安装 `faiss-gpu`，安装版本依据 PyTorch 官方历史版本说明。
+该脚本创建 `D:\AnaConda\envs\campuslens-gpu`，并组合安装：
+
+- `requirements.txt`：FastAPI、FAISS CPU、Pillow、NumPy、SciPy 等公共依赖；
+- `requirements-gpu.txt`：`torch 2.1.2+cu121`、`torchvision 0.16.2+cu121`；
+- `requirements-test.txt`：pytest 与 httpx。
+
+Windows 不安装 `faiss-gpu`。当前索引规模很小，FAISS 留在 CPU，DINOv2 使用 CUDA 推理。
+
+已有 Python 环境时可显式指定解释器：
+
+```powershell
+$env:CAMPUSLENS_ALGORITHM_PYTHON = "D:\path\to\python.exe"
+.\install_gpu.bat
+```
+
+CPU 环境使用相同方式设置解释器后执行 `install_cpu.bat`。不要只运行 `pip install -r requirements.txt`，该文件不包含 PyTorch。
 
 #### Step 2: 验证模型文件
 ```bash
@@ -115,8 +127,8 @@ python app/main.py
 ============================================================
 Loading DINOv2 model from: ./models/dinov2_model.pth
 Using device: cpu (或 cuda 如果有 GPU)
-📦 模型文件大小: 330.33 MB
-✅ 加载完整的 DINOv2 模型对象
+[INFO] 模型文件大小: 330.33 MB
+[OK] 加载完整的 DINOv2 模型对象
 DINOv2 model loaded successfully. Feature dimension: 768
 ```
 
@@ -211,19 +223,33 @@ files: <image_file_2>
 POST /api/v1/index/rebuild
 ```
 
-响应：
+主实例返回 HTTP `202`，响应体中的任务状态为 `building`：
 ```json
 {
-  "status": "success",
-  "message": "统计参数重建完成",
-  "data": {
-    "total_images": 250,
-    "total_landmarks": 10
-  }
+  "status": "building",
+  "rebuildJobId": "<uuid>",
+  "createdAt": "2026-06-13T10:00:00+00:00",
+  "error": null
 }
 ```
 
-### 4. 统计参数状态
+### 5. 重建任务状态
+
+```bash
+GET /api/v1/index/rebuild/{job_id}
+```
+
+状态依次为 `building`、`switching`，最终进入 `completed` 或 `failed`。完成后响应包含 `indexVersion`。
+
+### 6. 运行状态
+
+```bash
+GET /api/v1/runtime/status
+```
+
+返回实例身份、基准模型版本、活动索引版本、SAR 状态版本、漂移指标和最近重建任务。索引重建只允许 `instanceRole=primary` 的实例发起。
+
+### 7. 统计参数状态
 ```bash
 GET /api/v1/index/stats
 ```
@@ -238,6 +264,15 @@ GET /api/v1/index/stats
 }
 ```
 
+## 终端编码兼容
+
+Python 源码和文档使用 UTF-8，但 Windows 默认终端代码页不一定能编码 emoji。运行日志和工具脚本统一使用 `[OK]`、`[INFO]`、`[WARN]`、`[ERROR]`，不再输出 `✅` 等图标。统一启动脚本会设置 `PYTHONUTF8=1`；手工运行时可执行：
+
+```powershell
+$env:PYTHONUTF8 = "1"
+python app\main.py
+```
+
 ---
 
 ## 🧮 算法原理
@@ -246,7 +281,7 @@ GET /api/v1/index/stats
 
 算法服务维护基准与持续 SAR 两条轨道。用户请求的 `sarMode` 默认仍为 `false`；`SAR_ENABLED` 是运维级总开关。`sarMode=false` 始终使用不可变基准模型；`sarMode=true` 的同模式微批次联合执行 SAM 更新，并原子保存归一化层、优化器、低熵 EMA 和版本状态。SAR 状态跨重启恢复，低熵 EMA 或锚点漂移越界时自动回退。管理员采纳反馈只加入待发布数据集；CPU 子进程完成候选索引后，服务在短暂维护窗口内原子切换索引并创建新的 SAR generation。
 
-默认配置保持 `SAR_ENABLED=false`。可运行 `python benchmark_sar.py --limit-per-landmark 1` 对比基线与 SAR 的 Top-1、Top-5、延迟和 GPU 峰值显存。
+当前代码和 `.env.example` 默认 `SAR_ENABLED=true`，表示服务允许请求使用 SAR；单次检索的 `sarMode` 默认仍为 `false`。可运行 `python benchmark_sar.py --limit-per-landmark 1` 对比基线与 SAR 的 Top-1、Top-5、延迟和 GPU 峰值显存。
 
 ### 核心思想
 
@@ -331,29 +366,20 @@ score = 1 / (1 + exp(3.0 · (log(d + 1) - log(901))))
 
 本服务支持 **CPU 和 GPU 双模式**，可根据硬件配置灵活切换。
 
-### 默认：CPU 模式
+### Windows GPU 环境（当前日常配置）
 
-```bash
-# 安装 CPU 版本依赖
-pip install -r requirements.txt
-
-# 启动服务（自动使用 CPU）
-python app/main.py
+```powershell
+create_gpu_env.bat
+D:\AnaConda\envs\campuslens-gpu\python.exe -c "import torch, faiss; print(torch.__version__); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'); print(faiss.__version__)"
 ```
 
-### 启用 GPU 加速
+预期为 PyTorch `2.1.2+cu121`、CUDA 可用、识别本机 NVIDIA GPU、FAISS `1.7.4`。
 
-#### Windows
+### Windows CPU 环境
 
-```bash
-# 运行 GPU 安装脚本
-install_gpu.bat
-
-# 验证 GPU 是否可用
-python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
-
-# 重启服务（自动检测并使用 GPU）
-python app/main.py
+```powershell
+$env:CAMPUSLENS_ALGORITHM_PYTHON = "D:\path\to\python.exe"
+.\install_cpu.bat
 ```
 
 #### Linux（NVIDIA GPU）
@@ -366,7 +392,7 @@ pip install -r requirements-gpu.txt -r requirements-test.txt
 python app/main.py
 ```
 
-macOS 不支持 CUDA，使用 `requirements-cpu.txt`。Windows 不安装 `faiss-gpu`。
+macOS 不支持 CUDA，使用 `requirements-cpu.txt`。Windows 和当前项目均不安装 `faiss-gpu`。
 
 ### 验证结果
 

@@ -29,19 +29,36 @@ Campuslens/
 
 ## 本地演示启动
 
-Windows 下可以直接使用 `scripts/` 目录中的脚本启动后端、前端和算法服务：
+### 首次安装
+
+当前 Windows + NVIDIA GPU 的已验证安装方式为：
+
+```powershell
+Copy-Item algorithm\.env.example algorithm\.env
+algorithm\create_gpu_env.bat
+```
+
+`create_gpu_env.bat` 会在 `D:\AnaConda\envs\campuslens-gpu` 创建 Python 3.10 环境，并通过 `requirements.txt`、`requirements-gpu.txt`、`requirements-test.txt` 安装公共依赖、PyTorch CUDA 12.1 和测试依赖。FAISS 在 Windows 下固定使用 CPU 版，DINOv2 推理由 CUDA 执行。
+
+如果已经有其他 Python 环境，可设置 `CAMPUSLENS_ALGORITHM_PYTHON` 后运行 `algorithm\install_gpu.bat` 或 `algorithm\install_cpu.bat`。单独执行 `pip install -r algorithm\requirements.txt` 不包含 PyTorch，不能完成算法运行环境安装。
+
+还需要准备离线模型：
+
+```text
+algorithm/models/dinov2_model.pth
+```
+
+前端依赖在首次执行 `start.cmd` 且 `node_modules` 不存在时自动安装；后端 Maven 依赖由 `mvn spring-boot:run` 自动解析。`start.cmd` 不会自动安装算法 Python 依赖或下载模型。
+
+### 日常启动
+
+Windows 下使用 `scripts/` 目录中的统一脚本启动后端、前端和算法服务：
 
 ```powershell
 scripts\start.cmd
 ```
 
 默认启动流程会使用本机 Docker Desktop 启动 MySQL 和 Redis，并启动后端异步任务消费者。算法脚本优先读取 `CAMPUSLENS_ALGORITHM_PYTHON`，未设置时使用 `D:\AnaConda\envs\campuslens-gpu\python.exe`，再回退项目 `.venv`。
-
-首次创建 D 盘 GPU 环境可执行：
-
-```powershell
-algorithm\create_gpu_env.bat
-```
 
 如果需要做完整联调验收，直接运行：
 
@@ -60,6 +77,19 @@ scripts\verify.cmd
 
 前端监听 `0.0.0.0`，可将 `localhost` 替换为本机局域网 IP。HTTPS 使用包含当前局域网 IP SAN 的自签名证书，首次访问需要在每台设备和浏览器中确认继续访问；IP 变化后启动脚本会自动重新生成证书。页面通过 Vite 同源代理访问 `/api` 和 `/uploads`，不会产生混合内容问题。
 
+### 接口命名口径
+
+- 浏览器提交检索：`POST /api/search/upload`，只负责返回 `202`、`jobId`、`jobToken` 和 `searchRecordId`。
+- 浏览器轮询结果：`GET /api/search/jobs/{jobId}`，任务终态为 `success`、`low_confidence` 或 `failed`。
+- 后端任务消费者：正式检索调用算法服务 `POST /api/v1/search/batch`；`POST /api/v1/search` 保留给单图诊断。
+- 管理员运维：通过后端 `/api/admin/algorithm/runtime`、`/api/admin/index/rebuild` 和 `/api/admin/index/rebuild/{jobId}` 操作，不由前端直连算法服务。
+
+后端路径参数使用 Java 风格 `{jobId}`；算法服务的重建状态路径在 FastAPI 文档中显示为 `{job_id}`。两者都是路径占位符，不代表 JSON 字段改名。
+
+### 终端编码
+
+项目源码与 Markdown 统一使用 UTF-8。运行代码不再输出 emoji 图标，状态前缀统一使用 `[OK]`、`[INFO]`、`[WARN]`、`[ERROR]`，避免 Windows 默认代码页在打印 `✅` 等字符时触发编码错误。统一启动脚本已设置 `PYTHONUTF8=1`；手工启动算法服务时也可先设置 `$env:PYTHONUTF8 = "1"`。
+
 本地演示默认依赖 MySQL。算法服务需要本机准备模型文件和索引参数：
 
 ```text
@@ -69,7 +99,7 @@ algorithm/data/faiss_index/metadata.pkl
 algorithm/data/faiss_index/landmark_stats.pkl
 ```
 
-模型权重和 `algorithm/data/faiss_index/` 下的索引产物不提交到 GitHub。模型文件按 `algorithm/README.md` 下载到本地；索引和统计参数在算法服务启动后通过 `POST /api/v1/index/rebuild` 自动生成。
+模型权重和 `algorithm/data/faiss_index/` 下的索引产物不提交到 GitHub。模型文件按 `algorithm/README.md` 下载到本地；索引和统计参数在算法服务启动后通过 `POST /api/v1/index/rebuild` 触发生成。
 
 MySQL 和 Redis 是默认启动路径，不需要额外设置 `CAMPUSLENS_BACKEND_PROFILE`。`start.cmd` 会检查当前环境、启动 Windows Docker Desktop、复用 Compose 镜像和命名数据卷，再启动后端、双算法实例及单个 HTTPS 前端。数据库结构和基础种子数据统一由 Flyway 管理。
 

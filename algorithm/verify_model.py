@@ -14,53 +14,53 @@ def verify_model(model_path: str):
     model_file = Path(model_path)
 
     if not model_file.exists():
-        print(f"❌ 模型文件不存在: {model_path}")
+        print(f"[ERROR] 模型文件不存在: {model_path}")
         print(f"   当前工作目录: {Path.cwd()}")
         print(f"   请确认路径是否正确")
         return False
 
     file_size_mb = model_file.stat().st_size / (1024 * 1024)
-    print(f"✅ 模型文件存在: {model_path}")
-    print(f"📦 文件大小: {file_size_mb:.2f} MB")
+    print(f"[OK] 模型文件存在: {model_path}")
+    print(f"[INFO] 文件大小: {file_size_mb:.2f} MB")
 
     if file_size_mb < 100:
-        print(f"⚠️  警告: 文件过小，可能下载不完整")
+        print("[WARN] 文件过小，可能下载不完整")
         return False
 
     try:
-        print("\n🔄 尝试加载模型...")
+        print("\n[INFO] 尝试加载模型...")
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"💻 使用设备: {device}")
+        print(f"[INFO] 使用设备: {device}")
 
         model = torch.load(model_path, map_location=device, weights_only=False)
 
         if isinstance(model, dict):
             keys = list(model.keys())
-            print(f"📋 模型格式: 字典")
-            print(f"🔑 包含键: {keys[:5]}{'...' if len(keys) > 5 else ''}")
+            print("[INFO] 模型格式: 字典")
+            print(f"[INFO] 包含键: {keys[:5]}{'...' if len(keys) > 5 else ''}")
 
             if 'state_dict' in model or 'model_state_dict' in model:
-                print("✅ 检测到标准 state_dict 格式")
+                print("[OK] 检测到标准 state_dict 格式")
             else:
-                print("⚠️  非标准格式，可能需要特殊处理")
+                print("[WARN] 非标准格式，可能需要特殊处理")
 
         elif hasattr(model, 'eval'):
-            print(f"📋 模型格式: {type(model).__name__}")
+            print(f"[INFO] 模型格式: {type(model).__name__}")
             if hasattr(model, 'forward_features'):
-                print("✅ 检测到 DINOv2 模型对象（含 forward_features）")
+                print("[OK] 检测到 DINOv2 模型对象（含 forward_features）")
             else:
-                print("⚠️  模型缺少 forward_features 方法")
+                print("[WARN] 模型缺少 forward_features 方法")
 
         else:
-            print(f"📋 模型格式: {type(model)}")
-            print("⚠️  未知格式")
+            print(f"[INFO] 模型格式: {type(model)}")
+            print("[WARN] 未知格式")
 
-        print("\n✅ 模型验证通过！")
+        print("\n[OK] 模型验证通过")
         print("=" * 60)
         return True
 
     except Exception as e:
-        print(f"\n❌ 模型加载失败: {e}")
+        print(f"\n[ERROR] 模型加载失败: {e}")
         import traceback
         traceback.print_exc()
         return False

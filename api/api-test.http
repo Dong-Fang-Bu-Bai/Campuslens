@@ -6,6 +6,7 @@
 @guestClientToken = local-browser-token-00000001
 @jobId = 请复制上传接口返回的 jobId
 @jobToken = 请复制上传接口返回的 jobToken
+@rebuildJobId = 请复制索引重建接口返回的 rebuildJobId
 
 ### 后端健康检查
 GET {{backend}}/api/health
@@ -191,6 +192,14 @@ Content-Type: application/json
 POST {{backend}}/api/admin/index/rebuild
 Authorization: Bearer {{adminToken}}
 
+### 查询算法运行状态
+GET {{backend}}/api/admin/algorithm/runtime
+Authorization: Bearer {{adminToken}}
+
+### 查询索引重建任务
+GET {{backend}}/api/admin/index/rebuild/{{rebuildJobId}}
+Authorization: Bearer {{adminToken}}
+
 ### 算法服务检索接口
 POST {{algorithm}}/api/v1/search
 Content-Type: multipart/form-data; boundary=CampusLensAlgorithmBoundary
@@ -220,6 +229,12 @@ Content-Type: image/jpeg
 
 ### 算法服务重建统计参数
 POST {{algorithm}}/api/v1/index/rebuild
+
+### 算法服务查询重建任务
+GET {{algorithm}}/api/v1/index/rebuild/{{rebuildJobId}}
+
+### 算法服务运行状态
+GET {{algorithm}}/api/v1/runtime/status
 
 ### 算法服务统计参数状态
 GET {{algorithm}}/api/v1/index/stats
