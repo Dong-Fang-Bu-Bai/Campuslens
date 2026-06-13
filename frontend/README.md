@@ -12,8 +12,10 @@ npm run dev
 默认地址：
 
 ```text
-http://localhost:5173
+https://localhost:5173
 ```
+
+开发服务器固定使用 `frontend/certs/campuslens-dev.p12` 自签名证书。首次访问需要在浏览器中确认继续访问。
 
 ## 页面结构
 

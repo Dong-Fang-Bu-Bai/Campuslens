@@ -1,7 +1,9 @@
 import json
 import tempfile
 import unittest
+import io
 from pathlib import Path
+from PIL import Image
 
 try:
     from fastapi import FastAPI
@@ -29,6 +31,15 @@ class AdaptationEndpointTests(unittest.TestCase):
         self.tmpdir = Path(tempfile.mkdtemp(prefix="campuslens-adaptation-"))
         Config.CORRECTION_SAMPLES_MANIFEST = self.tmpdir / "correction_samples.jsonl"
 
+    def post_sample(self, payload):
+        buffer = io.BytesIO()
+        Image.new("RGB", (32, 32), "blue").save(buffer, format="JPEG")
+        return self.client.post(
+            "/api/v1/adaptation/correction-samples",
+            data={"payload": json.dumps(payload)},
+            files={"file": ("sample.jpg", buffer.getvalue(), "image/jpeg")},
+        )
+
     def tearDown(self):
         Config.CORRECTION_SAMPLES_MANIFEST = self.original_manifest
         for child in self.tmpdir.glob("*"):
@@ -36,7 +47,7 @@ class AdaptationEndpointTests(unittest.TestCase):
         self.tmpdir.rmdir()
 
     def test_valid_correction_sample_is_written_to_manifest(self):
-        response = self.client.post("/api/v1/adaptation/correction-samples", json={
+        response = self.post_sample({
             "sampleId": 12,
             "feedbackId": 8,
             "searchRecordId": 99,
@@ -46,15 +57,16 @@ class AdaptationEndpointTests(unittest.TestCase):
             "feedbackType": "wrong",
             "comment": "confirmed by user",
             "topResults": [
-                {"rank": 1, "landmarkCode": "L01", "score": 0.91, "mahalanobisDistance": 3.1},
-                {"rank": 2, "landmarkCode": "L02", "score": 0.72, "mahalanobisDistance": 6.4},
+                {"rank": 1, "landmarkCode": "L02", "score": 0.95, "mahalanobisDistance": 3.1},
+                {"rank": 2, "landmarkCode": "L01", "score": 0.05, "mahalanobisDistance": 6.4},
             ],
         })
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertTrue(body["suggestAccept"])
-        self.assertEqual(body["nextAction"], "append_to_manifest")
+        self.assertEqual(body["nextAction"], "pending_index")
+        self.assertFalse(body["activated"])
 
         lines = Config.CORRECTION_SAMPLES_MANIFEST.read_text(encoding="utf-8").splitlines()
         self.assertEqual(len(lines), 1)
@@ -63,7 +75,7 @@ class AdaptationEndpointTests(unittest.TestCase):
         self.assertEqual(record["confirmedLandmarkCode"], "L02")
 
     def test_empty_top_results_is_rejected(self):
-        response = self.client.post("/api/v1/adaptation/correction-samples", json={
+        response = self.post_sample({
             "sampleId": 12,
             "feedbackId": 8,
             "searchRecordId": 99,
@@ -75,7 +87,7 @@ class AdaptationEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_missing_required_field_is_rejected(self):
-        response = self.client.post("/api/v1/adaptation/correction-samples", json={
+        response = self.post_sample({
             "sampleId": 12,
             "feedbackId": 8,
             "imageUrl": "/uploads/sample.jpg",

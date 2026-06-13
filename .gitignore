@@ -56,6 +56,8 @@ logs/
 frontend/.vite/
 frontend/.nuxt/
 frontend/.output/
+frontend/certs/*.p12
+frontend/certs/*.txt
 
 # Java and Gradle local files
 .gradle/
@@ -81,6 +83,9 @@ algorithm/data/faiss_index/*
 !algorithm/data/faiss_index/.gitkeep
 algorithm/data/features/*
 !algorithm/data/features/.gitkeep
+algorithm/data/model_versions/*
+algorithm/data/logs/*
+algorithm/data/adaptation/*.jsonl
 
 # Large dataset images and archives should be managed separately unless the team confirms otherwise
 datasets/**/*.jpg

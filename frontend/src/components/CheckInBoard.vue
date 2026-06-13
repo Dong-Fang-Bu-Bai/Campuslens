@@ -68,7 +68,8 @@ import { reactive, watch } from 'vue'
 const props = defineProps({
   landmarks: { type: Array, default: () => [] },
   items: { type: Array, default: () => [] },
-  labels: { type: Object, required: true }
+  labels: { type: Object, required: true },
+  language: { type: String, default: 'zh' }
 })
 
 const emit = defineEmits(['create', 'like', 'reply', 'refresh', 'select-landmark'])
@@ -100,6 +101,6 @@ function submitReply(item) {
 
 function formatTime(value) {
   if (!value) return '-'
-  return new Date(value).toLocaleString('zh-CN', { hour12: false })
+  return new Date(value).toLocaleString(props.language === 'zh' ? 'zh-CN' : 'en-US', { hour12: false })
 }
 </script>

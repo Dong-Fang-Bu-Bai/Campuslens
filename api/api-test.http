@@ -2,7 +2,8 @@
 @algorithm = http://localhost:8000
 @adminToken = 请先执行管理员登录并复制返回 token
 @userToken = 请先执行用户登录并复制返回 token
-@guestId = guest-local-demo
+@guestId = 请先执行游客身份接口并复制返回 guestId
+@guestClientToken = local-browser-token-00000001
 @jobId = 请复制上传接口返回的 jobId
 @jobToken = 请复制上传接口返回的 jobToken
 
@@ -14,6 +15,14 @@ GET {{backend}}/api/landmarks
 
 ### 获取地标详情
 GET {{backend}}/api/landmarks/1
+
+### 幂等获取游客身份
+POST {{backend}}/api/guests
+Content-Type: application/json
+
+{
+  "clientToken": "{{guestClientToken}}"
+}
 
 ### 普通用户注册
 POST {{backend}}/api/auth/register
@@ -220,7 +229,16 @@ GET {{algorithm}}/api/v1/health
 
 ### 算法服务校正样本接收接口
 POST {{algorithm}}/api/v1/adaptation/correction-samples
-Content-Type: application/json
+Content-Type: multipart/form-data; boundary=CampusLensCorrectionBoundary
+
+--CampusLensCorrectionBoundary
+Content-Disposition: form-data; name="file"; filename="sample.jpg"
+Content-Type: image/jpeg
+
+< ../datasets/landmarks/L02_academic_auditorium/L02_back_day_010.jpg
+--CampusLensCorrectionBoundary
+Content-Disposition: form-data; name="payload"
+Content-Type: text/plain; charset=utf-8
 
 {
   "sampleId": 1,
@@ -236,3 +254,4 @@ Content-Type: application/json
     { "rank": 2, "landmarkCode": "L02", "score": 0.72, "mahalanobisDistance": 6.45 }
   ]
 }
+--CampusLensCorrectionBoundary--

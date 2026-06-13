@@ -14,6 +14,11 @@ public record SearchJobStatus(
     String message,
     String errorCode,
     List<SearchResult> results,
+    Boolean sarApplied,
+    String trustLevel,
+    String modelVersion,
+    String algorithmInstanceId,
+    String algorithmInstanceRole,
     LocalDateTime queuedAt,
     LocalDateTime startedAt,
     LocalDateTime finishedAt) {

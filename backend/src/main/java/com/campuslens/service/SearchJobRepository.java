@@ -34,15 +34,16 @@ public class SearchJobRepository {
       String fileSha256,
       String uploadUrl,
       String guestId,
-      Long userId) {
+      Long userId,
+      boolean sarMode) {
     KeyHolder keyHolder = new GeneratedKeyHolder();
     jdbcTemplate.update(connection -> {
       PreparedStatement ps = connection.prepareStatement("""
           INSERT INTO search_record (
             upload_image_url, top_results_json, status, low_confidence, message,
             guest_id, user_id, user_type, job_id, job_token_hash, idempotency_key,
-            file_sha256, queued_at
-          ) VALUES (?, '[]', 'queued', FALSE, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+            file_sha256, queued_at, sar_mode
+          ) VALUES (?, '[]', 'queued', FALSE, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
           """, new String[] {"id"});
       ps.setString(1, uploadUrl);
       ps.setString(2, "任务已进入检索队列");
@@ -53,22 +54,24 @@ public class SearchJobRepository {
       ps.setString(7, tokenHash);
       ps.setString(8, idempotencyKey);
       ps.setString(9, fileSha256);
+      ps.setBoolean(10, sarMode);
       return ps;
     }, keyHolder);
     long id = Objects.requireNonNull(keyHolder.getKey()).longValue();
     if ("guest".equals(guestId)) {
       jdbcTemplate.update("UPDATE search_record SET guest_id = ? WHERE id = ?", "guest#" + id, id);
     }
-    return new JobRow(id, jobId, fileSha256, uploadUrl, "queued", false);
+    return new JobRow(id, jobId, fileSha256, uploadUrl, "queued", false, sarMode);
   }
 
   public Optional<JobRow> findByIdempotencyKey(String key) {
     return jdbcTemplate.query("""
-        SELECT id, job_id, file_sha256, upload_image_url, status, queued_at
+        SELECT id, job_id, file_sha256, upload_image_url, status, queued_at, sar_mode
         FROM search_record WHERE idempotency_key = ?
         """, (rs, rowNum) -> new JobRow(
         rs.getLong("id"), rs.getString("job_id"), rs.getString("file_sha256"),
-        rs.getString("upload_image_url"), rs.getString("status"), rs.getTimestamp("queued_at") != null), key)
+        rs.getString("upload_image_url"), rs.getString("status"), rs.getTimestamp("queued_at") != null,
+        rs.getBoolean("sar_mode")), key)
         .stream().findFirst();
   }
 
@@ -84,6 +87,8 @@ public class SearchJobRepository {
     return jdbcTemplate.query("""
         SELECT id, job_id, status, attempt_count, upload_image_url, guest_id,
                low_confidence, message, error_code, top_results_json,
+               sar_mode, sar_applied, trust_level, base_model_version, index_version, sar_state_version,
+               algorithm_instance_id, algorithm_instance_role,
                queued_at, started_at, finished_at
         FROM search_record WHERE job_id = ?
         """, (rs, rowNum) -> new SearchJobStatus(
@@ -97,6 +102,11 @@ public class SearchJobRepository {
         rs.getString("message"),
         rs.getString("error_code"),
         parseResults(rs.getString("top_results_json")),
+        rs.getObject("sar_applied") == null ? null : rs.getBoolean("sar_applied"),
+        rs.getString("trust_level"),
+        combinedVersion(rs.getString("base_model_version"), rs.getString("index_version"), rs.getString("sar_state_version")),
+        rs.getString("algorithm_instance_id"),
+        rs.getString("algorithm_instance_role"),
         toLocalDateTime(rs.getTimestamp("queued_at")),
         toLocalDateTime(rs.getTimestamp("started_at")),
         toLocalDateTime(rs.getTimestamp("finished_at"))), jobId).stream().findFirst();
@@ -128,25 +138,36 @@ public class SearchJobRepository {
 
   private Optional<WorkerJob> findWorkerJob(String jobId) {
     return jdbcTemplate.query("""
-        SELECT id, job_id, upload_image_url, attempt_count, worker_id
+        SELECT id, job_id, upload_image_url, attempt_count, worker_id, sar_mode
         FROM search_record WHERE job_id = ?
         """, (rs, rowNum) -> new WorkerJob(
         rs.getLong("id"), rs.getString("job_id"), rs.getString("upload_image_url"),
-        rs.getInt("attempt_count"), rs.getString("worker_id")), jobId)
+        rs.getInt("attempt_count"), rs.getString("worker_id"), rs.getBoolean("sar_mode")), jobId)
         .stream().findFirst();
   }
 
-  public boolean complete(WorkerJob job, List<SearchResult> results, boolean lowConfidence, String message) {
+  public Optional<Boolean> findSarMode(String jobId) {
+    return jdbcTemplate.query("SELECT sar_mode FROM search_record WHERE job_id = ?",
+        (rs, rowNum) -> rs.getBoolean("sar_mode"), jobId).stream().findFirst();
+  }
+
+  public boolean complete(WorkerJob job, List<SearchResult> results, boolean lowConfidence, String message,
+      Boolean sarApplied, String trustLevel, String baseModelVersion, String indexVersion, String sarStateVersion,
+      String algorithmInstanceId, String algorithmInstanceRole) {
     SearchResult best = results.isEmpty() ? null : results.get(0);
     return jdbcTemplate.update("""
         UPDATE search_record
         SET top_results_json = ?, best_landmark_id = ?, best_score = ?, status = ?,
             low_confidence = ?, message = ?, error_code = NULL, lease_until = NULL,
-            worker_id = NULL, next_attempt_at = NULL,
+            worker_id = NULL, next_attempt_at = NULL, sar_applied = ?, trust_level = ?,
+            base_model_version = ?, index_version = ?, sar_state_version = ?,
+            algorithm_instance_id = ?, algorithm_instance_role = ?,
             finished_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND status = 'processing' AND worker_id = ? AND attempt_count = ?
         """, toJson(results), best == null ? null : best.landmarkId(), best == null ? null : best.score(),
         lowConfidence ? "low_confidence" : "success", lowConfidence, message,
+        sarApplied, trustLevel, baseModelVersion, indexVersion, sarStateVersion,
+        algorithmInstanceId, algorithmInstanceRole,
         job.id(), job.workerId(), job.attemptCount()) == 1;
   }
 
@@ -214,13 +235,13 @@ public class SearchJobRepository {
 
   public List<JobRow> findUnadmittedJobs(int limit) {
     return jdbcTemplate.query("""
-        SELECT id, job_id, file_sha256, upload_image_url, status, queued_at
+        SELECT id, job_id, file_sha256, upload_image_url, status, queued_at, sar_mode
         FROM search_record
         WHERE status = 'queued' AND job_id IS NOT NULL AND queued_at IS NULL
         ORDER BY id LIMIT ?
         """, (rs, rowNum) -> new JobRow(
         rs.getLong("id"), rs.getString("job_id"), rs.getString("file_sha256"),
-        rs.getString("upload_image_url"), rs.getString("status"), false), Math.max(1, limit));
+        rs.getString("upload_image_url"), rs.getString("status"), false, rs.getBoolean("sar_mode")), Math.max(1, limit));
   }
 
   public boolean isActive(String jobId) {
@@ -271,9 +292,10 @@ public class SearchJobRepository {
       String fileSha256,
       String uploadImageUrl,
       String status,
-      boolean admitted) {}
+      boolean admitted,
+      boolean sarMode) {}
   public record JobOwnership(Long userId, String tokenHash) {}
-  public record WorkerJob(long id, String jobId, String uploadImageUrl, int attemptCount, String workerId) {}
+  public record WorkerJob(long id, String jobId, String uploadImageUrl, int attemptCount, String workerId, boolean sarMode) {}
   public record RecoveryResult(List<String> requeuedJobIds, List<String> failedJobIds) {}
   private record ExpiredJob(long id, String jobId, int attemptCount, String workerId, LocalDateTime leaseUntil) {}
 
@@ -296,5 +318,11 @@ public class SearchJobRepository {
           result.score(), result.confidenceLevel(), result.mahalanobisDistance(), result.summary(),
           result.locationText(), result.mapX(), result.mapY());
     }
+  }
+
+  private String combinedVersion(String base, String index, String sar) {
+    if (base == null && index == null && sar == null) return null;
+    return String.join("@", base == null ? "unknown" : base, index == null ? "unknown" : index,
+        sar == null ? "baseline" : sar);
   }
 }

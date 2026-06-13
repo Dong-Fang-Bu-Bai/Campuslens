@@ -9,8 +9,6 @@ import com.campuslens.model.SessionUser;
 import java.sql.PreparedStatement;
 import java.util.List;
 import java.util.Objects;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
@@ -18,16 +16,17 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class CheckInService {
-  private static final Pattern GUEST_SEQUENCE_PATTERN = Pattern.compile("^guest#([1-9]\\d*)$");
   private final JdbcTemplate jdbcTemplate;
+  private final GuestIdentityService guestIdentityService;
 
-  public CheckInService(JdbcTemplate jdbcTemplate) {
+  public CheckInService(JdbcTemplate jdbcTemplate, GuestIdentityService guestIdentityService) {
     this.jdbcTemplate = jdbcTemplate;
+    this.guestIdentityService = guestIdentityService;
   }
 
   public List<CheckInRecord> list(Long landmarkId, int limit, SessionUser user, String guestId) {
     int safeLimit = Math.max(1, Math.min(limit, 100));
-    String viewerGuestId = user == null ? normalizeGuestId(guestId) : null;
+    String viewerGuestId = user == null ? guestIdentityService.optionalExisting(guestId) : null;
     String sql = """
         SELECT ci.id, ci.landmark_id, l.code, l.name, l.location_text, l.map_x, l.map_y,
                ci.user_id, ci.guest_id, ci.display_name, ci.message,
@@ -68,7 +67,7 @@ public class CheckInService {
 
   public CheckInRecord create(CheckInRequest request, SessionUser user) {
     ensureLandmarkExists(request.landmarkId());
-    String guestId = user == null ? normalizeGuestId(request.guestId()) : null;
+    String guestId = user == null ? guestIdentityService.requireExisting(request.guestId()) : null;
     String displayName = user == null ? guestId : user.username();
     KeyHolder keyHolder = new GeneratedKeyHolder();
     jdbcTemplate.update(connection -> {
@@ -90,7 +89,7 @@ public class CheckInService {
   public LikeResponse toggleLike(Long checkInId, SessionUser user, String guestId) {
     ensureCheckInExists(checkInId);
     Long userId = user == null ? null : user.userId();
-    String normalizedGuestId = user == null ? normalizeGuestId(guestId) : null;
+    String normalizedGuestId = user == null ? guestIdentityService.requireExisting(guestId) : null;
     Long likeId = findLikeId(checkInId, userId, normalizedGuestId);
     boolean liked;
     if (likeId == null) {
@@ -110,7 +109,7 @@ public class CheckInService {
 
   public CheckInReply addReply(Long checkInId, CheckInReplyRequest request, SessionUser user) {
     ensureCheckInExists(checkInId);
-    String guestId = user == null ? normalizeGuestId(request.guestId()) : null;
+    String guestId = user == null ? guestIdentityService.requireExisting(request.guestId()) : null;
     String displayName = user == null ? guestId : user.username();
     KeyHolder keyHolder = new GeneratedKeyHolder();
     jdbcTemplate.update(connection -> {
@@ -201,21 +200,4 @@ public class CheckInService {
     jdbcTemplate.update("UPDATE check_in SET reply_count = ? WHERE id = ?", count == null ? 0 : count, checkInId);
   }
 
-  private synchronized String normalizeGuestId(String guestId) {
-    if (guestId != null && GUEST_SEQUENCE_PATTERN.matcher(guestId.trim()).matches()) {
-      return guestId.trim();
-    }
-    int max = jdbcTemplate.queryForList(
-            "SELECT guest_id FROM check_in WHERE guest_id LIKE 'guest#%'",
-            String.class).stream()
-        .mapToInt(this::guestSequence)
-        .max()
-        .orElse(0);
-    return "guest#" + (max + 1);
-  }
-
-  private int guestSequence(String guestId) {
-    Matcher matcher = GUEST_SEQUENCE_PATTERN.matcher(guestId == null ? "" : guestId.trim());
-    return matcher.matches() ? Integer.parseInt(matcher.group(1)) : 0;
-  }
 }

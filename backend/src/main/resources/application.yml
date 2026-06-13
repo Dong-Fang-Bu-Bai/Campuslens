@@ -37,9 +37,10 @@ spring:
       max-request-size: 10MB
 
 campuslens:
+  dataset-dir: ${CAMPUSLENS_DATASET_DIR:../datasets/landmarks}
   algorithm:
     base-url: http://localhost:8000
-    base-urls: ${CAMPUSLENS_ALGORITHM_URLS:http://localhost:8000}
+    base-urls: ${CAMPUSLENS_ALGORITHM_URLS:http://localhost:8000,http://localhost:8001}
     connect-timeout-ms: ${CAMPUSLENS_ALGORITHM_CONNECT_TIMEOUT_MS:3000}
     read-timeout-ms: ${CAMPUSLENS_ALGORITHM_READ_TIMEOUT_MS:20000}
     unhealthy-cooldown-ms: ${CAMPUSLENS_ALGORITHM_UNHEALTHY_COOLDOWN_MS:10000}

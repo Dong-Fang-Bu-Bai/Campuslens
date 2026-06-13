@@ -54,6 +54,7 @@ public class SearchJobWorker {
       queue.promoteDue(batchSize);
       List<SearchJobRepository.WorkerJob> jobs = new ArrayList<>();
       List<SearchQueue.ReservedJob> reservations = new ArrayList<>();
+      Boolean batchSarMode = null;
       long deadline = System.nanoTime() + Duration.ofMillis(batchWaitMs).toNanos();
       while (jobs.size() < batchSize) {
         SearchQueue.ReservedJob reservation = queue.reserve(Duration.ofSeconds(leaseSeconds));
@@ -62,10 +63,23 @@ public class SearchJobWorker {
           sleepBriefly();
           continue;
         }
+        Boolean reservedMode = repository.findSarMode(reservation.jobId()).orElse(null);
+        if (reservedMode == null) {
+          queue.acknowledge(reservation, true);
+          continue;
+        }
+        if (batchSarMode != null && !batchSarMode.equals(reservedMode)) {
+          queue.release(reservation);
+          break;
+        }
         repository.claim(reservation.jobId(), workerId, leaseSeconds, maxAttempts).ifPresentOrElse(job -> {
           jobs.add(job);
           reservations.add(reservation);
         }, () -> queue.acknowledge(reservation, false));
+        if (!jobs.isEmpty() && batchSarMode == null) batchSarMode = reservedMode;
+        // SAR performs two gradient passes and a final inference pass. Keep it
+        // single-item on an 8 GB GPU when primary and secondary are both resident.
+        if (Boolean.TRUE.equals(batchSarMode)) break;
       }
       if (jobs.isEmpty()) return;
       process(jobs, reservations);
@@ -79,7 +93,10 @@ public class SearchJobWorker {
       List<SearchQueue.ReservedJob> reservations) {
     try {
       List<Path> paths = jobs.stream().map(job -> pathFromUrl(job.uploadImageUrl())).toList();
-      List<AlgorithmBatchItem> responses = algorithm.searchBatch(paths);
+      boolean sarMode = jobs.get(0).sarMode();
+      List<AlgorithmBatchItem> responses = sarMode
+          ? algorithm.searchBatch(paths, true)
+          : algorithm.searchBatch(paths);
       for (int i = 0; i < jobs.size(); i++) {
         SearchJobRepository.WorkerJob job = jobs.get(i);
         SearchQueue.ReservedJob reservation = reservations.get(i);
@@ -93,7 +110,10 @@ public class SearchJobWorker {
             .flatMap(java.util.Optional::stream)
             .toList();
         boolean low = item.response().lowConfidence();
-        boolean completed = repository.complete(job, results, low, normalizeMessage(item.response().message()));
+        boolean completed = repository.complete(job, results, low, normalizeMessage(item.response().message()),
+            item.response().sarApplied(), item.response().trustLevel(),
+            item.response().baseModelVersion(), item.response().indexVersion(), item.response().sarStateVersion(),
+            item.response().instanceId(), item.response().instanceRole());
         queue.acknowledge(reservation, completed);
       }
     } catch (RuntimeException ex) {

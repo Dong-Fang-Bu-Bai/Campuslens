@@ -10,8 +10,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.PreparedStatement;
 import java.util.List;
 import java.util.Objects;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
@@ -19,13 +17,17 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class SearchRecordService {
-  private static final Pattern GUEST_SEQUENCE_PATTERN = Pattern.compile("^guest#([1-9]\\d*)$");
   private final JdbcTemplate jdbcTemplate;
   private final ObjectMapper objectMapper;
+  private final GuestIdentityService guestIdentityService;
 
-  public SearchRecordService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+  public SearchRecordService(
+      JdbcTemplate jdbcTemplate,
+      ObjectMapper objectMapper,
+      GuestIdentityService guestIdentityService) {
     this.jdbcTemplate = jdbcTemplate;
     this.objectMapper = objectMapper;
+    this.guestIdentityService = guestIdentityService;
   }
 
   public SearchRecordCreation create(
@@ -38,7 +40,9 @@ public class SearchRecordService {
       String guestId) {
     SearchResult best = results.isEmpty() ? null : results.get(0);
     String topResultsJson = toJson(results);
-    String storedGuestId = userId == null ? normalizeGuestId(guestId) : "user-" + userId;
+    String storedGuestId = userId == null
+        ? guestIdentityService.requireExisting(guestId)
+        : "user-" + userId;
     KeyHolder keyHolder = new GeneratedKeyHolder();
     jdbcTemplate.update(connection -> {
       PreparedStatement ps = connection.prepareStatement("""
@@ -198,32 +202,6 @@ public class SearchRecordService {
     } catch (JsonProcessingException ex) {
       throw new IllegalArgumentException("Top-5 结果快照序列化失败");
     }
-  }
-
-  private synchronized String normalizeGuestId(String guestId) {
-    if (guestId == null || guestId.isBlank()) {
-      return nextGuestId();
-    }
-    String value = guestId.trim();
-    if (GUEST_SEQUENCE_PATTERN.matcher(value).matches()) {
-      return value;
-    }
-    return nextGuestId();
-  }
-
-  private String nextGuestId() {
-    int max = jdbcTemplate.queryForList(
-            "SELECT guest_id FROM search_record WHERE user_type = 'guest' AND guest_id LIKE 'guest#%'",
-            String.class).stream()
-        .mapToInt(this::guestSequence)
-        .max()
-        .orElse(0);
-    return "guest#" + (max + 1);
-  }
-
-  private int guestSequence(String guestId) {
-    Matcher matcher = GUEST_SEQUENCE_PATTERN.matcher(guestId == null ? "" : guestId.trim());
-    return matcher.matches() ? Integer.parseInt(matcher.group(1)) : 0;
   }
 
   public record SearchRecordCreation(Long id, String guestId) {

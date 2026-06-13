@@ -9,7 +9,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.io.ByteArrayResource;
@@ -30,7 +29,6 @@ public class AlgorithmSearchClient {
   private final ObjectMapper objectMapper;
   private final RestTemplate restTemplate;
   private final List<String> baseUrls;
-  private final AtomicInteger nextUrl = new AtomicInteger();
   private final Map<String, Long> unhealthyUntil = new ConcurrentHashMap<>();
   private final long unhealthyCooldownMs;
 
@@ -55,37 +53,45 @@ public class AlgorithmSearchClient {
   }
 
   public AlgorithmSearchResponse search(MultipartFile file) {
+    return search(file, false);
+  }
+
+  public AlgorithmSearchResponse search(MultipartFile file, boolean sarMode) {
     HttpEntity<MultiValueMap<String, Object>> request;
     try {
-      request = multipartRequest(file);
+      request = multipartRequest(file, sarMode);
     } catch (IOException ex) {
       throw new AlgorithmSearchException("读取上传图片失败", ex);
     }
 
-    String baseUrl = nextBaseUrl();
-    try {
-      ResponseEntity<String> response = restTemplate.postForEntity(
-          baseUrl + "/api/v1/search",
-          request,
-          String.class);
-      if (!response.getStatusCode().is2xxSuccessful()) {
-        throw new AlgorithmSearchException(
-            "算法服务返回 HTTP " + response.getStatusCode().value() + ": " + response.getBody());
+    AlgorithmSearchException last = null;
+    for (String baseUrl : candidateUrls()) {
+      try {
+        ResponseEntity<String> response = restTemplate.postForEntity(
+            baseUrl + "/api/v1/search", request, String.class);
+        return objectMapper.readValue(response.getBody(), AlgorithmSearchResponse.class);
+      } catch (IOException ex) {
+        throw new AlgorithmSearchException("解析算法服务响应失败", ex);
+      } catch (HttpStatusCodeException ex) {
+        if (!ex.getStatusCode().is5xxServerError()) {
+          throw new AlgorithmSearchException(
+              "算法服务返回 HTTP " + ex.getStatusCode().value() + ": " + ex.getResponseBodyAsString(), ex);
+        }
+        markUnhealthy(baseUrl);
+        last = new AlgorithmSearchException("算法实例 " + baseUrl + " 返回 HTTP " + ex.getStatusCode().value(), ex);
+      } catch (RestClientException ex) {
+        markUnhealthy(baseUrl);
+        last = new AlgorithmSearchException("调用算法实例 " + baseUrl + " 失败：" + ex.getMessage(), ex);
       }
-      return objectMapper.readValue(response.getBody(), AlgorithmSearchResponse.class);
-    } catch (IOException ex) {
-      throw new AlgorithmSearchException("解析算法服务响应失败", ex);
-    } catch (HttpStatusCodeException ex) {
-      markUnhealthyOnServerError(baseUrl, ex);
-      throw new AlgorithmSearchException(
-          "算法服务返回 HTTP " + ex.getStatusCode().value() + ": " + ex.getResponseBodyAsString(), ex);
-    } catch (RestClientException ex) {
-      markUnhealthy(baseUrl);
-      throw new AlgorithmSearchException("调用算法服务失败：" + ex.getMessage(), ex);
     }
+    throw last == null ? new AlgorithmSearchException("没有可用的算法实例") : last;
   }
 
   public List<AlgorithmBatchItem> searchBatch(List<Path> paths) {
+    return searchBatch(paths, false);
+  }
+
+  public List<AlgorithmBatchItem> searchBatch(List<Path> paths, boolean sarMode) {
     MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
     try {
       for (Path path : paths) {
@@ -103,41 +109,59 @@ public class AlgorithmSearchClient {
     } catch (IOException ex) {
       throw new AlgorithmSearchException("读取排队图片失败", ex);
     }
+    body.add("sarMode", String.valueOf(sarMode));
 
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-    String baseUrl = nextBaseUrl();
-    try {
-      ResponseEntity<String> response = restTemplate.postForEntity(
-          baseUrl + "/api/v1/search/batch",
-          new HttpEntity<>(body, headers),
-          String.class);
-      if (!response.getStatusCode().is2xxSuccessful()) {
-        throw new AlgorithmSearchException("算法批量接口返回 HTTP " + response.getStatusCode().value());
+    AlgorithmSearchException last = null;
+    for (String baseUrl : candidateUrls()) {
+      try {
+        ResponseEntity<String> response = restTemplate.postForEntity(
+            baseUrl + "/api/v1/search/batch", new HttpEntity<>(body, headers), String.class);
+        AlgorithmBatchResponse batch = objectMapper.readValue(response.getBody(), AlgorithmBatchResponse.class);
+        if (batch.items() == null || batch.items().size() != paths.size()) {
+          throw new AlgorithmSearchException("算法批量响应数量与请求不一致");
+        }
+        return batch.items();
+      } catch (IOException ex) {
+        throw new AlgorithmSearchException("解析算法批量响应失败", ex);
+      } catch (HttpStatusCodeException ex) {
+        if (!ex.getStatusCode().is5xxServerError()) {
+          throw new AlgorithmSearchException(
+              "算法批量接口返回 HTTP " + ex.getStatusCode().value() + ": " + ex.getResponseBodyAsString(), ex);
+        }
+        markUnhealthy(baseUrl);
+        last = new AlgorithmSearchException("算法实例 " + baseUrl + " 返回 HTTP " + ex.getStatusCode().value(), ex);
+      } catch (RestClientException ex) {
+        markUnhealthy(baseUrl);
+        last = new AlgorithmSearchException("调用算法实例 " + baseUrl + " 失败：" + ex.getMessage(), ex);
       }
-      AlgorithmBatchResponse batch = objectMapper.readValue(response.getBody(), AlgorithmBatchResponse.class);
-      if (batch.items() == null || batch.items().size() != paths.size()) {
-        throw new AlgorithmSearchException("算法批量响应数量与请求不一致");
-      }
-      return batch.items();
-    } catch (IOException ex) {
-      throw new AlgorithmSearchException("解析算法批量响应失败", ex);
-    } catch (HttpStatusCodeException ex) {
-      markUnhealthyOnServerError(baseUrl, ex);
-      throw new AlgorithmSearchException(
-          "算法批量接口返回 HTTP " + ex.getStatusCode().value() + ": " + ex.getResponseBodyAsString(), ex);
-    } catch (RestClientException ex) {
-      markUnhealthy(baseUrl);
-      throw new AlgorithmSearchException("调用算法批量接口失败：" + ex.getMessage(), ex);
     }
+    throw last == null ? new AlgorithmSearchException("没有可用的算法实例") : last;
   }
 
-  public AdaptationResponse submitCorrectionSample(AdaptationRequest payload) {
-    String baseUrl = nextBaseUrl();
+  public AdaptationResponse submitCorrectionSample(AdaptationRequest payload, Path imagePath) {
+    String baseUrl = primaryBaseUrl();
     try {
+      byte[] imageBytes = Files.readAllBytes(imagePath);
+      ByteArrayResource imageResource = new ByteArrayResource(imageBytes) {
+        @Override
+        public String getFilename() {
+          return imagePath.getFileName().toString();
+        }
+      };
+      HttpHeaders imageHeaders = new HttpHeaders();
+      imageHeaders.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+      MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+      body.add("file", new HttpEntity<>(imageResource, imageHeaders));
+      HttpHeaders payloadHeaders = new HttpHeaders();
+      payloadHeaders.setContentType(MediaType.TEXT_PLAIN);
+      body.add("payload", new HttpEntity<>(objectMapper.writeValueAsString(payload), payloadHeaders));
+      HttpHeaders headers = new HttpHeaders();
+      headers.setContentType(MediaType.MULTIPART_FORM_DATA);
       ResponseEntity<String> response = restTemplate.postForEntity(
           baseUrl + "/api/v1/adaptation/correction-samples",
-          payload,
+          new HttpEntity<>(body, headers),
           String.class);
       if (!response.getStatusCode().is2xxSuccessful()) {
         throw new AlgorithmSearchException(
@@ -156,19 +180,25 @@ public class AlgorithmSearchClient {
     }
   }
 
-  private String nextBaseUrl() {
+  private String primaryBaseUrl() {
     if (baseUrls.isEmpty()) {
       throw new AlgorithmSearchException("未配置算法服务地址");
     }
-    int start = Math.floorMod(nextUrl.getAndIncrement(), baseUrls.size());
-    long now = System.currentTimeMillis();
-    for (int offset = 0; offset < baseUrls.size(); offset++) {
-      String candidate = baseUrls.get((start + offset) % baseUrls.size());
-      if (unhealthyUntil.getOrDefault(candidate, 0L) <= now) {
-        return candidate;
-      }
+    return baseUrls.get(0);
+  }
+
+  private List<String> candidateUrls() {
+    if (baseUrls.isEmpty()) {
+      throw new AlgorithmSearchException("未配置算法服务地址");
     }
-    return baseUrls.get(start);
+    long now = System.currentTimeMillis();
+    List<String> healthy = baseUrls.stream()
+        .filter(url -> unhealthyUntil.getOrDefault(url, 0L) <= now)
+        .toList();
+    if (!healthy.isEmpty()) {
+      return healthy;
+    }
+    return baseUrls;
   }
 
   private void markUnhealthyOnServerError(String baseUrl, HttpStatusCodeException ex) {
@@ -181,7 +211,36 @@ public class AlgorithmSearchClient {
     unhealthyUntil.put(baseUrl, System.currentTimeMillis() + unhealthyCooldownMs);
   }
 
-  private HttpEntity<MultiValueMap<String, Object>> multipartRequest(MultipartFile file) throws IOException {
+  public Map<String, Object> runtimeStatus() {
+    return getJson("/api/v1/runtime/status");
+  }
+
+  public Map<String, Object> startIndexRebuild() {
+    String baseUrl = primaryBaseUrl();
+    try {
+      ResponseEntity<String> response = restTemplate.postForEntity(
+          baseUrl + "/api/v1/index/rebuild", HttpEntity.EMPTY, String.class);
+      return objectMapper.readValue(response.getBody(), Map.class);
+    } catch (IOException | RestClientException ex) {
+      throw new AlgorithmSearchException("启动索引重建失败：" + ex.getMessage(), ex);
+    }
+  }
+
+  public Map<String, Object> indexRebuildStatus(String jobId) {
+    return getJson("/api/v1/index/rebuild/" + jobId);
+  }
+
+  private Map<String, Object> getJson(String path) {
+    String baseUrl = primaryBaseUrl();
+    try {
+      String body = restTemplate.getForObject(baseUrl + path, String.class);
+      return objectMapper.readValue(body, Map.class);
+    } catch (IOException | RestClientException ex) {
+      throw new AlgorithmSearchException("读取算法运行状态失败：" + ex.getMessage(), ex);
+    }
+  }
+
+  private HttpEntity<MultiValueMap<String, Object>> multipartRequest(MultipartFile file, boolean sarMode) throws IOException {
     String filename = file.getOriginalFilename() == null ? "upload.jpg" : file.getOriginalFilename();
     String contentType = file.getContentType() == null ? MediaType.APPLICATION_OCTET_STREAM_VALUE : file.getContentType();
 
@@ -203,6 +262,7 @@ public class AlgorithmSearchClient {
 
     MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
     body.add("file", filePart);
+    body.add("sarMode", String.valueOf(sarMode));
 
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.MULTIPART_FORM_DATA);
@@ -212,7 +272,18 @@ public class AlgorithmSearchClient {
   public record AlgorithmSearchResponse(
       List<AlgorithmSearchResult> results,
       boolean lowConfidence,
-      String message) {
+      String message,
+      Boolean sarApplied,
+      String trustLevel,
+      String modelVersion,
+      String baseModelVersion,
+      String indexVersion,
+      String sarStateVersion,
+      String instanceId,
+      String instanceRole) {
+    public AlgorithmSearchResponse(List<AlgorithmSearchResult> results, boolean lowConfidence, String message) {
+      this(results, lowConfidence, message, false, null, null, null, null, null, null, null);
+    }
   }
 
   public record AlgorithmSearchResult(
@@ -257,6 +328,9 @@ public class AlgorithmSearchClient {
       double reviewScore,
       String reason,
       boolean sarEligible,
-      String nextAction) {
+      String nextAction,
+      String modelVersion,
+      boolean activated,
+      String adaptationError) {
   }
 }

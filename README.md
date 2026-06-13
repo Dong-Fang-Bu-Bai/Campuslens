@@ -32,8 +32,7 @@ Campuslens/
 Windows 下可以直接使用 `scripts/` 目录中的脚本启动后端、前端和算法服务：
 
 ```powershell
-scripts\1_check-env.cmd
-scripts\2_start-dev.cmd
+scripts\start.cmd
 ```
 
 默认启动流程会使用本机 Docker Desktop 启动 MySQL 和 Redis，并启动后端异步任务消费者。算法脚本优先读取 `CAMPUSLENS_ALGORITHM_PYTHON`，未设置时使用 `D:\AnaConda\envs\campuslens-gpu\python.exe`，再回退项目 `.venv`。
@@ -47,16 +46,19 @@ algorithm\create_gpu_env.bat
 如果需要做完整联调验收，直接运行：
 
 ```powershell
-scripts\4_verify-dev.cmd
+scripts\verify.cmd
 ```
 
 启动后访问：
 
 ```text
-前端页面：http://localhost:5173
+前端 HTTPS：https://localhost:5173
 后端健康检查：http://localhost:8080/api/health
-算法健康检查：http://localhost:8000/api/v1/health
+算法主实例：http://localhost:8000/api/v1/health
+算法备用实例：http://localhost:8001/api/v1/health
 ```
+
+前端监听 `0.0.0.0`，可将 `localhost` 替换为本机局域网 IP。HTTPS 使用包含当前局域网 IP SAN 的自签名证书，首次访问需要在每台设备和浏览器中确认继续访问；IP 变化后启动脚本会自动重新生成证书。页面通过 Vite 同源代理访问 `/api` 和 `/uploads`，不会产生混合内容问题。
 
 本地演示默认依赖 MySQL。算法服务需要本机准备模型文件和索引参数：
 
@@ -69,34 +71,21 @@ algorithm/data/faiss_index/landmark_stats.pkl
 
 模型权重和 `algorithm/data/faiss_index/` 下的索引产物不提交到 GitHub。模型文件按 `algorithm/README.md` 下载到本地；索引和统计参数在算法服务启动后通过 `POST /api/v1/index/rebuild` 自动生成。
 
-MySQL 和 Redis 是默认启动路径，不需要额外设置 `CAMPUSLENS_BACKEND_PROFILE`。`start-database.cmd` 会优先使用 Windows 原生 Docker Desktop；Docker Compose 为 Redis 启用 AOF 和独立数据卷。数据库结构和基础种子数据统一由 Flyway 管理，Compose 不再挂载另一套建表脚本。
+MySQL 和 Redis 是默认启动路径，不需要额外设置 `CAMPUSLENS_BACKEND_PROFILE`。`start.cmd` 会检查当前环境、启动 Windows Docker Desktop、复用 Compose 镜像和命名数据卷，再启动后端、双算法实例及单个 HTTPS 前端。数据库结构和基础种子数据统一由 Flyway 管理。
 
 ```powershell
-scripts\2_start-dev.cmd
+scripts\start.cmd
 ```
 
-当前本机已验证 Docker Desktop 程序安装在 `D:\Tools\Docker\Docker`，Docker Desktop 的 WSL 数据盘通过目录联接放在 `D:\DockerData\wsl`。项目脚本不依赖这个路径必须存在；存在时会优先使用它。
-
-如果使用 WSL Docker，需要先在 Ubuntu 中确认当前用户有 Docker daemon 权限：
-
-```bash
-sudo usermod -aG docker $USER
-```
-
-执行后在 Windows PowerShell 中重启 WSL，再重新运行启动脚本：
-
-```powershell
-wsl --shutdown
-scripts\2_start-dev.cmd
-```
+当前本机已验证 Docker Desktop 程序安装在 `D:\Tools\Docker\Docker`，Docker Desktop 的 Linux 后端数据盘位于 `D:\DockerData\wsl`。统一脚本只维护这套已验证的 Windows Docker Desktop 运行方式。
 
 停止由脚本启动的服务：
 
 ```powershell
-scripts\3_stop-dev.cmd
+scripts\stop.cmd
 ```
 
-`3_stop-dev.cmd` 只读取 `.run/` 中的 PID 文件并停止本项目脚本启动的窗口，不会扫描端口或强行结束其他 Java、Node 进程。若服务是手动通过 `mvn spring-boot:run` 或 `npm run dev` 启动的，请直接关闭对应命令行窗口。数据库可用 `docker compose stop mysql` 暂停，或用 `docker compose down` 停止容器；不要随意删除 volume，否则会清空本地数据库数据。
+`stop.cmd` 会清理后端、HTTPS 前端、双算法实例以及 MySQL/Redis 容器，但保留 Docker 镜像和命名数据卷。不要使用 `docker compose down -v`，否则会删除本地数据库和 Redis 数据卷。
 
 ## 分支模型
 
@@ -215,6 +204,8 @@ git push origin main --tags
 - [第四周 V3 M1/M2/M4/M5 实施记录](docs/11_v3_m1_m2_m4_m5.md)
 - [运行、回归与并发测试记录](docs/12_runtime_and_concurrency_test.md)
 - [GPU 与 Redis 异步队列测试记录](docs/13_gpu_async_queue_test.md)
+- [SAR 在线适配与模型索引版本测试记录](docs/14_sar_online_adaptation_test.md)
+- [全链路修复与验收记录](docs/15_full_system_acceptance_test.md)
 
 ## 接口契约
 

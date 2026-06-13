@@ -1,6 +1,6 @@
 # database
 
-数据库脚本目录。第二周 V1 已接入基础 MySQL 库，当前真实使用 `landmark` 表读取 L01-L10 地标元数据；`landmark_image`、`image_feature`、`search_record`、`feedback` 和 `admin_user` 表为后续迭代预留。
+数据库脚本目录。MySQL 通过 Flyway 管理地标、检索、反馈、社区和游客身份数据；`guest_identity` 使用自增主键生成全局递增的 `guest#number`。
 
 - `schema.sql`：建表脚本。
 - `seed_landmarks.sql`：首批地标初始化数据。
@@ -10,17 +10,14 @@
 
 ## Docker 启动
 
-项目根目录提供 `docker-compose.yml`。首次启动时会自动执行：
-
-1. `database/schema.sql`
-2. `database/seed_landmarks.sql`
+项目根目录提供 `docker-compose.yml`，数据库结构与种子数据由后端启动时的 Flyway migration 管理。
 
 ```powershell
 cd ..
-scripts\start-database.cmd
+scripts\start.cmd
 ```
 
-`scripts\start-database.cmd` 会优先使用 Windows 原生 Docker Desktop；脚本会自动把 `D:\Tools\Docker\Docker\resources\bin` 加入当前进程 `PATH`，并在 Docker daemon 未就绪时尝试启动 `D:\Tools\Docker\Docker\Docker Desktop.exe`。如果 Windows 没有 `docker` 命令，但 WSL 的 `Ubuntu` 发行版中已经安装并启动 Docker Engine，则会自动在 WSL 中运行同一份 `docker-compose.yml`。这种方式不需要安装 Docker Desktop，后端和前端仍可继续在 Windows 中启动。
+`scripts\start.cmd` 使用当前已验证的 Windows Docker Desktop，自动补充 D 盘 Docker CLI 路径、等待 daemon 就绪，并启动 MySQL 与 Redis。
 
 当前本机推荐布局：
 
@@ -28,14 +25,6 @@ scripts\start-database.cmd
 Docker Desktop: D:\Tools\Docker\Docker
 Docker data:    D:\DockerData\wsl
 ```
-
-首次使用 WSL Docker 时，需要确保 Ubuntu 当前用户可以访问 Docker daemon：
-
-```bash
-sudo usermod -aG docker $USER
-```
-
-执行后在 Windows PowerShell 中运行 `wsl --shutdown`，重新打开终端后再执行 `scripts\start-database.cmd`。
 
 默认连接信息：
 
@@ -50,7 +39,7 @@ password: campuslens123
 验证数据库是否真正可用：
 
 ```powershell
-scripts\4_verify-dev.cmd
+scripts\verify.cmd
 ```
 
 这些账号只用于本地开发。同学从 GitHub 拉取代码后，启动自己的 Docker MySQL 容器即可得到同样的基础库；不要把个人 `.env` 或真实服务器密码提交到仓库。

@@ -242,6 +242,12 @@ GET /api/v1/index/stats
 
 ## 🧮 算法原理
 
+### SAR 在线适配
+
+算法服务维护基准与持续 SAR 两条轨道。用户请求的 `sarMode` 默认仍为 `false`；`SAR_ENABLED` 是运维级总开关。`sarMode=false` 始终使用不可变基准模型；`sarMode=true` 的同模式微批次联合执行 SAM 更新，并原子保存归一化层、优化器、低熵 EMA 和版本状态。SAR 状态跨重启恢复，低熵 EMA 或锚点漂移越界时自动回退。管理员采纳反馈只加入待发布数据集；CPU 子进程完成候选索引后，服务在短暂维护窗口内原子切换索引并创建新的 SAR generation。
+
+默认配置保持 `SAR_ENABLED=false`。可运行 `python benchmark_sar.py --limit-per-landmark 1` 对比基线与 SAR 的 Top-1、Top-5、延迟和 GPU 峰值显存。
+
 ### 核心思想
 
 **不只是比较"有多像"，而是判断"是否属于同一分布"**

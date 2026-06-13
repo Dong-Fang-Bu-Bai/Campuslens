@@ -16,6 +16,8 @@ import com.campuslens.model.FeedbackRequest;
 import com.campuslens.model.FeedbackResponse;
 import com.campuslens.model.FeedbackStatusRequest;
 import com.campuslens.model.HealthResponse;
+import com.campuslens.model.GuestIdentityRequest;
+import com.campuslens.model.GuestIdentityResponse;
 import com.campuslens.model.LandmarkDetail;
 import com.campuslens.model.LandmarkImage;
 import com.campuslens.model.LandmarkSummary;
@@ -31,12 +33,15 @@ import com.campuslens.service.AuthService;
 import com.campuslens.service.CheckInService;
 import com.campuslens.service.FeedbackService;
 import com.campuslens.service.LandmarkService;
+import com.campuslens.service.IndexRebuildService;
+import com.campuslens.service.GuestIdentityService;
 import com.campuslens.service.SearchRecordService;
 import com.campuslens.service.SearchService;
 import com.campuslens.service.SearchJobService;
 import com.campuslens.service.SessionService;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -62,6 +67,8 @@ public class ApiController {
   private final AuthService authService;
   private final SessionService sessionService;
   private final CheckInService checkInService;
+  private final IndexRebuildService indexRebuildService;
+  private final GuestIdentityService guestIdentityService;
 
   public ApiController(
       LandmarkService landmarkService,
@@ -72,7 +79,9 @@ public class ApiController {
       AdminService adminService,
       AuthService authService,
       SessionService sessionService,
-      CheckInService checkInService) {
+      CheckInService checkInService,
+      IndexRebuildService indexRebuildService,
+      GuestIdentityService guestIdentityService) {
     this.landmarkService = landmarkService;
     this.searchService = searchService;
     this.searchJobService = searchJobService;
@@ -82,11 +91,18 @@ public class ApiController {
     this.authService = authService;
     this.sessionService = sessionService;
     this.checkInService = checkInService;
+    this.indexRebuildService = indexRebuildService;
+    this.guestIdentityService = guestIdentityService;
   }
 
   @GetMapping("/health")
   public HealthResponse health() {
     return new HealthResponse("ok", "CampusLens backend is running");
+  }
+
+  @PostMapping("/guests")
+  public GuestIdentityResponse guestIdentity(@Valid @RequestBody GuestIdentityRequest request) {
+    return guestIdentityService.allocate(request.clientToken());
   }
 
   @GetMapping("/landmarks")
@@ -104,11 +120,13 @@ public class ApiController {
   @PostMapping("/search/upload")
   public ResponseEntity<SearchJobSubmission> upload(
       @RequestPart("file") MultipartFile file,
-      @RequestPart(value = "guestId", required = false) String guestId,
+      @RequestParam(value = "guestId", required = false) String guestId,
+      @RequestParam(value = "sarMode", required = false, defaultValue = "false") boolean sarMode,
       @RequestHeader("Idempotency-Key") String idempotencyKey,
       @RequestHeader(value = "Authorization", required = false) String authorization) {
     SessionUser user = sessionService.find(authorization).orElse(null);
-    return ResponseEntity.accepted().body(searchJobService.submit(file, user, guestId, idempotencyKey));
+    return ResponseEntity.accepted().body(searchJobService.submit(
+        file, user, guestId, idempotencyKey, sarMode));
   }
 
   @GetMapping("/search/jobs/{jobId}")
@@ -216,6 +234,28 @@ public class ApiController {
       @RequestHeader(value = "Authorization", required = false) String authorization) {
     sessionService.requireAdmin(authorization);
     return feedbackService.updateStatus(id, request);
+  }
+
+  @GetMapping("/admin/algorithm/runtime")
+  public Map<String, Object> algorithmRuntime(
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    sessionService.requireAdmin(authorization);
+    return indexRebuildService.runtime();
+  }
+
+  @PostMapping("/admin/index/rebuild")
+  public ResponseEntity<Map<String, Object>> rebuildIndex(
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    sessionService.requireAdmin(authorization);
+    return ResponseEntity.accepted().body(indexRebuildService.start());
+  }
+
+  @GetMapping("/admin/index/rebuild/{jobId}")
+  public Map<String, Object> rebuildIndexStatus(
+      @PathVariable String jobId,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    sessionService.requireAdmin(authorization);
+    return indexRebuildService.status(jobId);
   }
 
   @PostMapping("/admin/landmarks")

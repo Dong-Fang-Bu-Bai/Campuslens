@@ -38,6 +38,11 @@ public class InMemorySearchQueue implements SearchQueue {
   }
 
   @Override
+  public void release(ReservedJob reservation) {
+    queue.add(reservation.jobId());
+  }
+
+  @Override
   public void scheduleRetry(ReservedJob reservation, Duration delay) {
     queue.add(reservation.jobId());
   }

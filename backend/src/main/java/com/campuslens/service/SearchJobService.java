@@ -29,16 +29,22 @@ public class SearchJobService {
   private final SearchJobRepository repository;
   private final SearchQueue queue;
   private final AuthService authService;
+  private final IndexRebuildService indexRebuildService;
+  private final GuestIdentityService guestIdentityService;
   private final String tokenSecret;
 
   public SearchJobService(
       SearchJobRepository repository,
       SearchQueue queue,
       AuthService authService,
+      IndexRebuildService indexRebuildService,
+      GuestIdentityService guestIdentityService,
       @Value("${campuslens.search.job-token-secret:campuslens-local-job-secret}") String tokenSecret) {
     this.repository = repository;
     this.queue = queue;
     this.authService = authService;
+    this.indexRebuildService = indexRebuildService;
+    this.guestIdentityService = guestIdentityService;
     this.tokenSecret = tokenSecret;
   }
 
@@ -46,12 +52,19 @@ public class SearchJobService {
       MultipartFile file,
       SessionUser user,
       String guestId,
-      String idempotencyKey) {
+      String idempotencyKey,
+      boolean sarMode) {
+    if (indexRebuildService.isMaintenance()) {
+      throw new SearchMaintenanceException("索引正在切换，请稍后重试");
+    }
     validate(file);
     Long userId = user == null ? null : activeUserId(user.userId());
     String key = normalizeIdempotencyKey(idempotencyKey);
-    String requestedGuestId = userId == null ? normalizeGuestId(guestId) : "user-" + userId;
-    String scopedKey = sha256((userId == null ? "guest:" + requestedGuestId : "user:" + userId) + ":" + key);
+    String requestedGuestId = userId == null
+        ? guestIdentityService.requireExisting(guestId)
+        : "user-" + userId;
+    String scopedKey = sha256((userId == null ? "guest:" + requestedGuestId : "user:" + userId)
+        + ":" + key + ":sar=" + sarMode);
     String fileSha = sha256(file);
     var existing = repository.findByIdempotencyKey(scopedKey);
     if (existing.isPresent()) {
@@ -67,7 +80,7 @@ public class SearchJobService {
     SearchJobRepository.JobRow row;
     try {
       row = repository.create(
-          jobId, sha256(token), scopedKey, fileSha, toUrl(saved), requestedGuestId, userId);
+          jobId, sha256(token), scopedKey, fileSha, toUrl(saved), requestedGuestId, userId, sarMode);
     } catch (DuplicateKeyException ex) {
       deleteQuietly(saved);
       SearchJobRepository.JobRow concurrent = repository.findByIdempotencyKey(scopedKey)
@@ -154,13 +167,6 @@ public class SearchJobService {
 
   private String toUrl(Path path) {
     return "/" + path.toString().replace('\\', '/');
-  }
-
-  private String normalizeGuestId(String value) {
-    if (value != null && value.trim().matches("guest#[1-9]\\d*")) {
-      return value.trim();
-    }
-    return "guest";
   }
 
   private String normalizeIdempotencyKey(String value) {

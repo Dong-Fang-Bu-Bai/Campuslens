@@ -8,17 +8,18 @@ from app.utils.scoring import mahalanobis_match_score, match_level
 
 
 class FAISSManager:
-    def __init__(self, dimension: int):
+    def __init__(self, dimension: int, index_dir=None):
         self.dimension = dimension
         self.index = None
         self.metadata = []
-        self.index_path = Config.FAISS_INDEX_DIR / "landmark_index.faiss"
-        self.metadata_path = Config.FAISS_INDEX_DIR / "metadata.pkl"
+        self.index_dir = Path(index_dir or Config.FAISS_INDEX_DIR)
+        self.index_path = self.index_dir / "landmark_index.faiss"
+        self.metadata_path = self.index_dir / "metadata.pkl"
         
         # 地标级别的统计信息
         self.landmark_stats = {}  # {landmark_code: {"mean", "std", "count", "name"}}
         self.landmark_codes = []  # 地标代码列表（与索引顺序对应）
-        self.stats_path = Config.FAISS_INDEX_DIR / "landmark_stats.pkl"
+        self.stats_path = self.index_dir / "landmark_stats.pkl"
     
     def create_index(self):
         self.index = faiss.IndexFlatIP(self.dimension)
@@ -26,7 +27,8 @@ class FAISSManager:
     
     def load_index(self) -> bool:
         if self.index_path.exists() and self.metadata_path.exists():
-            self.index = faiss.read_index(str(self.index_path))
+            serialized = np.frombuffer(self.index_path.read_bytes(), dtype=np.uint8)
+            self.index = faiss.deserialize_index(serialized)
             with open(self.metadata_path, 'rb') as f:
                 self.metadata = pickle.load(f)
             
@@ -44,8 +46,9 @@ class FAISSManager:
         return False
     
     def save_index(self):
-        Config.FAISS_INDEX_DIR.mkdir(parents=True, exist_ok=True)
-        faiss.write_index(self.index, str(self.index_path))
+        self.index_dir.mkdir(parents=True, exist_ok=True)
+        # FAISS FileIOWriter cannot reliably open Unicode Windows paths.
+        self.index_path.write_bytes(faiss.serialize_index(self.index).tobytes())
         with open(self.metadata_path, 'wb') as f:
             pickle.dump(self.metadata, f)
         

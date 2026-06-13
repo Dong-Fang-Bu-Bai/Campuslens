@@ -54,35 +54,38 @@
 </template>
 
 <script setup>
-defineProps({
+const props = defineProps({
   currentUser: { type: Object, default: null },
   records: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   labels: { type: Object, required: true },
-  fallbackImage: { type: String, required: true }
+  fallbackImage: { type: String, required: true },
+  language: { type: String, default: 'zh' }
 })
 
 defineEmits(['refresh', 'open-feedback'])
 
 function recordStatusLabel(status) {
+  const isEn = props.language !== 'zh'
   return {
-    success: '成功',
-    low_confidence: '低匹配',
-    empty_result: '空结果',
-    algorithm_unavailable: '算法不可用'
+    success: isEn ? 'Success' : '成功',
+    low_confidence: isEn ? 'Low Match' : '低匹配',
+    empty_result: isEn ? 'Empty' : '空结果',
+    algorithm_unavailable: isEn ? 'Offline' : '算法不可用'
   }[status] || status || '-'
 }
 
 function feedbackStatusLabel(status) {
+  const isEn = props.language !== 'zh'
   return {
-    pending: '反馈待处理',
-    accepted: '反馈已采纳',
-    ignored: '反馈已忽略'
-  }[status] || '未反馈'
+    pending: isEn ? 'Pending' : '反馈待处理',
+    accepted: isEn ? 'Accepted' : '反馈已采纳',
+    ignored: isEn ? 'Ignored' : '反馈已忽略'
+  }[status] || (isEn ? 'No Feedback' : '未反馈')
 }
 
 function formatTime(value) {
   if (!value) return '-'
-  return new Date(value).toLocaleString('zh-CN', { hour12: false })
+  return new Date(value).toLocaleString(props.language === 'zh' ? 'zh-CN' : 'en-US', { hour12: false })
 }
 </script>

@@ -22,7 +22,7 @@
 
 ## 运行与回归结果
 
-- `scripts\4_verify-dev.cmd`：通过。MySQL 含 L01-L10，后端、算法和前端健康检查均返回 HTTP 200。
+- `scripts\verify.cmd`：当次验收通过。该历史测试当时同时运行 HTTP/HTTPS；当前日常配置已调整为单个 HTTPS `5173` 前端。
 - 后端 `mvn test`：14 项通过，0 失败，0 跳过。
 - 算法 `python -m pytest`：9 项通过，0 失败；存在 `httpx` 与 Pydantic 弃用警告，不影响当前结果。
 - 前端 `npm run build`：通过，Vite 成功生成生产构建。

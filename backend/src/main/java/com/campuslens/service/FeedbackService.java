@@ -101,7 +101,7 @@ public class FeedbackService {
     }
     if ("accepted".equals(request.status())) {
       correctionSampleService.createAndNotify(id);
-      return new FeedbackResponse(id, request.status(), "反馈已采纳，校正样本已进入同步队列");
+      return new FeedbackResponse(id, request.status(), "反馈已采纳，图片已加入待发布样本，等待索引重建");
     }
     return new FeedbackResponse(id, request.status(), "反馈状态已更新");
   }

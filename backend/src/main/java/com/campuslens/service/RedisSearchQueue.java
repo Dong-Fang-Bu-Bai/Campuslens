@@ -81,6 +81,19 @@ public class RedisSearchQueue implements SearchQueue {
       redis.call('ZADD', KEYS[4], ARGV[2], job)
       return 1
       """, Long.class);
+  private static final DefaultRedisScript<Long> RELEASE_SCRIPT = script("""
+      local job = redis.call('HGET', KEYS[2], ARGV[1])
+      if not job then return 0 end
+      redis.call('ZREM', KEYS[1], ARGV[1])
+      redis.call('HDEL', KEYS[2], ARGV[1])
+      if redis.call('HGET', KEYS[3], job) == ARGV[1] then
+        redis.call('HDEL', KEYS[3], job)
+      end
+      if redis.call('SADD', KEYS[5], job) == 1 then
+        redis.call('RPUSH', KEYS[4], job)
+      end
+      return 1
+      """, Long.class);
   private static final DefaultRedisScript<Long> PROMOTE_SCRIPT = script("""
       local jobs = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', ARGV[1], 'LIMIT', 0, ARGV[2])
       local count = 0
@@ -128,6 +141,12 @@ public class RedisSearchQueue implements SearchQueue {
   public void acknowledge(ReservedJob reservation, boolean terminal) {
     execute(ACK_SCRIPT, List.of(PROCESSING_KEY, RECEIPTS_KEY, JOB_RECEIPTS_KEY, ACTIVE_KEY,
         DELAYED_KEY, READY_KEY, READY_SET_KEY), reservation.receiptId(), terminal ? "1" : "0");
+  }
+
+  @Override
+  public void release(ReservedJob reservation) {
+    execute(RELEASE_SCRIPT, List.of(PROCESSING_KEY, RECEIPTS_KEY, JOB_RECEIPTS_KEY,
+        READY_KEY, READY_SET_KEY), reservation.receiptId());
   }
 
   @Override

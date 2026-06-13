@@ -1,28 +1,43 @@
 <template>
   <section class="admin-page">
     <div v-if="!isAdmin" class="empty-state">
-      <h3>需要管理员登录</h3>
-      <p>请通过右上角“登录/注册”进入登录页，管理员账号登录成功后会自动进入后台。</p>
+      <h3>{{ labels.needAdmin }}</h3>
+      <p>{{ labels.needAdminDesc }}</p>
     </div>
     <div v-else class="admin-layout">
       <article class="admin-card">
         <div class="admin-card-head">
+          <div><p class="eyebrow">SAR Runtime</p><h3>{{ labels.algorithmRuntime }}</h3></div>
+          <button type="button" :disabled="['building', 'switching'].includes(rebuildJob?.status)" @click="$emit('rebuild-index')">{{ labels.rebuildIndex }}</button>
+        </div>
+        <div class="detail-grid admin-detail-grid">
+          <span>{{ labels.runtimeState }}</span><strong>{{ runtimeStatus?.status || '-' }}</strong>
+          <span>{{ labels.baseModelVersion }}</span><strong>{{ runtimeStatus?.baseModelVersion || '-' }}</strong>
+          <span>{{ labels.indexVersion }}</span><strong>{{ runtimeStatus?.indexVersion || '-' }}</strong>
+          <span>{{ labels.sarStateVersion }}</span><strong>{{ runtimeStatus?.sarStateVersion || '-' }}</strong>
+          <span>{{ labels.updateCount }}</span><strong>{{ runtimeStatus?.updateCount ?? 0 }}</strong>
+          <span>{{ labels.lastResetReason }}</span><strong>{{ runtimeStatus?.lastResetReason || '-' }}</strong>
+        </div>
+        <p v-if="rebuildJob" class="admin-detail-note">Rebuild {{ rebuildJob.rebuildJobId }} · {{ rebuildJob.status }}<template v-if="rebuildJob.error"> · {{ rebuildJob.error }}</template></p>
+      </article>
+      <article class="admin-card">
+        <div class="admin-card-head">
           <div>
             <p class="eyebrow">Search Records</p>
-            <h3>检索记录</h3>
+            <h3>{{ labels.searchRecords }}</h3>
           </div>
-          <button type="button" @click="$emit('refresh')">刷新</button>
+          <button type="button" @click="$emit('refresh')">{{ labels.refresh }}</button>
         </div>
         <div class="admin-table">
           <div class="admin-row admin-row-head">
-            <span>ID</span>
-            <span>最高候选</span>
-            <span>状态</span>
-            <span>游客</span>
+            <span>{{ labels.id }}</span>
+            <span>{{ labels.bestCandidate }}</span>
+            <span>{{ labels.status }}</span>
+            <span>{{ labels.visitor }}</span>
           </div>
           <div v-for="record in searchRecords" :key="record.id" class="admin-row">
             <span>#{{ record.id }}</span>
-            <span>{{ record.bestLandmarkName || '无候选' }}<small>{{ scoreLabel(record.bestScore) }}</small></span>
+            <span>{{ record.bestLandmarkName || labels.noCandidate }}<small>{{ scoreLabel(record.bestScore) }}</small></span>
             <span :class="['status-badge', record.status]">{{ recordStatusLabel(record.status) }}</span>
             <span>{{ record.username || record.guestId }}</span>
           </div>
@@ -33,21 +48,21 @@
         <div class="admin-card-head">
           <div>
             <p class="eyebrow">Feedback</p>
-            <h3>反馈处理</h3>
+            <h3>{{ labels.feedbackProcess }}</h3>
           </div>
         </div>
         <div class="feedback-admin-list">
           <div v-for="item in feedbackRecords" :key="item.id" class="feedback-admin-item" :class="{ selected: selectedFeedbackDetail?.id === item.id }">
             <div>
               <strong>#{{ item.id }} {{ feedbackTypeLabel(item.feedbackType) }}</strong>
-              <p>检索 #{{ item.searchRecordId }} · 用户：{{ item.username || 'guest' }} · 预测：{{ item.predictedLandmarkName || '-' }} · 确认：{{ item.confirmedLandmarkName || '-' }}</p>
-              <small>{{ item.comment || '无补充说明' }}</small>
+              <p>{{ labels.searchRecord }} #{{ item.searchRecordId }} · {{ labels.visitor }}：{{ item.username || 'guest' }} · {{ labels.predicted }}：{{ item.predictedLandmarkName || '-' }} · {{ labels.confirmed }}：{{ item.confirmedLandmarkName || '-' }}</p>
+              <small>{{ item.comment || labels.noComment }}</small>
             </div>
             <div class="admin-actions">
               <span :class="['status-badge', item.status]">{{ feedbackStatusLabel(item.status) }}</span>
-              <button type="button" @click="$emit('view-detail', item.id)">详情</button>
-              <button type="button" @click="$emit('update-status', item.id, 'accepted')">采纳</button>
-              <button type="button" @click="$emit('update-status', item.id, 'ignored')">忽略</button>
+              <button type="button" @click="$emit('view-detail', item.id)">{{ labels.detail }}</button>
+              <button type="button" @click="$emit('update-status', item.id, 'accepted')">{{ labels.accept }}</button>
+              <button type="button" @click="$emit('update-status', item.id, 'ignored')">{{ labels.ignore }}</button>
             </div>
           </div>
         </div>
@@ -57,20 +72,20 @@
         <div class="admin-card-head">
           <div>
             <p class="eyebrow">Feedback Detail</p>
-            <h3>反馈详情</h3>
+            <h3>{{ labels.feedbackDetail }}</h3>
           </div>
         </div>
         <div v-if="!selectedFeedbackDetail" class="empty-state compact">
-          <h3>请选择反馈记录</h3>
-          <p>详情会展示上传图片、Top-5 快照、算法采纳建议和校正样本同步状态。</p>
+          <h3>{{ labels.selectFeedback }}</h3>
+          <p>{{ labels.selectFeedbackDesc }}</p>
         </div>
         <div v-else class="feedback-detail-body">
           <div class="feedback-image" :style="{ backgroundImage: `url(${selectedFeedbackDetail.uploadImageUrl || ''})` }"></div>
           <div class="detail-grid admin-detail-grid">
-            <span>检索记录</span><strong>#{{ selectedFeedbackDetail.searchRecordId }}</strong>
-            <span>反馈状态</span><strong>{{ feedbackStatusLabel(selectedFeedbackDetail.status) }}</strong>
-            <span>校正同步</span><strong>{{ syncStatusLabel(selectedFeedbackDetail.correctionSample?.syncStatus) }}</strong>
-            <span>采纳建议</span><strong>{{ adviceLabel(selectedFeedbackDetail.correctionSample) }}</strong>
+            <span>{{ labels.searchRecord }}</span><strong>#{{ selectedFeedbackDetail.searchRecordId }}</strong>
+            <span>{{ labels.status }}</span><strong>{{ feedbackStatusLabel(selectedFeedbackDetail.status) }}</strong>
+            <span>{{ labels.syncStatus }}</span><strong>{{ syncStatusLabel(selectedFeedbackDetail.correctionSample?.syncStatus) }}</strong>
+            <span>{{ labels.advice }}</span><strong>{{ adviceLabel(selectedFeedbackDetail.correctionSample) }}</strong>
           </div>
           <div class="top-snapshot-list">
             <button v-for="item in selectedFeedbackDetail.topResults" :key="item.landmarkId" type="button">
@@ -79,7 +94,7 @@
               <small>{{ Math.round(Number(item.score) * 100) }}%</small>
             </button>
           </div>
-          <p class="admin-detail-note">{{ selectedFeedbackDetail.correctionSample?.reason || selectedFeedbackDetail.comment || '暂无补充说明' }}</p>
+          <p class="admin-detail-note">{{ selectedFeedbackDetail.correctionSample?.reason || selectedFeedbackDetail.comment || labels.noCommentAdmin }}</p>
         </div>
       </article>
     </div>
@@ -87,55 +102,60 @@
 </template>
 
 <script setup>
-defineProps({
+const props = defineProps({
   isAdmin: { type: Boolean, required: true },
   searchRecords: { type: Array, default: () => [] },
   feedbackRecords: { type: Array, default: () => [] },
-  selectedFeedbackDetail: { type: Object, default: null }
+  selectedFeedbackDetail: { type: Object, default: null },
+  runtimeStatus: { type: Object, default: null },
+  rebuildJob: { type: Object, default: null },
+  labels: { type: Object, required: true }
 })
 
-defineEmits(['refresh', 'update-status', 'view-detail'])
+defineEmits(['refresh', 'update-status', 'view-detail', 'rebuild-index'])
 
 function recordStatusLabel(status) {
   return {
-    success: '成功',
-    low_confidence: '低匹配',
-    empty_result: '空结果',
-    algorithm_unavailable: '算法不可用'
+    success: props.labels.statusSuccess,
+    low_confidence: props.labels.statusLowConfidence,
+    empty_result: props.labels.statusEmptyResult,
+    algorithm_unavailable: props.labels.statusAlgorithmUnavailable
   }[status] || status
 }
 
 function feedbackTypeLabel(value) {
   return {
-    correct: '识别正确',
-    wrong: '识别错误',
-    uncertain: '不确定'
+    correct: props.labels.typeCorrect,
+    wrong: props.labels.typeWrong,
+    uncertain: props.labels.typeUncertain
   }[value] || value
 }
 
 function feedbackStatusLabel(value) {
   return {
-    pending: '待处理',
-    accepted: '已采纳',
-    ignored: '已忽略'
+    pending: props.labels.feedbackPending,
+    accepted: props.labels.feedbackAccepted,
+    ignored: props.labels.feedbackIgnored
   }[value] || value
 }
 
 function scoreLabel(value) {
-  return value == null ? '' : `匹配分 ${Math.round(Number(value) * 100)}%`
+  return value == null ? '' : `${props.labels.matchScore} ${Math.round(Number(value) * 100)}%`
 }
 
 function syncStatusLabel(value) {
   return {
-    sync_pending: '同步中',
-    synced: '已同步',
-    sync_failed: '同步失败'
-  }[value] || '未生成'
+    sync_pending: props.labels.syncPending,
+    synced: props.labels.synced,
+    sync_failed: props.labels.syncFailed,
+    pending_index: props.labels.syncPending,
+    published: props.labels.synced
+  }[value] || props.labels.syncNone
 }
 
 function adviceLabel(sample) {
-  if (!sample) return '待生成'
-  if (sample.reviewScore == null) return '等待算法建议'
-  return `${sample.suggestAccept ? '建议采纳' : '建议复核'} · ${Math.round(Number(sample.reviewScore) * 100)}%`
+  if (!sample) return props.labels.advicePending
+  if (sample.reviewScore == null) return props.labels.adviceWait
+  return `${sample.suggestAccept ? props.labels.adviceAccept : props.labels.adviceReview} · ${Math.round(Number(sample.reviewScore) * 100)}%`
 }
 </script>

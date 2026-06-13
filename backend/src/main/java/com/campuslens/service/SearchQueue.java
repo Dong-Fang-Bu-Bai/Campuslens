@@ -12,6 +12,8 @@ public interface SearchQueue {
 
   void acknowledge(ReservedJob reservation, boolean terminal);
 
+  void release(ReservedJob reservation);
+
   void scheduleRetry(ReservedJob reservation, Duration delay);
 
   void requeueRecovered(String jobId);

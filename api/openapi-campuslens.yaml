@@ -18,6 +18,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
+  /api/guests:
+    post:
+      summary: 幂等分配浏览器游客身份
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GuestIdentityRequest"
+      responses:
+        "200":
+          description: 返回数据库分配并由当前浏览器复用的游客编号
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuestIdentityResponse"
+        "400":
+          description: clientToken 缺失或长度不合法
   /api/search/upload:
     post:
       summary: 提交异步图片检索任务
@@ -499,6 +518,21 @@ components:
       scheme: bearer
       description: 登录或注册接口返回的服务端会话 token。后台接口要求 role=admin。
   schemas:
+    GuestIdentityRequest:
+      type: object
+      required: [clientToken]
+      properties:
+        clientToken:
+          type: string
+          minLength: 16
+          maxLength: 200
+    GuestIdentityResponse:
+      type: object
+      required: [guestId]
+      properties:
+        guestId:
+          type: string
+          pattern: '^guest#[1-9][0-9]*$'
     SearchJobSubmission:
       type: object
       required: [jobId, searchRecordId, status, jobToken, pollAfterMs]

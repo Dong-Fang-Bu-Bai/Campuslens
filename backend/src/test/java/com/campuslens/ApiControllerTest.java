@@ -17,9 +17,16 @@ import com.campuslens.service.AlgorithmSearchClient.AlgorithmBatchItem;
 import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResponse;
 import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResult;
 import com.campuslens.service.AlgorithmSearchException;
+import com.campuslens.service.GuestIdentityService;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
@@ -39,6 +46,9 @@ class ApiControllerTest {
   @Autowired
   private MockMvc mockMvc;
 
+  @Autowired
+  private GuestIdentityService guestIdentityService;
+
   @MockBean
   private AlgorithmSearchClient algorithmSearchClient;
 
@@ -57,7 +67,50 @@ class ApiControllerTest {
   }
 
   @Test
+  void guestIdentityIsIdempotentSequentialAndRejectsUnknownIds() throws Exception {
+    String clientToken = UUID.randomUUID().toString();
+    String first = allocateGuest(clientToken);
+    String repeated = allocateGuest(clientToken);
+    String second = allocateGuest(UUID.randomUUID().toString());
+
+    assertThat(repeated).isEqualTo(first);
+    assertThat(guestSequence(second)).isEqualTo(guestSequence(first) + 1);
+
+    MockMultipartFile file = new MockMultipartFile(
+        "file", "invalid-guest.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {1, 2, 3});
+    mockMvc.perform(multipart("/api/search/upload").file(file)
+            .param("guestId", "guest#999999999")
+            .header("Idempotency-Key", UUID.randomUUID().toString()))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void concurrentGuestAllocationReturnsOneIdentityForOneBrowserToken() throws Exception {
+    String clientToken = UUID.randomUUID().toString();
+    CountDownLatch start = new CountDownLatch(1);
+    var executor = Executors.newFixedThreadPool(8);
+    List<Future<String>> futures = new ArrayList<>();
+    try {
+      for (int i = 0; i < 16; i++) {
+        futures.add(executor.submit(() -> {
+          start.await();
+          return guestIdentityService.allocate(clientToken).guestId();
+        }));
+      }
+      start.countDown();
+      Set<String> guestIds = new HashSet<>();
+      for (Future<String> future : futures) {
+        guestIds.add(future.get());
+      }
+      assertThat(guestIds).hasSize(1);
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  @Test
   void uploadReturnsAlgorithmTopFive() throws Exception {
+    String guestId = allocateGuest();
     mockSearch(new AlgorithmSearchResponse(
         List.of(
             new AlgorithmSearchResult(1, "L03", "文雍广场", 0.91, "high", 3.12),
@@ -75,6 +128,7 @@ class ApiControllerTest {
         new byte[] {1, 2, 3});
 
     String submission = mockMvc.perform(multipart("/api/search/upload").file(file)
+            .param("guestId", guestId)
             .header("Idempotency-Key", UUID.randomUUID().toString()))
         .andExpect(status().isAccepted())
         .andExpect(jsonPath("$.searchRecordId").isNumber())
@@ -89,7 +143,27 @@ class ApiControllerTest {
   }
 
   @Test
+  void uploadAcceptsMultipartTextSarMode() throws Exception {
+    String guestId = allocateGuest();
+    mockSearch(new AlgorithmSearchResponse(
+        List.of(new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12)),
+        false,
+        "Search successful"));
+    MockMultipartFile file = new MockMultipartFile(
+        "file", "sar.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {1, 2, 3});
+
+    mockMvc.perform(multipart("/api/search/upload")
+            .file(file)
+            .param("guestId", guestId)
+            .param("sarMode", "true")
+            .header("Idempotency-Key", UUID.randomUUID().toString()))
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.status").value("queued"));
+  }
+
+  @Test
   void uploadFallsBackWhenAlgorithmUnavailable() throws Exception {
+    String guestId = allocateGuest();
     when(algorithmSearchClient.searchBatch(any())).thenThrow(new AlgorithmSearchException("连接失败"));
 
     MockMultipartFile file = new MockMultipartFile(
@@ -99,6 +173,7 @@ class ApiControllerTest {
         new byte[] {1, 2, 3});
 
     String submission = mockMvc.perform(multipart("/api/search/upload").file(file)
+            .param("guestId", guestId)
             .header("Idempotency-Key", UUID.randomUUID().toString()))
         .andExpect(status().isAccepted())
         .andReturn().getResponse().getContentAsString();
@@ -111,6 +186,7 @@ class ApiControllerTest {
 
   @Test
   void searchJobRequiresGuestTokenAndUserOwnership() throws Exception {
+    String guestId = allocateGuest();
     mockSearch(new AlgorithmSearchResponse(
         List.of(new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12)),
         false,
@@ -118,6 +194,7 @@ class ApiControllerTest {
     MockMultipartFile guestFile = new MockMultipartFile(
         "file", "guest.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {1, 2, 3});
     String guestSubmission = mockMvc.perform(multipart("/api/search/upload").file(guestFile)
+            .param("guestId", guestId)
             .header("Idempotency-Key", UUID.randomUUID().toString()))
         .andExpect(status().isAccepted())
         .andReturn().getResponse().getContentAsString();
@@ -148,6 +225,7 @@ class ApiControllerTest {
 
   @Test
   void uploadIdempotencyReturnsOriginalJobAndRejectsDifferentFile() throws Exception {
+    String guestId = allocateGuest();
     mockSearch(new AlgorithmSearchResponse(
         List.of(new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12)),
         false,
@@ -157,6 +235,7 @@ class ApiControllerTest {
         "file", "first.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {1, 2, 3});
     String firstSubmission = mockMvc.perform(multipart("/api/search/upload")
             .file(first)
+            .param("guestId", guestId)
             .header("Idempotency-Key", key))
         .andExpect(status().isAccepted())
         .andReturn().getResponse().getContentAsString();
@@ -166,6 +245,7 @@ class ApiControllerTest {
         "file", "same.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {1, 2, 3});
     String duplicate = mockMvc.perform(multipart("/api/search/upload")
             .file(same)
+            .param("guestId", guestId)
             .header("Idempotency-Key", key))
         .andExpect(status().isAccepted())
         .andExpect(jsonPath("$.status").value("success"))
@@ -176,6 +256,7 @@ class ApiControllerTest {
         "file", "different.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {9, 8, 7});
     mockMvc.perform(multipart("/api/search/upload")
             .file(different)
+            .param("guestId", guestId)
             .header("Idempotency-Key", key))
         .andExpect(status().isConflict());
   }
@@ -252,6 +333,7 @@ class ApiControllerTest {
 
   @Test
   void feedbackReturnsPending() throws Exception {
+    String guestId = allocateGuest();
     mockSearch(new AlgorithmSearchResponse(
         List.of(new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12)),
         false,
@@ -263,9 +345,8 @@ class ApiControllerTest {
         MediaType.IMAGE_JPEG_VALUE,
         new byte[] {1, 2, 3});
 
-    MockMultipartFile guestIdPart = new MockMultipartFile(
-        "guestId", "", MediaType.TEXT_PLAIN_VALUE, "guest#701".getBytes());
-    String searchResponse = mockMvc.perform(multipart("/api/search/upload").file(file).file(guestIdPart)
+    String searchResponse = mockMvc.perform(multipart("/api/search/upload").file(file)
+            .param("guestId", guestId)
             .header("Idempotency-Key", UUID.randomUUID().toString()))
         .andExpect(status().isAccepted())
         .andReturn()
@@ -281,11 +362,11 @@ class ApiControllerTest {
                   "searchRecordId": %d,
                   "predictedLandmarkId": 1,
                   "confirmedLandmarkId": 1,
-                  "guestId": "guest#701",
+                  "guestId": "%s",
                   "feedbackType": "correct",
                   "comment": "识别正确"
                 }
-                """.formatted(searchRecordId)))
+                """.formatted(searchRecordId, guestId)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("pending"));
   }
@@ -398,25 +479,27 @@ class ApiControllerTest {
 
   @Test
   void checkInBoardSupportsPostLikeAndReply() throws Exception {
+    String authorGuestId = allocateGuest();
+    String replyGuestId = allocateGuest();
     String createResponse = mockMvc.perform(post("/api/check-ins")
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
                   "landmarkId": 1,
                   "message": "图书馆门口完成打卡",
-                  "guestId": "guest#88"
+                  "guestId": "%s"
                 }
-                """))
+                """.formatted(authorGuestId)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.landmarkCode").value("L01"))
-        .andExpect(jsonPath("$.displayName").value("guest#88"))
+        .andExpect(jsonPath("$.displayName").value(authorGuestId))
         .andReturn()
         .getResponse()
         .getContentAsString();
     long checkInId = extractLong(createResponse, "id");
 
     mockMvc.perform(post("/api/check-ins/" + checkInId + "/like")
-            .param("guestId", "guest#88"))
+            .param("guestId", authorGuestId))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.liked").value(true))
         .andExpect(jsonPath("$.likeCount").value(1));
@@ -426,30 +509,27 @@ class ApiControllerTest {
             .content("""
                 {
                   "message": "同一地点也适合夜景拍摄",
-                  "guestId": "guest#89"
+                  "guestId": "%s"
                 }
-                """))
+                """.formatted(replyGuestId)))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.displayName").value("guest#89"));
+        .andExpect(jsonPath("$.displayName").value(replyGuestId));
 
     mockMvc.perform(get("/api/check-ins")
-            .param("guestId", "guest#88"))
+            .param("guestId", authorGuestId))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].likedByMe").value(true))
         .andExpect(jsonPath("$[0].replyCount").value(1));
   }
 
   @Test
-  void acceptingFeedbackCreatesCorrectionSampleAndSyncsAlgorithmAdvice() throws Exception {
+  void acceptingFeedbackStagesCorrectionSampleForNextIndex() throws Exception {
     mockSearch(new AlgorithmSearchResponse(
         List.of(
             new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12),
             new AlgorithmSearchResult(2, "L02", "学术大讲堂", 0.72, "medium", 6.45)),
         false,
         "Search successful"));
-    when(algorithmSearchClient.submitCorrectionSample(any(AdaptationRequest.class)))
-        .thenReturn(new AdaptationResponse(true, 0.86, "用户确认地标命中 Top-5，可进入校正样本池", true, "append_to_manifest"));
-
     String userToken = register("feedback01", "password123");
     long searchRecordId = uploadWithToken(userToken);
     long feedbackId = createWrongFeedback(searchRecordId, 1, 2, userToken);
@@ -466,21 +546,18 @@ class ApiControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("accepted"));
 
-    String detail = waitForFeedbackDetail(adminToken, feedbackId, "synced");
-    assertThat(detail).contains("\"syncStatus\":\"synced\"");
+    String detail = waitForFeedbackDetail(adminToken, feedbackId, "pending_index");
+    assertThat(detail).contains("\"syncStatus\":\"pending_index\"");
     assertThat(detail).contains("\"suggestAccept\":true");
     assertThat(detail).contains("\"confirmedLandmarkId\":2");
   }
 
   @Test
-  void algorithmNotificationFailureKeepsAcceptedFeedbackWithSyncFailedSample() throws Exception {
+  void acceptingFeedbackDoesNotDependOnAlgorithmAdaptationEndpoint() throws Exception {
     mockSearch(new AlgorithmSearchResponse(
         List.of(new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12)),
         false,
         "Search successful"));
-    when(algorithmSearchClient.submitCorrectionSample(any(AdaptationRequest.class)))
-        .thenThrow(new AlgorithmSearchException("算法接口离线"));
-
     String userToken = register("feedback02", "password123");
     long searchRecordId = uploadWithToken(userToken);
     long feedbackId = createWrongFeedback(searchRecordId, 1, 1, userToken);
@@ -496,8 +573,8 @@ class ApiControllerTest {
                 """))
         .andExpect(status().isOk());
 
-    String detail = waitForFeedbackDetail(adminToken, feedbackId, "sync_failed");
-    assertThat(detail).contains("\"syncStatus\":\"sync_failed\"");
+    String detail = waitForFeedbackDetail(adminToken, feedbackId, "pending_index");
+    assertThat(detail).contains("\"syncStatus\":\"pending_index\"");
     assertThat(detail).contains("\"status\":\"accepted\"");
   }
 
@@ -600,6 +677,30 @@ class ApiControllerTest {
         .getResponse()
         .getContentAsString();
     return response.replaceAll(".*\"token\":\"([^\"]+)\".*", "$1");
+  }
+
+  private String allocateGuest() throws Exception {
+    return allocateGuest(UUID.randomUUID().toString());
+  }
+
+  private String allocateGuest(String clientToken) throws Exception {
+    String response = mockMvc.perform(post("/api/guests")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "clientToken": "%s"
+                }
+                """.formatted(clientToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.guestId").isString())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+    return extractString(response, "guestId");
+  }
+
+  private long guestSequence(String guestId) {
+    return Long.parseLong(guestId.substring("guest#".length()));
   }
 
   private long uploadWithToken(String token) throws Exception {
