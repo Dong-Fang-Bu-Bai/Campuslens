@@ -163,7 +163,7 @@ class FAISSManager:
         # 保存索引和统计信息
         self.save_index()
         
-        print(f"✅ Landmark index built: {len(self.landmark_codes)} landmarks")
+        print(f"[OK] Landmark index built: {len(self.landmark_codes)} landmarks")
     
     def get_index_stats(self) -> dict:
         if self.index is None:

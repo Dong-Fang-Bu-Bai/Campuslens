@@ -43,7 +43,9 @@ Vue 前端 -> Spring Boot 提交接口 -> MySQL + Redis ready/processing/delayed
 | `POST /api/admin/landmarks` | 新增地标，需管理员 token | M2 |
 | `PUT /api/admin/landmarks/{id}` | 修改地标，需管理员 token | M2 |
 | `POST /api/admin/landmarks/{id}/images` | 上传地标样本图片，需管理员 token | M2 |
-| `POST /api/admin/index/rebuild` | 重建地标统计参数，仍归 M3 实现 | M3 |
+| `GET /api/admin/algorithm/runtime` | 查看主算法实例的模型、SAR、索引和重建任务状态 | M3 / M4 |
+| `POST /api/admin/index/rebuild` | 提交索引重建任务，返回 `202` 和 `rebuildJobId` | M3 |
+| `GET /api/admin/index/rebuild/{jobId}` | 查询索引重建任务状态和发布版本 | M3 / M4 |
 | `GET /api/admin/feedback` | 查看反馈记录，需管理员 token | M5 |
 | `GET /api/admin/feedback/{id}` | 查看反馈详情，含上传图、Top-5 快照、算法建议和校正样本同步状态 | M5 / M4 |
 | `POST /api/admin/feedback/{id}/status` | 将反馈状态更新为 `pending`、`accepted` 或 `ignored`，需管理员 token | M5 |
@@ -56,7 +58,9 @@ Vue 前端 -> Spring Boot 提交接口 -> MySQL + Redis ready/processing/delayed
 | --- | --- | --- |
 | `POST /api/v1/search` | 接收上传图片文件，返回 Top-5 候选地标 | M3 周子栋 |
 | `POST /api/v1/search/batch` | 按上传顺序接收最多 2 张图片，逐项返回结果或可重试错误 | M3 周子栋 |
-| `POST /api/v1/index/rebuild` | 根据样本库重建地标统计参数 | M3 周子栋 |
+| `POST /api/v1/index/rebuild` | 主实例异步创建索引重建任务，返回 `202` 和 `rebuildJobId` | M3 周子栋 |
+| `GET /api/v1/index/rebuild/{job_id}` | 查询算法端重建任务的 building/switching/completed/failed 状态 | M3 周子栋 |
+| `GET /api/v1/runtime/status` | 查看当前实例、模型版本、SAR 状态和活动索引版本 | M3 周子栋 |
 | `GET /api/v1/index/stats` | 查看当前统计参数状态、样本数量和维度 | M3 周子栋 |
 | `GET /api/v1/health` | 算法服务健康检查 | M3 周子栋 |
 | `POST /api/v1/adaptation/correction-samples` | multipart 接收管理员采纳后的校正图片与 JSON 元数据，完成可靠性门控，并在通过时构建候选模型和完整索引版本 | M3 周子栋 |
@@ -68,6 +72,7 @@ Vue 前端 -> Spring Boot 提交接口 -> MySQL + Redis ready/processing/delayed
 - 地标编号使用 `L01` 至 `L10`。
 - 时间字段统一使用 ISO 8601 字符串，例如 `2026-05-18T10:00:00`。
 - 游客编号仅由 `guest_identity` 自增主键生成。前端不得自行拼接编号，检索和社区接口会拒绝数据库中不存在的 `guestId`。
+- 浏览器和后端 JSON 使用 `jobId`、`rebuildJobId` 等小驼峰字段。FastAPI 路径模板中的 `{job_id}` 是算法端函数参数名，不改变 JSON 字段命名。
 
 ## Top-5 返回规则
 
@@ -76,7 +81,7 @@ Vue 前端 -> Spring Boot 提交接口 -> MySQL + Redis ready/processing/delayed
 - Top-5 按 `score` 从高到低排序；`score` 越高，表示查询图越接近该地标特征分布。该分数用于排序和展示区分度，不具备概率或统计置信度含义。
 - 后端对外返回字段至少包含：`rank`、`landmarkId`、`landmarkCode`、`name`、`score`、`confidenceLevel`、`mahalanobisDistance`、`coverImageUrl`、`summary`、`locationText`、`mapX`、`mapY`。
 - 算法服务内部返回字段至少包含：`rank`、`landmarkCode`、`landmarkName`、`score`、`confidenceLevel`、`mahalanobisDistance`。用户任务响应仅新增 `sarApplied`、`trustLevel`、`modelVersion`；后端另行保存 `sarMode`、基准模型版本、索引版本和 SAR 状态版本用于追溯。
-- SAR 默认关闭。开启后普通检索按图片独立适配并恢复模型状态；批量中的不同用户图片不会共享本次适配梯度。
+- 服务级 `SAR_ENABLED` 默认开启，但请求字段 `sarMode` 默认关闭。仅 `sarMode=true` 的请求进入 SAR 流程；批量中的不同用户图片不会共享本次适配梯度。
 - 管理员采纳样本由后端从受控 `uploads/` 目录读取并通过 multipart 转发。只有校正样本通过熵、候选匹配分和标签存在性检查后，算法服务才会生成候选模型，并使用同一候选模型重建完整 FAISS 索引。模型和索引验证成功后才切换活动版本。
 - 如果算法返回的候选均为低匹配等级，终态为 `low_confidence`；算法或任务处理失败时终态为 `failed`，并返回 `errorCode` 和明确 `message`，不伪造演示 Top-5。
 - 状态统一为 `queued -> processing -> success|low_confidence|failed`。任务最多尝试 3 次，使用 90 秒 lease；重试时间写入 MySQL `next_attempt_at`，退避为 2、5、15 秒，不阻塞消费者线程。

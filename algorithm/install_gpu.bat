@@ -17,7 +17,7 @@ echo Installing GPU requirements. FAISS remains on CPU on Windows.
 
 echo.
 echo ========================================
-echo ✅ GPU installation complete!
+echo [OK] GPU installation complete!
 echo ========================================
 echo.
 echo Verifying GPU availability...

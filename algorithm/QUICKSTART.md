@@ -1,248 +1,142 @@
-# CampusLens AI 服务快速启动指南
+# CampusLens 算法服务快速启动
 
-## 📦 第一步：安装依赖
+本文说明当前 `dev` 分支的算法环境安装与日常启动方式。完整项目优先使用根目录 `scripts` 下的统一脚本。
 
-### CPU 模式（默认）
+## 1. 首次安装
 
-```bash
+进入算法目录并创建配置文件：
+
+```powershell
 cd algorithm
-pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-### GPU 模式（可选，需要 NVIDIA GPU）
+Windows + NVIDIA GPU 推荐直接创建项目专用环境：
 
-**Windows:**
-```bash
-install_gpu.bat
-```
-
-**Linux（NVIDIA GPU）：**
-```bash
-pip install -r requirements-gpu.txt -r requirements-test.txt
-```
-
-FAISS 仍使用 `faiss-cpu==1.7.4`；当前索引只有 10 个地标类别，迁移到 GPU 没有实际收益。macOS 不支持 CUDA，使用 CPU requirements。
-
-验证 GPU 是否可用：
-```bash
-python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
-```
-
----
-
-## ✅ 第二步：验证模型
-
-```bash
-python verify_model.py ./models/dinov2_model.pth
-```
-
-如果看到 "✅ 模型验证通过！"，说明模型文件正常。
-
----
-
-## 🚀 第三步：启动服务
-
-```bash
-python app/main.py
-```
-
-启动成功后会看到：
-```
-============================================================
-初始化 DINOv2 特征提取器（离线模式）
-============================================================
-Loading DINOv2 model from: .\models\dinov2_model.pth
-Using device: cpu  ← 如果使用 GPU，这里会显示 cuda
-📦 模型文件大小: 330.33 MB
-✅ 加载完整的 DINOv2 模型对象
-DINOv2 model loaded successfully. Feature dimension: 768
-```
-
----
-
-## 🔨 第四步：构建统计参数（首次运行必需）
-
-确保 `../datasets/landmarks/` 目录下有地标图片，然后执行：
-
-**PowerShell:**
 ```powershell
-curl.exe -X POST http://localhost:8000/api/v1/index/rebuild
+.\create_gpu_env.bat
 ```
 
-**CMD:**
-```cmd
-curl -X POST http://localhost:8000/api/v1/index/rebuild
-```
+该脚本使用 `D:\AnaConda\Scripts\conda.exe` 创建 `D:\AnaConda\envs\campuslens-gpu`，并安装公共依赖、PyTorch CUDA 12.1 及测试依赖。Conda、pip 和临时文件缓存均写入 D 盘配置目录。
 
-预期输出：
-```json
-{
-  "status": "success",
-  "message": "统计参数重建完成",
-  "data": {
-    "total_images": 250,
-    "total_landmarks": 10
-  }
-}
-```
+已有 Python 3.10 环境时，可指定解释器后安装：
 
----
-
-## 🧪 第五步：测试检索
-
-准备一张测试图片，然后执行：
-
-**PowerShell:**
 ```powershell
-curl.exe -X POST http://localhost:8000/api/v1/search `
-  -F "file=@.\datasets\landmarks\L01_library\编号1_图书馆_1.jpg" | python -m json.tool
+$env:CAMPUSLENS_ALGORITHM_PYTHON = "D:\path\to\python.exe"
+.\install_gpu.bat
 ```
 
-**CMD:**
-```cmd
-curl -X POST http://localhost:8000/api/v1/search -F "file=@test.jpg"
+无 NVIDIA GPU 时使用 CPU 依赖：
+
+```powershell
+$env:CAMPUSLENS_ALGORITHM_PYTHON = "D:\path\to\python.exe"
+.\install_cpu.bat
 ```
 
-预期响应：
-```json
-{
-  "results": [
-    {
-      "rank": 1,
-      "landmarkCode": "L01",
-      "landmarkName": "library",
-      "score": 0.8533,
-      "confidenceLevel": "high",
-      "mahalanobisDistance": 4.3239
-    }
-  ],
-  "lowConfidence": false,
-  "message": "Search successful"
-}
+依赖文件的职责如下：
+
+| 文件 | 内容 |
+| --- | --- |
+| `requirements.txt` | FastAPI、FAISS CPU、图像与数据处理等公共依赖，不含 PyTorch |
+| `requirements-gpu.txt` | 公共依赖 + PyTorch CUDA 12.1 |
+| `requirements-cpu.txt` | 公共依赖 + CPU 版 PyTorch |
+| `requirements-test.txt` | 公共依赖 + pytest、httpx |
+
+不要只执行 `pip install -r requirements.txt`，否则算法服务缺少 PyTorch。
+
+## 2. 准备模型与数据
+
+模型默认路径：
+
+```text
+algorithm/models/dinov2_model.pth
 ```
 
----
+可通过 `.env` 中的 `DINO_MODEL_PATH` 修改。验证模型：
 
-## 📊 查看统计参数状态
-
-```bash
-curl.exe http://localhost:8000/api/v1/index/stats
+```powershell
+D:\AnaConda\envs\campuslens-gpu\python.exe verify_model.py .\models\dinov2_model.pth
 ```
 
-预期输出：
-```json
-{
-  "status": "ready",
-  "totalVectors": 10,
-  "dimension": 768,
-  "indexedLandmarks": 10
-}
+索引和 SAR 运行数据位于 `algorithm/data`。首次没有可用索引时，需要准备 `datasets/landmarks` 数据集并由主实例触发索引重建。
+
+## 3. 验证环境
+
+```powershell
+D:\AnaConda\envs\campuslens-gpu\python.exe -c "import torch, faiss; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'); print('FAISS CPU ready')"
 ```
 
----
+当前设计是 DINOv2 使用 CUDA 推理，FAISS 使用 CPU 索引，因此不应以 `faiss.get_num_gpus()` 作为 GPU 环境验收条件。
 
-## 🏥 健康检查
+## 4. 启动完整项目
 
-```bash
+回到项目根目录：
+
+```powershell
+scripts\start.cmd
+scripts\verify.cmd
+```
+
+统一脚本会启动 MySQL、Redis、算法主实例 `8000`、算法备用实例 `8001`、Spring Boot 后端和 `https://localhost:5173` 前端。它不会自动安装算法 Python 依赖或下载模型。
+
+停止项目：
+
+```powershell
+scripts\stop.cmd
+```
+
+停止时保留 Docker 镜像和命名数据卷。
+
+## 5. 仅启动算法服务
+
+主实例：
+
+```powershell
+$env:PORT = "8000"
+$env:INSTANCE_ID = "algorithm-primary"
+$env:INSTANCE_ROLE = "primary"
+D:\AnaConda\envs\campuslens-gpu\python.exe app\main.py
+```
+
+备用实例需在另一个终端启动：
+
+```powershell
+$env:PORT = "8001"
+$env:INSTANCE_ID = "algorithm-secondary"
+$env:INSTANCE_ROLE = "secondary"
+D:\AnaConda\envs\campuslens-gpu\python.exe app\main.py
+```
+
+健康检查：
+
+```powershell
 curl.exe http://localhost:8000/api/v1/health
+curl.exe http://localhost:8001/api/v1/health
 ```
 
-预期输出：
-```json
-{
-  "status": "healthy",
-  "service": "CampusLens AI Search",
-  "version": "1.0.0"
-}
-```
+当前主要接口：
 
----
+| 接口 | 作用 |
+| --- | --- |
+| `POST /api/v1/search` | 单图普通/SAR 检索 |
+| `POST /api/v1/search/batch` | 批量检索 |
+| `GET /api/v1/health` | 健康与实例信息 |
+| `GET /api/v1/runtime/status` | 模型、SAR 与索引运行状态 |
+| `GET /api/v1/index/stats` | 活动索引统计 |
+| `POST /api/v1/index/rebuild` | 主实例创建索引重建任务 |
+| `GET /api/v1/index/rebuild/{job_id}` | 查询重建状态 |
+| `POST /api/v1/adaptation/correction-samples` | 写入已采纳校正样本 |
 
-## 🐳 使用 Docker（可选）
+`SAR_ENABLED` 默认为 `true`，但单次请求是否启用 SAR 仍由请求字段 `sarMode` 控制，默认请求值为 `false`。
 
-```bash
-docker-compose up -d
-```
+## 6. 常见问题
 
-查看日志：
-```bash
-docker-compose logs -f
-```
+- 显示 `Using device: cpu`：检查 `nvidia-smi`、PyTorch CUDA 版本和 `.env` 的 `DEVICE`。
+- 模型不存在：确认模型文件路径，或修改 `DINO_MODEL_PATH`。
+- 端口被占用：先运行根目录 `scripts\stop.cmd`，再检查 8000、8001 端口。
+- 显存不足：双实例会各自加载模型，可减小 `BATCH_SIZE`，测试时也可临时只启动一个实例。
+- PowerShell 请求失败：使用 `curl.exe`，避免调用 PowerShell 的 `curl` 别名。
 
-停止服务：
-```bash
-docker-compose down
-```
+更多说明见 [README.md](README.md) 和 [GPU_SUPPORT.md](GPU_SUPPORT.md)。
 
----
-
-## ❓ 常见问题
-
-### Q1: 提示模型文件不存在
-**A**: 确认模型文件在 `./models/dinov2_model.pth`，或设置环境变量：
-```bash
-set DINO_MODEL_PATH=C:\your\path\to\model.pth
-```
-
-### Q2: 统计参数重建失败
-**A**: 检查 `../datasets/landmarks/` 目录是否有图片文件，每个地标文件夹至少要有几张图片。
-
-### Q3: 端口被占用
-**A**: 修改 `.env` 文件中的 `PORT` 配置，或停止占用 8000 端口的程序。
-
-### Q4: 内存不足
-**A**: 减小 `BATCH_SIZE` 环境变量，或强制使用 CPU：
-```bash
-# 在 .env 文件中设置
-DEVICE=cpu
-BATCH_SIZE=16
-```
-
-### Q5: GPU 未启用
-**A**: 检查是否有 NVIDIA GPU 并安装 GPU 版本依赖：
-```bash
-nvidia-smi  # 检查 GPU 状态
-python -c "import torch; print(torch.cuda.is_available())"  # 验证 CUDA
-# 如果返回 False，运行 install_gpu.bat (Windows) 或见 README GPU 章节
-```
-
-### Q6: PowerShell 中 curl 命令报错
-**A**: PowerShell 的 `curl` 是 `Invoke-WebRequest` 的别名，需要使用 `curl.exe`：
-```powershell
-# ❌ 错误
-curl -X POST ...
-
-# ✅ 正确
-curl.exe -X POST ...
-```
-
-### Q7: 如何理解 score 和 mahalanobisDistance？
-**A**: 
-- `score`: 基于马氏距离 sigmoid 归一化得到的经验匹配分（0-1），越高表示越匹配；该分数只用于排序、展示区分度和辅助判断，不具备概率或统计置信度含义
-- `mahalanobisDistance`: 马氏距离原始值，越小表示查询点越接近地标分布中心
-- `confidenceLevel`: 兼容字段，当前表示匹配等级
-  - `score >= 0.8` → high（高匹配）
-  - `score 0.4-0.8` → medium（中匹配）
-  - `score < 0.4` → low（低匹配，建议人工核验）
-
-详细算法说明见：[algo.md](algo.md)
-
-### Q8: v2.1 优化了什么？
-**A**: 
-- 移除了未使用的余弦相似度变量，代码更简洁
-- 改进了 FAISS 召回策略，从 `top_k * 2` 提升到 `max(top_k * 5, 30)`
-- 召回率从 ~90% 提升至 >99%
-- 响应时间略有增加（~3ms），但准确率显著提升
-
----
-
-## 🎯 下一步
-
-- 📖 阅读完整文档：[README.md](README.md)
-- 🧮 了解算法原理：[algo.md](algo.md)
-- ⚡ 配置 GPU 加速：[GPU_SUPPORT.md](GPU_SUPPORT.md)
-- 📋 查看项目状态：[CHECKLIST.md](CHECKLIST.md)
-
----
-
-**最后更新**: 2026-05-19
+**最后更新：2026-06-13**

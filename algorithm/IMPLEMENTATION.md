@@ -1,5 +1,7 @@
 # 地标检索算法实现详解
 
+> 文档定位：本文重点解释基础特征提取、FAISS 与马氏距离检索实现。当前依赖安装、双实例启动和 GPU 配置以 [README.md](README.md)、[QUICKSTART.md](QUICKSTART.md) 与 [GPU_SUPPORT.md](GPU_SUPPORT.md) 为准；SAR 持续适配和索引版本切换以 [持续 SAR 双轨运行验证记录](../docs/14_sar_online_adaptation_test.md) 及实际代码为准。
+
 ## 📋 目录
 
 1. [系统架构](#系统架构)

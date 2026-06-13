@@ -16,7 +16,7 @@ function networkLabelPlugin() {
           const port = address.port
           const interfaces = os.networkInterfaces()
           
-          console.log(`\n  \x1b[32m➜\x1b[0m  \x1b[1mLocal:      \x1b[0mhttps://localhost:${port}/`)
+          console.log(`\n  \x1b[32m>\x1b[0m  \x1b[1mLocal:      \x1b[0mhttps://localhost:${port}/`)
           
           const paddedLabels = {
             'WLAN': 'WLAN:       ',
@@ -44,7 +44,7 @@ function networkLabelPlugin() {
                 }
                 
                 const prefix = paddedLabels[label] || `${label}: `
-                console.log(`  \x1b[32m➜\x1b[0m  \x1b[1m${prefix}\x1b[0mhttps://${net.address}:${port}/`)
+                console.log(`  \x1b[32m>\x1b[0m  \x1b[1m${prefix}\x1b[0mhttps://${net.address}:${port}/`)
               }
             }
           }

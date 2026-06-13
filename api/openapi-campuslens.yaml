@@ -369,6 +369,20 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AdminSearchRecord"
+  /api/admin/algorithm/runtime:
+    get:
+      summary: 查看算法运行状态
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 主算法实例、模型、SAR、活动索引和重建任务状态
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
   /api/admin/landmarks:
     post:
       summary: 新增地标
@@ -444,8 +458,60 @@ paths:
       security:
         - bearerAuth: []
       responses:
+        "202":
+          description: 已提交索引重建任务
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rebuildJobId, status]
+                properties:
+                  rebuildJobId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [building]
+                  createdAt:
+                    type: string
+                    format: date-time
+                  error:
+                    type: string
+                    nullable: true
+  /api/admin/index/rebuild/{jobId}:
+    get:
+      summary: 查询索引重建任务状态
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
         "200":
-          description: 已提交统计参数重建任务
+          description: 重建任务状态；完成时包含 indexVersion，失败时包含 error
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rebuildJobId, status]
+                properties:
+                  rebuildJobId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [building, switching, completed, failed]
+                  indexVersion:
+                    type: string
+                    nullable: true
+                  error:
+                    type: string
+                    nullable: true
   /api/admin/feedback:
     get:
       summary: 查看反馈记录
