@@ -4,6 +4,7 @@ node_modules/
 venv/
 env/
 ENV/
+.clenv/
 __pycache__/
 *.pyc
 *.pyo

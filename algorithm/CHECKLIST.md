@@ -75,6 +75,6 @@ scripts\verify.cmd
 - FAISS 使用 CPU，GPU 主要用于 DINOv2 和 SAR 计算。
 - 压测结论应以实际运行记录为准，不在本文维护固定吞吐量或显存数字。
 
-详细启动方式见 [QUICKSTART.md](QUICKSTART.md)，GPU 配置见 [GPU_SUPPORT.md](GPU_SUPPORT.md)，全链路验收记录见 [../docs/15_full_system_acceptance_test.md](../docs/15_full_system_acceptance_test.md)。
+详细启动方式见 [README.md](README.md)，GPU 配置见 [GPU_SUPPORT.md](GPU_SUPPORT.md)，全链路验收记录见 [../docs/15_full_system_acceptance_test.md](../docs/15_full_system_acceptance_test.md)。
 
 **最后更新：2026-06-13**
