@@ -1,5 +1,12 @@
 @backend = http://localhost:8080
 @algorithm = http://localhost:8000
+@adminToken = 请先执行管理员登录并复制返回 token
+@userToken = 请先执行用户登录并复制返回 token
+@guestId = 请先执行游客身份接口并复制返回 guestId
+@guestClientToken = local-browser-token-00000001
+@jobId = 请复制上传接口返回的 jobId
+@jobToken = 请复制上传接口返回的 jobToken
+@rebuildJobId = 请复制索引重建接口返回的 rebuildJobId
 
 ### 后端健康检查
 GET {{backend}}/api/health
@@ -10,8 +17,46 @@ GET {{backend}}/api/landmarks
 ### 获取地标详情
 GET {{backend}}/api/landmarks/1
 
-### 上传图片并检索 Top-5
+### 幂等获取游客身份
+POST {{backend}}/api/guests
+Content-Type: application/json
+
+{
+  "clientToken": "{{guestClientToken}}"
+}
+
+### 普通用户注册
+POST {{backend}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "student01",
+  "password": "password123",
+  "email": "student01@example.com"
+}
+
+### 用户登录
+POST {{backend}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "student01",
+  "password": "password123"
+}
+
+### 管理员隐式登录后台
+POST {{backend}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin"
+}
+
+### 提交异步图片检索任务
 POST {{backend}}/api/search/upload
+Authorization: Bearer {{userToken}}
+Idempotency-Key: local-demo-upload-001
 Content-Type: multipart/form-data; boundary=CampusLensBoundary
 
 --CampusLensBoundary
@@ -19,16 +64,31 @@ Content-Disposition: form-data; name="file"; filename="sample.jpg"
 Content-Type: image/jpeg
 
 < ./sample.jpg
+--CampusLensBoundary
+Content-Disposition: form-data; name="guestId"
+
+{{guestId}}
 --CampusLensBoundary--
 
+### 登录用户查询检索任务
+GET {{backend}}/api/search/jobs/{{jobId}}
+Authorization: Bearer {{userToken}}
+
+### 游客查询检索任务
+GET {{backend}}/api/search/jobs/{{jobId}}
+X-Search-Job-Token: {{jobToken}}
+
 ### 提交识别反馈：正确
+# searchRecordId 需使用上一步上传接口返回的数据库记录 ID。
 POST {{backend}}/api/feedback
+Authorization: Bearer {{userToken}}
 Content-Type: application/json
 
 {
   "searchRecordId": 1,
   "predictedLandmarkId": 1,
   "confirmedLandmarkId": 1,
+  "guestId": "{{guestId}}",
   "feedbackType": "correct",
   "comment": "识别结果正确"
 }
@@ -41,6 +101,7 @@ Content-Type: application/json
   "searchRecordId": 1,
   "predictedLandmarkId": 1,
   "confirmedLandmarkId": 2,
+  "guestId": "{{guestId}}",
   "feedbackType": "wrong",
   "comment": "实际是学术大讲堂"
 }
@@ -56,21 +117,88 @@ Content-Type: application/json
   "comment": "照片角度较偏，无法确认候选地标"
 }
 
-### 新增地标
-POST {{backend}}/api/admin/landmarks
+### 当前登录用户个人历史
+GET {{backend}}/api/me/search-records?limit=20
+Authorization: Bearer {{userToken}}
+
+### 查询打卡留言
+GET {{backend}}/api/check-ins?limit=50&guestId={{guestId}}
+
+### 发布打卡留言
+POST {{backend}}/api/check-ins
+Authorization: Bearer {{userToken}}
 Content-Type: application/json
 
 {
-  "code": "L01",
-  "name": "图书馆",
+  "landmarkId": 1,
+  "message": "图书馆门口完成打卡，入口角度适合拍摄识别样本。",
+  "guestId": "{{guestId}}"
+}
+
+### 点赞或取消点赞
+POST {{backend}}/api/check-ins/1/like?guestId={{guestId}}
+Authorization: Bearer {{userToken}}
+
+### 回复打卡留言
+POST {{backend}}/api/check-ins/1/replies
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+{
+  "message": "同一位置傍晚光线也比较稳定。",
+  "guestId": "{{guestId}}"
+}
+
+### 查看最近检索记录
+GET {{backend}}/api/admin/search-records
+Authorization: Bearer {{adminToken}}
+
+### 查看反馈记录
+GET {{backend}}/api/admin/feedback
+Authorization: Bearer {{adminToken}}
+
+### 查看反馈详情
+GET {{backend}}/api/admin/feedback/1
+Authorization: Bearer {{adminToken}}
+
+### 处理反馈状态
+POST {{backend}}/api/admin/feedback/1/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "accepted"
+}
+
+### 新增地标
+POST {{backend}}/api/admin/landmarks
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "code": "L11",
+  "name": "新增测试地标",
   "englishName": "Library",
   "type": "建筑",
   "summary": "校园核心学习空间，建筑体量大、外立面辨识度高。",
-  "locationText": "文雍广场附近"
+  "description": "用于管理员新增地标接口联调。",
+  "locationText": "文雍广场附近",
+  "mapX": 50.0,
+  "mapY": 50.0,
+  "coverImageUrl": "/images/landmarks/l11.jpg"
 }
 
 ### 重建统计参数
 POST {{backend}}/api/admin/index/rebuild
+Authorization: Bearer {{adminToken}}
+
+### 查询算法运行状态
+GET {{backend}}/api/admin/algorithm/runtime
+Authorization: Bearer {{adminToken}}
+
+### 查询索引重建任务
+GET {{backend}}/api/admin/index/rebuild/{{rebuildJobId}}
+Authorization: Bearer {{adminToken}}
 
 ### 算法服务检索接口
 POST {{algorithm}}/api/v1/search
@@ -83,11 +211,62 @@ Content-Type: image/jpeg
 < ./sample.jpg
 --CampusLensAlgorithmBoundary--
 
+### 算法服务批量检索接口（最多 2 张）
+POST {{algorithm}}/api/v1/search/batch
+Content-Type: multipart/form-data; boundary=CampusLensBatchBoundary
+
+--CampusLensBatchBoundary
+Content-Disposition: form-data; name="files"; filename="sample-1.jpg"
+Content-Type: image/jpeg
+
+< ./sample.jpg
+--CampusLensBatchBoundary
+Content-Disposition: form-data; name="files"; filename="sample-2.jpg"
+Content-Type: image/jpeg
+
+< ./sample.jpg
+--CampusLensBatchBoundary--
+
 ### 算法服务重建统计参数
 POST {{algorithm}}/api/v1/index/rebuild
+
+### 算法服务查询重建任务
+GET {{algorithm}}/api/v1/index/rebuild/{{rebuildJobId}}
+
+### 算法服务运行状态
+GET {{algorithm}}/api/v1/runtime/status
 
 ### 算法服务统计参数状态
 GET {{algorithm}}/api/v1/index/stats
 
 ### 算法服务健康检查
 GET {{algorithm}}/api/v1/health
+
+### 算法服务校正样本接收接口
+POST {{algorithm}}/api/v1/adaptation/correction-samples
+Content-Type: multipart/form-data; boundary=CampusLensCorrectionBoundary
+
+--CampusLensCorrectionBoundary
+Content-Disposition: form-data; name="file"; filename="sample.jpg"
+Content-Type: image/jpeg
+
+< ../datasets/landmarks/L02_academic_auditorium/L02_back_day_010.jpg
+--CampusLensCorrectionBoundary
+Content-Disposition: form-data; name="payload"
+Content-Type: text/plain; charset=utf-8
+
+{
+  "sampleId": 1,
+  "feedbackId": 1,
+  "searchRecordId": 1,
+  "imageUrl": "/uploads/20260608/sample.jpg",
+  "confirmedLandmarkCode": "L02",
+  "predictedLandmarkCode": "L01",
+  "feedbackType": "wrong",
+  "comment": "实际是学术大讲堂",
+  "topResults": [
+    { "rank": 1, "landmarkCode": "L01", "score": 0.91, "mahalanobisDistance": 3.12 },
+    { "rank": 2, "landmarkCode": "L02", "score": 0.72, "mahalanobisDistance": 6.45 }
+  ]
+}
+--CampusLensCorrectionBoundary--

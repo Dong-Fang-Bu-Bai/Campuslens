@@ -1,236 +1,132 @@
-# CPU/GPU 双模式支持说明
+# CampusLens CPU/GPU 环境说明
 
-## 📋 概述
+## 当前计算边界
 
-CampusLens AI 图像检索服务现已支持 **CPU 和 GPU 双模式**，可根据硬件配置灵活切换。
+- DINOv2 特征提取使用 PyTorch，可在 NVIDIA GPU 或 CPU 上运行。
+- FAISS 固定使用 `faiss-cpu==1.7.4`。当前索引规模不需要 FAISS GPU，且 Windows 环境不再安装 `faiss-gpu`。
+- 日常模式启动两个独立算法进程，主实例监听 `8000`，备用实例监听 `8001`。两个进程都会加载模型，因此显存占用不是单实例的数值。
+- `.env` 默认 `DEVICE=auto`：CUDA 可用时选择 GPU，否则回退 CPU。设置 `DEVICE=cuda` 时若 CUDA 不可用，服务会明确报错。
 
-## 🎯 核心特性
+## Windows GPU 安装
 
-- ✅ **自动检测**: 默认 `DEVICE=auto` 自动选择最佳设备
-- ✅ **灵活切换**: 通过环境变量或安装脚本快速切换
-- ✅ **性能优化**: GPU 模式下特征提取速度提升 6-7 倍
-- ✅ **兼容性好**: CPU 模式可在任何机器上运行
+推荐方式：
 
----
+```powershell
+cd algorithm
+Copy-Item .env.example .env
+.\create_gpu_env.bat
+```
 
-## 🚀 快速开始
+脚本使用固定路径：
 
-### 默认 CPU 模式
+```text
+Conda:  D:\AnaConda\Scripts\conda.exe
+环境:   D:\AnaConda\envs\campuslens-gpu
+缓存:   D:\Tools\conda-pkgs、D:\Tools\pip-cache、D:\tmp
+```
+
+如果本机环境路径不同，先创建自己的 Python 3.10 环境，再指定解释器：
+
+```powershell
+$env:CAMPUSLENS_ALGORITHM_PYTHON = "D:\path\to\python.exe"
+.\install_gpu.bat
+```
+
+`install_gpu.bat` 安装 `requirements-gpu.txt` 和 `requirements-test.txt`。其中 GPU requirements 已引用公共 `requirements.txt`，无需再单独安装。
+
+## CPU 安装
+
+```powershell
+$env:CAMPUSLENS_ALGORITHM_PYTHON = "D:\path\to\python.exe"
+.\install_cpu.bat
+```
+
+该脚本会移除现有 `torch`、`torchvision`，再安装 CPU 版本及测试依赖。不要在仍需 CUDA 的共享环境中执行该脚本。
+
+Linux NVIDIA 环境可在 Python 3.10 虚拟环境中执行：
 
 ```bash
-pip install -r requirements.txt
-python app/main.py
+python -m pip install -r requirements-gpu.txt -r requirements-test.txt
 ```
 
-启动时会看到：
-```
-Using device: cpu
-```
+macOS 和无 NVIDIA GPU 的 Linux 环境使用 `requirements-cpu.txt`。
 
-### 启用 GPU 加速
+## 验证
 
-#### Windows（推荐）
+Windows 推荐环境：
 
-```bash
-install_gpu.bat
-python app/main.py
+```powershell
+D:\AnaConda\envs\campuslens-gpu\python.exe -c "import torch, faiss; print('CUDA:', torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'); print('FAISS CPU ready')"
 ```
 
-启动时会看到：
-```
-Using device: cuda
-```
+同时检查驱动：
 
-#### Linux/Mac
-
-```bash
-pip uninstall -y torch torchvision faiss-cpu
-pip install torch==2.1.2+cu118 torchvision==0.16.2+cu118 --index-url https://download.pytorch.org/whl/cu118
-pip install faiss-gpu==1.7.4
-python app/main.py
+```powershell
+nvidia-smi
 ```
 
----
+验收标准是 `torch.cuda.is_available()` 返回 `True` 且能输出显卡名称。FAISS GPU 数量不是当前项目的验收指标。
 
-## ⚙️ 配置方式
+服务启动后可检查两个实例：
 
-### 方法 1: 环境变量（推荐）
+```powershell
+curl.exe http://localhost:8000/api/v1/health
+curl.exe http://localhost:8001/api/v1/health
+```
 
-在 `.env` 文件中设置：
+响应中的 `instanceId`、`instanceRole` 和设备信息应与主备配置一致。
 
-```bash
-# 自动检测（默认）
+## 配置
+
+在 `algorithm/.env` 中选择设备：
+
+```dotenv
 DEVICE=auto
-
-# 强制使用 CPU
-DEVICE=cpu
-
-# 强制使用 GPU
-DEVICE=cuda
+MIXED_PRECISION=true
+BATCH_SIZE=32
+SAR_ENABLED=true
 ```
 
-### 方法 2: 代码指定
+- `DEVICE=auto`：自动选择 CUDA 或 CPU。
+- `DEVICE=cuda`：要求 CUDA 必须可用。
+- `DEVICE=cpu`：强制 CPU，适合兼容性验证。
+- `MIXED_PRECISION=true`：GPU 推理使用混合精度以降低显存和延迟。
+- `SAR_ENABLED=true`：允许请求使用 SAR；具体请求仍需传入 `sarMode=true`。
 
-```python
-from app.models.dinov2_extractor import DINOv2Extractor
+## 双实例资源说明
 
-# 自动检测
-extractor = DINOv2Extractor(model_path="...", device="auto")
+日常启动脚本会启动两个独立 Python 进程。这样可以在主实例连接失败、超时或返回 5xx 时由后端转向备用实例，但代价是两份模型显存。
 
-# 强制 CPU
-extractor = DINOv2Extractor(model_path="...", device="cpu")
+显存不足时按以下顺序处理：
 
-# 强制 GPU
-extractor = DINOv2Extractor(model_path="...", device="cuda")
+1. 关闭其他占用 GPU 的进程。
+2. 减小 `.env` 中的 `BATCH_SIZE`。
+3. 临时设置 `DEVICE=cpu` 验证功能。
+4. 仅在开发诊断时手工启动单实例；日常完整验收仍使用双实例。
+
+## 常见故障
+
+### `torch.cuda.is_available()` 为 `False`
+
+确认 NVIDIA 驱动正常，再确认实际启动解释器与安装依赖时使用的是同一个解释器：
+
+```powershell
+where.exe python
+$env:CAMPUSLENS_ALGORITHM_PYTHON
 ```
 
----
+项目启动脚本的解释器优先级为：`CAMPUSLENS_ALGORITHM_PYTHON`、固定 D 盘 Conda 环境、项目 `.venv`。
 
-## 📊 性能对比
+### 安装后仍缺少 PyTorch
 
-| 操作 | CPU (i7) | GPU (RTX 3060) | 加速比 |
-|------|----------|----------------|--------|
-| 单图特征提取 | ~200ms | ~30ms | **6.7x** ⚡ |
-| Top-5 检索 | ~5ms | ~2ms | 2.5x |
-| 索引构建 (250张) | ~60s | ~15s | **4x** ⚡ |
-| 内存/显存占用 | ~2GB RAM | ~1.5GB VRAM | - |
+`requirements.txt` 只包含公共依赖。应运行 `install_gpu.bat`、`install_cpu.bat`，或安装对应的 CPU/GPU requirements。
 
-**建议**：如果有 NVIDIA GPU，强烈建议启用 GPU 加速！
+### 模型加载失败
 
----
+确认 `algorithm/models/dinov2_model.pth` 存在，且 `.env` 中 `DINO_MODEL_PATH` 指向正确文件。统一启动脚本不会下载模型。
 
-## 🔧 切换模式
+### 双实例中一个未启动
 
-### CPU → GPU
+先查看 `scripts/runtime/logs`，再检查 8000、8001 端口。可用根目录 `scripts\stop.cmd` 清理旧进程后重新启动。
 
-```bash
-# Windows
-install_gpu.bat
-
-# Linux/Mac
-pip uninstall -y torch torchvision faiss-cpu
-pip install torch==2.1.2+cu118 torchvision==0.16.2+cu118 --index-url https://download.pytorch.org/whl/cu118
-pip install faiss-gpu==1.7.4
-```
-
-### GPU → CPU
-
-```bash
-# Windows
-install_cpu.bat
-
-# Linux/Mac
-pip uninstall -y torch torchvision faiss-gpu
-pip install torch==2.1.2 torchvision==0.16.2 faiss-cpu==1.7.4
-```
-
----
-
-## ✅ 验证 GPU 是否生效
-
-```bash
-# 检查 CUDA 可用性
-python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
-
-# 检查 GPU 信息
-python -c "import torch; print(torch.cuda.get_device_name(0))"
-
-# 检查 FAISS GPU 支持
-python -c "import faiss; print(f'GPU count: {faiss.get_num_gpus()}')"
-```
-
-预期输出（GPU 模式）：
-```
-CUDA available: True
-NVIDIA GeForce RTX 3060
-GPU count: 1
-```
-
----
-
-## ⚠️ 注意事项
-
-### GPU 要求
-
-1. **硬件**: NVIDIA GPU（至少 4GB 显存）
-2. **驱动**: 最新 NVIDIA 显卡驱动
-3. **CUDA**: CUDA 11.8+（PyTorch 会自动包含）
-
-### 常见问题
-
-**Q: 为什么显示 `Using device: cpu`？**
-
-A: 可能原因：
-- 没有 NVIDIA GPU
-- 未安装 GPU 版本依赖
-- 设置了 `DEVICE=cpu`
-
-解决：运行 `nvidia-smi` 检查 GPU，然后运行 `install_gpu.bat`
-
-**Q: GPU 模式下内存不足？**
-
-A: 减小批处理大小：
-```bash
-# 在 .env 文件中
-BATCH_SIZE=16
-```
-
-**Q: 可以在没有 GPU 的机器上运行吗？**
-
-A: 可以！默认就是 CPU 模式，无需任何额外配置。
-
-**Q: GPU 加速对马氏距离计算有帮助吗？**
-
-A: 
-- 特征提取（DINOv2）：**显著提升**（6-7倍）
-- 马氏距离计算：轻微提升（矩阵运算在 CPU 上已很快）
-- 总体收益：仍然值得，因为特征提取是瓶颈
-
----
-
-## 🎯 最佳实践
-
-1. **开发环境**: 使用 CPU 模式（简单、兼容性好）
-2. **生产环境**: 如有 GPU，强烈建议启用（性能提升显著）
-3. **测试阶段**: 先用 CPU 验证功能，再切换到 GPU 优化性能
-4. **资源受限**: 使用 CPU + 小 BATCH_SIZE
-
----
-
-## 📝 技术实现
-
-### 自动检测逻辑
-
-```python
-# app/models/dinov2_extractor.py
-if device == "auto" or device is None:
-    self.device = "cuda" if torch.cuda.is_available() else "cpu"
-else:
-    self.device = device
-```
-
-### 配置加载
-
-```python
-# app/config.py
-DEVICE = os.getenv("DEVICE", "auto")
-
-# app/services/feature_service.py
-self.extractor = DINOv2Extractor(
-    model_path=Config.DINO_MODEL_PATH,
-    device=Config.DEVICE
-)
-```
-
----
-
-## 🔗 相关文档
-
-- [README.md](README.md) - 完整使用文档
-- [QUICKSTART.md](QUICKSTART.md) - 快速启动指南
-- [requirements.txt](requirements.txt) - 依赖列表
-
----
-
-**最后更新**: 2026-05-19  
-**版本**: v2.0
+**最后更新：2026-06-13**

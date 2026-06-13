@@ -18,10 +18,40 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
+  /api/guests:
+    post:
+      summary: 幂等分配浏览器游客身份
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GuestIdentityRequest"
+      responses:
+        "200":
+          description: 返回数据库分配并由当前浏览器复用的游客编号
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuestIdentityResponse"
+        "400":
+          description: clientToken 缺失或长度不合法
   /api/search/upload:
     post:
-      summary: 上传图片并检索 Top-5 地标
+      summary: 提交异步图片检索任务
       tags: [Search]
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+          description: 在同一登录用户或游客作用域内，同键同文件返回原任务；同键不同文件返回 409
       requestBody:
         required: true
         content:
@@ -33,15 +63,55 @@ paths:
                 file:
                   type: string
                   format: binary
+                guestId:
+                  type: string
+                  description: 未登录游客标识；登录用户身份由 Bearer token 解析
       responses:
-        "200":
-          description: 检索成功；若算法服务暂不可用，返回空候选结果、lowConfidence=true 并在 message 中说明原因
+        "202":
+          description: 任务已进入 Redis 队列
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SearchResponse"
+                $ref: "#/components/schemas/SearchJobSubmission"
         "400":
           description: 图片格式或参数错误
+        "409":
+          description: 同一幂等键用于不同图片
+        "429":
+          description: 队列容量已满，并返回 Retry-After
+        "503":
+          description: Redis 队列不可用，且不会保留伪成功记录
+  /api/search/jobs/{jobId}:
+    get:
+      summary: 查询异步图片检索任务状态
+      tags: [Search]
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: X-Search-Job-Token
+          in: header
+          required: false
+          schema:
+            type: string
+          description: 游客任务必须携带；登录任务使用 Bearer token 校验所有权
+      responses:
+        "200":
+          description: 当前任务状态及完成后的 Top-5
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchJobStatus"
+        "401":
+          description: 登录用户无权访问，或游客任务令牌无效
+        "404":
+          description: 任务不存在
   /api/landmarks:
     get:
       summary: 获取地标列表
@@ -79,6 +149,9 @@ paths:
     post:
       summary: 提交识别反馈
       tags: [Feedback]
+      security:
+        - bearerAuth: []
+        - {}
       requestBody:
         required: true
         content:
@@ -92,10 +165,230 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FeedbackResponse"
+  /api/auth/register:
+    post:
+      summary: 普通用户注册
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthRegisterRequest"
+      responses:
+        "200":
+          description: 注册成功并返回用户身份
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: 用户名重复、密码过短或参数错误
+  /api/auth/login:
+    post:
+      summary: 用户登录；admin/admin 会返回管理员身份
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthLoginRequest"
+      responses:
+        "200":
+          description: 登录成功；role=admin 时前端自动进入后台
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: 用户名或密码错误
+  /api/me/search-records:
+    get:
+      summary: 查询当前登录用户个人检索历史
+      tags: [User]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 50
+      responses:
+        "200":
+          description: 当前登录用户自己的检索记录
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserSearchRecord"
+        "401":
+          description: 未登录
+  /api/check-ins:
+    get:
+      summary: 查询校园打卡留言
+      tags: [CheckIn]
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: landmarkId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: guestId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 打卡留言列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CheckInRecord"
+    post:
+      summary: 发布校园打卡留言
+      tags: [CheckIn]
+      security:
+        - bearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckInRequest"
+      responses:
+        "200":
+          description: 发布成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckInRecord"
+  /api/check-ins/{id}/like:
+    post:
+      summary: 点赞或取消点赞打卡留言
+      tags: [CheckIn]
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: guestId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 点赞状态
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LikeResponse"
+  /api/check-ins/{id}/replies:
+    post:
+      summary: 回复打卡留言
+      tags: [CheckIn]
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckInReplyRequest"
+      responses:
+        "200":
+          description: 回复成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckInReply"
+  /api/admin/auth/login:
+    post:
+      summary: 管理员轻量登录（兼容旧接口，前端不直接展示）
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminLoginRequest"
+      responses:
+        "200":
+          description: 登录成功；V2 前端使用 /api/auth/login 隐式进入后台
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminLoginResponse"
+        "400":
+          description: 账号或密码错误
+  /api/admin/search-records:
+    get:
+      summary: 查看最近检索记录
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 最近 50 条检索记录
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminSearchRecord"
+  /api/admin/algorithm/runtime:
+    get:
+      summary: 查看算法运行状态
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 主算法实例、模型、SAR、活动索引和重建任务状态
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
   /api/admin/landmarks:
     post:
       summary: 新增地标
       tags: [Admin]
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -109,6 +402,8 @@ paths:
     put:
       summary: 修改地标
       tags: [Admin]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -129,6 +424,8 @@ paths:
     post:
       summary: 上传地标样本图片
       tags: [Admin]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -158,18 +455,210 @@ paths:
     post:
       summary: 重建地标统计参数
       tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        "202":
+          description: 已提交索引重建任务
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rebuildJobId, status]
+                properties:
+                  rebuildJobId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [building]
+                  createdAt:
+                    type: string
+                    format: date-time
+                  error:
+                    type: string
+                    nullable: true
+  /api/admin/index/rebuild/{jobId}:
+    get:
+      summary: 查询索引重建任务状态
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       responses:
         "200":
-          description: 已提交统计参数重建任务
+          description: 重建任务状态；完成时包含 indexVersion，失败时包含 error
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rebuildJobId, status]
+                properties:
+                  rebuildJobId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [building, switching, completed, failed]
+                  indexVersion:
+                    type: string
+                    nullable: true
+                  error:
+                    type: string
+                    nullable: true
   /api/admin/feedback:
     get:
       summary: 查看反馈记录
       tags: [Admin]
+      security:
+        - bearerAuth: []
       responses:
         "200":
           description: 反馈列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminFeedbackRecord"
+  /api/admin/feedback/{id}:
+    get:
+      summary: 查看反馈详情
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: 反馈详情，含上传图、Top-5 快照和校正样本状态
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminFeedbackDetail"
+  /api/admin/feedback/{id}/status:
+    post:
+      summary: 更新反馈处理状态
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackStatusRequest"
+      responses:
+        "200":
+          description: 状态更新成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackResponse"
+        "400":
+          description: 任务尚未成功完成，或候选地标不属于本次 Top-5
+        "401":
+          description: 登录用户或游客标识与检索任务所有者不一致
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: 登录或注册接口返回的服务端会话 token。后台接口要求 role=admin。
   schemas:
+    GuestIdentityRequest:
+      type: object
+      required: [clientToken]
+      properties:
+        clientToken:
+          type: string
+          minLength: 16
+          maxLength: 200
+    GuestIdentityResponse:
+      type: object
+      required: [guestId]
+      properties:
+        guestId:
+          type: string
+          pattern: '^guest#[1-9][0-9]*$'
+    SearchJobSubmission:
+      type: object
+      required: [jobId, searchRecordId, status, jobToken, pollAfterMs]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        searchRecordId:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [queued, processing, success, low_confidence, failed]
+        jobToken:
+          type: string
+          description: 游客轮询令牌；数据库仅保存 SHA-256 哈希
+        pollAfterMs:
+          type: integer
+          example: 1000
+    SearchJobStatus:
+      type: object
+      required: [jobId, searchRecordId, status, attemptCount, lowConfidence, results]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        searchRecordId:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [queued, processing, success, low_confidence, failed]
+        attemptCount:
+          type: integer
+        uploadImageUrl:
+          type: string
+        guestId:
+          type: string
+        lowConfidence:
+          type: boolean
+        message:
+          type: string
+        errorCode:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+        queuedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        finishedAt:
+          type: string
+          format: date-time
+          nullable: true
     SearchResponse:
       type: object
       required: [searchRecordId, results]
@@ -301,6 +790,10 @@ components:
         confirmedLandmarkId:
           type: integer
           format: int64
+        guestId:
+          type: string
+          nullable: true
+          description: 未登录游客标识，必须与检索任务一致；登录用户身份由 Bearer token 解析
         feedbackType:
           type: string
           enum: [correct, wrong, uncertain]
@@ -318,9 +811,319 @@ components:
         message:
           type: string
           example: 反馈已记录，后续可进入后台审核
+    FeedbackStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending, accepted, ignored]
+    UserSearchRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        uploadImageUrl:
+          type: string
+        bestLandmarkName:
+          type: string
+          nullable: true
+        bestScore:
+          type: number
+          format: double
+          nullable: true
+        status:
+          type: string
+        lowConfidence:
+          type: boolean
+        message:
+          type: string
+        feedbackStatus:
+          type: string
+          nullable: true
+        topResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+        createdAt:
+          type: string
+          format: date-time
+    CheckInRequest:
+      type: object
+      required: [landmarkId, message]
+      properties:
+        landmarkId:
+          type: integer
+          format: int64
+        message:
+          type: string
+          maxLength: 500
+        guestId:
+          type: string
+          nullable: true
+    CheckInReplyRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          maxLength: 500
+        guestId:
+          type: string
+          nullable: true
+    CheckInReply:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        checkInId:
+          type: integer
+          format: int64
+        displayName:
+          type: string
+        message:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    CheckInRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        landmarkId:
+          type: integer
+          format: int64
+        landmarkCode:
+          type: string
+        landmarkName:
+          type: string
+        displayName:
+          type: string
+        message:
+          type: string
+        likeCount:
+          type: integer
+        replyCount:
+          type: integer
+        likedByMe:
+          type: boolean
+        replies:
+          type: array
+          items:
+            $ref: "#/components/schemas/CheckInReply"
+        createdAt:
+          type: string
+          format: date-time
+    LikeResponse:
+      type: object
+      properties:
+        checkInId:
+          type: integer
+          format: int64
+        liked:
+          type: boolean
+        likeCount:
+          type: integer
+    AuthRegisterRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          description: 普通字符串，数据库唯一
+          example: student01
+        password:
+          type: string
+          minLength: 8
+          example: password123
+        email:
+          type: string
+          format: email
+          nullable: true
+          description: 选填，用于绑定
+    AuthLoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: student01
+        password:
+          type: string
+          example: password123
+    AuthResponse:
+      type: object
+      properties:
+        userId:
+          type: integer
+          format: int64
+        username:
+          type: string
+        email:
+          type: string
+          nullable: true
+        role:
+          type: string
+          enum: [user, admin]
+        admin:
+          type: boolean
+        token:
+          type: string
+          description: "服务端会话 token，调用需登录接口时放入 Authorization: Bearer"
+        message:
+          type: string
+    AdminLoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: admin
+        password:
+          type: string
+          example: admin
+    AdminLoginResponse:
+      type: object
+      properties:
+        loggedIn:
+          type: boolean
+        username:
+          type: string
+        role:
+          type: string
+        token:
+          type: string
+        message:
+          type: string
+    AdminSearchRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        uploadImageUrl:
+          type: string
+        bestLandmarkName:
+          type: string
+          nullable: true
+        bestScore:
+          type: number
+          format: double
+          nullable: true
+        status:
+          type: string
+          enum: [queued, processing, success, low_confidence, failed]
+        lowConfidence:
+          type: boolean
+        message:
+          type: string
+        guestId:
+          type: string
+        userId:
+          type: integer
+          format: int64
+          nullable: true
+        username:
+          type: string
+          nullable: true
+        userType:
+          type: string
+          enum: [guest, user]
+        createdAt:
+          type: string
+          format: date-time
+    AdminFeedbackRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        searchRecordId:
+          type: integer
+          format: int64
+        predictedLandmarkId:
+          type: integer
+          format: int64
+          nullable: true
+        predictedLandmarkName:
+          type: string
+          nullable: true
+        confirmedLandmarkId:
+          type: integer
+          format: int64
+          nullable: true
+        confirmedLandmarkName:
+          type: string
+          nullable: true
+        userId:
+          type: integer
+          format: int64
+          nullable: true
+        username:
+          type: string
+          nullable: true
+        feedbackType:
+          type: string
+          enum: [correct, wrong, uncertain]
+        comment:
+          type: string
+        status:
+          type: string
+          enum: [pending, accepted, ignored]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    AdminFeedbackDetail:
+      allOf:
+        - $ref: "#/components/schemas/AdminFeedbackRecord"
+        - type: object
+          properties:
+            uploadImageUrl:
+              type: string
+            guestId:
+              type: string
+              nullable: true
+            topResults:
+              type: array
+              items:
+                $ref: "#/components/schemas/SearchResult"
+            correctionSample:
+              $ref: "#/components/schemas/CorrectionSampleInfo"
+    CorrectionSampleInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        syncStatus:
+          type: string
+          enum: [sync_pending, synced, sync_failed]
+        suggestAccept:
+          type: boolean
+          nullable: true
+        reviewScore:
+          type: number
+          format: double
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        sarEligible:
+          type: boolean
+          nullable: true
+        nextAction:
+          type: string
+          nullable: true
     LandmarkCreateRequest:
       type: object
-      required: [code, name]
+      required: [code, name, mapX, mapY]
       properties:
         code:
           type: string
@@ -340,6 +1143,8 @@ components:
           type: number
         mapY:
           type: number
+        coverImageUrl:
+          type: string
     HealthResponse:
       type: object
       properties:
