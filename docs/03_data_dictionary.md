@@ -53,7 +53,7 @@
 
 ## SearchRecord 检索记录
 
-第三周 V2 已接入运行时持久化。`POST /api/search/upload` 保存上传图后调用算法服务，并将检索状态、Top-5 快照和游客身份写入该表，接口返回的 `searchRecordId` 来自数据库主键。
+第四周 V3 异步改造后，`search_record` 同时作为检索记录和任务权威状态表。提交接口先写入待准入记录，Redis 原子准入成功后进入 `queued`，并立即返回任务编号；Redis 只保存运行期调度结构。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -65,14 +65,37 @@
 | `status` | String | 成功、失败、低匹配等级 |
 | `lowConfidence` | Boolean | 是否需要人工核验 |
 | `message` | String | 检索提示或异常说明 |
-| `guestId` | String | 未登录用户的前端持久化游客标识；登录用户记录为 `user-{userId}` |
+| `guestId` | String | 未登录用户由 `guest_identity` 表分配的 `guest#number`；登录用户记录为 `user-{userId}` |
 | `userId` | Long | 登录用户 ID，未登录时为空 |
 | `userType` | String | `guest` 或 `user` |
+| `jobId` | String | 对外任务 UUID，唯一 |
+| `jobTokenHash` | String | 游客任务令牌 SHA-256 哈希，不保存明文 |
+| `idempotencyKey` | String | 所有者作用域与原始幂等键的 SHA-256 摘要，全局唯一且不暴露原始键 |
+| `fileSha256` | String | 上传文件摘要，用于识别同键不同文件 |
+| `queuedAt` | DateTime | Redis 容量准入确认时间；为空表示尚未完成准入 |
+| `startedAt` | DateTime | 首次开始处理时间 |
+| `finishedAt` | DateTime | 进入终态时间 |
+| `updatedAt` | DateTime | 最近状态更新时间 |
+| `attemptCount` | Integer | 已领取执行次数，最多 3 次 |
+| `errorCode` | String | 最近错误代码，可为空 |
+| `leaseUntil` | DateTime | 当前 worker 租约到期时间 |
+| `workerId` | String | 当前领取任务的消费者标识 |
+| `nextAttemptAt` | DateTime | 下次允许重试的时间；首次任务和终态为空 |
+| `sarMode` | Boolean | 用户提交时是否请求持续 SAR 模式 |
+| `sarApplied` | Boolean | 本次任务是否实际应用 SAR；任务未完成时可为空 |
+| `trustLevel` | String | SAR 可靠性门控结果或信任等级 |
+| `baseModelVersion` | String | 本次检索使用的基础模型版本 |
+| `indexVersion` | String | 本次检索读取的活动索引版本 |
+| `sarStateVersion` | String | 本次检索使用的 SAR 状态版本 |
+| `algorithmInstanceId` | String | 实际处理任务的算法实例编号 |
+| `algorithmInstanceRole` | String | 实际算法实例角色，当前为 `primary` 或 `secondary` |
 | `createdAt` | DateTime | 检索时间 |
+
+状态取值为 `queued`、`processing`、`success`、`low_confidence`、`failed`。Top-5 快照不重复保存地标 Base64 封面，避免运行记录膨胀；展示时根据地标编号补齐封面。
 
 ## Feedback 用户反馈
 
-第三周 V2 已接入运行时持久化。提交反馈时会校验 `searchRecordId` 是否存在，并要求 `predictedLandmarkId` 来自本次检索结果，保证反馈和检索记录能闭环追踪。
+第三周 V2 已接入运行时持久化。提交反馈时要求任务状态为 `success` 或 `low_confidence`，校验提交者所有权，并要求 `predictedLandmarkId` 来自本次检索结果。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -88,6 +111,99 @@
 | `updatedAt` | DateTime | 状态更新时间 |
 
 `feedbackType` 对外接口取值为 `correct`、`wrong`、`uncertain`。数据库可先保存同名字符串，后续如需要中文展示由前端或后台管理页面转换。
+
+## CheckIn 打卡留言
+
+第四周 V3 新增。用于校园留言板，复用 `landmark` 作为打卡地点来源。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | Long | 主键 |
+| `landmarkId` | Long | 打卡地标 |
+| `userId` | Long | 登录用户 ID，游客为空 |
+| `guestId` | String | 游客编号 |
+| `displayName` | String | 前端展示名，登录用户为用户名，游客为 `guest#number` |
+| `message` | String | 留言内容，最长 500 字符 |
+| `likeCount` | Integer | 点赞数量缓存 |
+| `replyCount` | Integer | 一级回复数量缓存 |
+| `status` | String | 当前为 `visible`，为后续后台删除/隐藏预留 |
+| `createdAt` | DateTime | 发布时间 |
+| `updatedAt` | DateTime | 更新时间 |
+
+## CheckInLike 打卡点赞
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | Long | 主键 |
+| `checkInId` | Long | 关联打卡留言 |
+| `userId` | Long | 登录用户 ID，游客为空 |
+| `guestId` | String | 游客编号 |
+| `createdAt` | DateTime | 点赞时间 |
+
+## CheckInReply 打卡回复
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | Long | 主键 |
+| `checkInId` | Long | 关联打卡留言 |
+| `userId` | Long | 登录用户 ID，游客为空 |
+| `guestId` | String | 游客编号 |
+| `displayName` | String | 展示名 |
+| `message` | String | 回复内容，最长 500 字符 |
+| `status` | String | 当前为 `visible` |
+| `createdAt` | DateTime | 回复时间 |
+
+## CorrectionSample 校正样本
+
+第四周 V3 新增。管理员采纳反馈后先写入该表，不直接污染正式地标样本库。算法服务接收元数据后写入 JSONL manifest，用于后续自适应或人工复核。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | Long | 主键 |
+| `feedbackId` | Long | 来源反馈 |
+| `searchRecordId` | Long | 来源检索记录 |
+| `uploadImageUrl` | String | 用户上传图路径 |
+| `predictedLandmarkId` | Long | 原预测地标 |
+| `confirmedLandmarkId` | Long | 管理员采纳后的确认地标 |
+| `confirmedLandmarkCode` | String | 确认地标编号，如 `L02` |
+| `sourceFeedbackType` | String | 来源反馈类型 |
+| `topResultsJson` | Text | 来源检索 Top-5 快照 |
+| `syncStatus` | String | 当前主流程为 `pending_index` 或 `published`；`sync_pending`、`synced`、`sync_failed` 仅兼容旧记录 |
+| `suggestAccept` | Boolean | 算法是否建议采纳 |
+| `reviewScore` | Decimal | 基于 Top-5 分数构造的伪概率评估分 |
+| `reason` | String | 算法建议或失败原因 |
+| `sarEligible` | Boolean | 是否满足 SAR 思路下的可靠样本门槛 |
+| `nextAction` | String | 建议动作，如 `append_to_manifest` 或 `manual_review` |
+| `algorithmResponseJson` | Text | 算法接口原始响应 |
+| `datasetPath` | String | 待发布样本在受控地标目录中的实际路径 |
+| `publishedIndexVersion` | String | 样本正式发布时对应的索引版本 |
+| `createdAt` | DateTime | 创建时间 |
+| `updatedAt` | DateTime | 更新时间 |
+
+## IndexRebuildJob 索引重建任务
+
+第四周 V3 新增。管理员提交索引重建后，后端以该表保存重建任务的权威状态，并从主算法实例同步最终发布结果。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | Long | 数据库主键 |
+| `rebuildJobId` | String | 对外重建任务 UUID，唯一 |
+| `status` | String | `building`、`switching`、`completed` 或 `failed` |
+| `indexVersion` | String | 发布成功后的活动索引版本 |
+| `errorMessage` | String | 失败原因，可为空 |
+| `createdAt` | DateTime | 创建时间 |
+| `updatedAt` | DateTime | 最近状态更新时间 |
+
+## GuestIdentity 持久化游客身份
+
+第四周 V3 新增。浏览器首次访问时提交本地生成的 `clientToken`，后端只保存 SHA-256 哈希，并通过自增主键生成全局唯一的 `guest#number`。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | Long | 自增游客编号，接口展示为 `guest#{id}` |
+| `clientTokenHash` | String | 浏览器令牌 SHA-256 哈希，唯一，不保存明文 |
+| `createdAt` | DateTime | 首次分配时间 |
+| `updatedAt` | DateTime | 最近幂等获取时间 |
 
 ## 地图坐标口径
 
@@ -123,3 +239,9 @@
 | `V3__seed_landmarks_and_admin.sql` | 写入 L01-L10 地标元数据和 `admin/admin` 演示账号 |
 | `V4__app_user_auth_and_record_owner.sql` | 创建 `app_user`，为检索记录和反馈记录补充登录用户归属字段 |
 | `V5__hash_admin_passwords.sql` | 将管理员演示账号密码升级为 PBKDF2 哈希 |
+| `V10__v3_check_in_and_correction_sample.sql` | 创建打卡留言、点赞、回复和校正样本表 |
+| `V11__async_search_jobs.sql` | 为检索记录增加异步任务、幂等、lease 和错误字段 |
+| `V12__harden_async_search_queue.sql` | 增加持久化重试时间和队列到期索引 |
+| `V13__persistent_sar_and_index_rebuild.sql` | 增加 SAR、模型/索引版本、待发布样本路径，并创建索引重建任务表 |
+| `V14__algorithm_instance_tracking.sql` | 保存实际处理任务的算法实例编号与主备角色 |
+| `V15__persistent_guest_identity.sql` | 创建持久化游客身份表，使用令牌哈希幂等分配游客编号 |

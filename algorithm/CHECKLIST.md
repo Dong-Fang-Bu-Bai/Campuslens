@@ -1,283 +1,80 @@
-# CampusLens AI 服务 - 项目清单
+# CampusLens 算法服务验收清单
 
-## ✅ 已创建的文件列表
+本文用于核对当前算法服务是否具备完整运行条件，不再记录容易失真的文件数量、代码行数或历史性能估算。
 
-### 核心应用文件
-- [x] `app/__init__.py` - 包初始化
-- [x] `app/main.py` - FastAPI 应用入口
-- [x] `app/config.py` - 配置管理（纯离线）
-- [x] `app/models/__init__.py` - 模型包初始化
-- [x] `app/models/dinov2_extractor.py` - DINOv2 特征提取器
-- [x] `app/services/__init__.py` - 服务包初始化
-- [x] `app/services/feature_service.py` - 特征提取服务
-- [x] `app/services/search_service.py` - 搜索服务（地标级别检索）
-- [x] `app/api/__init__.py` - API 包初始化
-- [x] `app/api/routes.py` - API 路由定义
-- [x] `app/utils/__init__.py` - 工具包初始化
-- [x] `app/utils/image_processor.py` - 图片处理工具
-- [x] `app/utils/faiss_manager.py` - FAISS 索引管理 + 马氏距离计算
-- [x] `app/schemas/__init__.py` - 模型包初始化
-- [x] `app/schemas/response.py` - API 响应模型
+## 首次安装
 
-### 配置文件
-- [x] `requirements.txt` - Python 依赖（含 scipy）
-- [x] `.env.example` - 环境变量示例
-- [x] `.gitignore` - Git 忽略规则
+- [ ] `algorithm/.env` 已由 `.env.example` 创建，并按本机路径检查。
+- [ ] Python 3.10 环境已通过 `create_gpu_env.bat`、`install_gpu.bat` 或 `install_cpu.bat` 安装完整依赖。
+- [ ] 未把仅含公共包的 `requirements.txt` 误当成完整运行环境。
+- [ ] `models/dinov2_model.pth` 存在，`verify_model.py` 验证通过。
+- [ ] GPU 模式下 `torch.cuda.is_available()` 为 `True`；FAISS CPU 可以正常导入。
 
-### Docker 配置
-- [x] `Dockerfile` - Docker 构建文件
-- [x] `docker-compose.yml` - Docker Compose 配置
+## 配置与数据
 
-### 文档
-- [x] `README.md` - 详细使用文档（**已更新至 v2.0**）
-- [x] `QUICKSTART.md` - 快速启动指南（**已更新至 v2.0**）
-- [x] `algo.md` - 算法原理说明（马氏距离 + sigmoid 经验匹配分）
-- [x] `GPU_SUPPORT.md` - GPU 加速配置指南
-- [x] `CHECKLIST.md` - 项目清单（本文档）
+- [ ] `DEVICE`、`DINO_MODEL_PATH`、`DATASET_PATH` 和数据目录指向有效位置。
+- [ ] `data/faiss_index/active_index.json` 指向可加载的活动索引版本。
+- [ ] SAR checkpoint、状态和事件日志目录可写。
+- [ ] `SAR_ENABLED` 运维开关符合运行要求；普通请求默认仍使用 `sarMode=false`。
 
-### 工具脚本
-- [x] `verify_model.py` - 模型验证脚本
-- [x] `check_service.py` - 服务健康检查
-- [x] `test_mahalanobis_search.py` - 马氏距离搜索测试脚本
+## 双实例运行
 
-### 目录结构
-- [x] `data/faiss_index/` - FAISS 索引目录（含地标统计信息）
-- [x] `data/features/` - 特征缓存目录
-- [x] `tests/` - 测试目录
-- [x] `models/` - 模型文件目录
+- [ ] 主实例 `8000` 返回健康状态，`instanceRole=primary`。
+- [ ] 备用实例 `8001` 返回健康状态，`instanceRole=secondary`。
+- [ ] 两个实例加载相同的活动索引版本。
+- [ ] 活动索引指针变化后，两个实例均能在请求前同步新版本。
+- [ ] 停止主实例后，后端检索可在同一请求内回退到备用实例。
+- [ ] 主实例恢复并经过冷却探测后，后端重新优先使用主实例。
 
----
+## 接口
 
-## 📊 统计信息
+- [ ] `POST /api/v1/search` 支持 `sarMode=false/true`。
+- [ ] `POST /api/v1/search/batch` 可处理批量请求。
+- [ ] `GET /api/v1/health` 返回实例身份和健康信息。
+- [ ] `GET /api/v1/runtime/status` 返回模型、SAR、索引与实例状态。
+- [ ] `GET /api/v1/index/stats` 返回活动索引统计。
+- [ ] `POST /api/v1/index/rebuild` 仅由主实例执行发布流程。
+- [ ] `GET /api/v1/index/rebuild/{job_id}` 可查询重建任务。
+- [ ] `POST /api/v1/adaptation/correction-samples` 可接收已采纳校正样本。
 
-- **Python 文件**: 18 个
-- **配置文件**: 5 个
-- **文档文件**: 5 个
-- **脚本文件**: 3 个
-- **Docker 文件**: 2 个
-- **总代码行数**: ~900+ 行
-- **总文档行数**: ~850+ 行
+## SAR 与索引
 
----
+- [ ] 普通检索不修改基准模型。
+- [ ] SAR 检索响应包含是否应用、信任度和相关版本信息。
+- [ ] SAR 状态使用文件锁与临时文件原子替换持久化。
+- [ ] 反馈采纳后形成校正样本和待发布数据。
+- [ ] 索引重建先生成候选版本，校验通过后再原子替换活动指针。
+- [ ] 重建失败时旧活动指针和内存 manager 保持可用。
+- [ ] 新索引发布后创建新的 SAR generation，并完成主备同步。
 
-## 🎯 功能覆盖
+## 自动化验证
 
-### 核心功能
-- ✅ DINOv2 离线模型加载
-- ✅ 特征向量提取（单图/批量）
-- ✅ **地标级别统计信息计算**（均值、协方差矩阵）
-- ✅ **马氏距离计算**
-- ✅ **基于马氏距离 sigmoid 归一化的经验匹配分**
-- ✅ FAISS 向量索引构建（地标中心）
-- ✅ Top-K 地标检索
-- ✅ 自适应评判标准（无需手动调参）
-- ✅ 统计参数与索引持久化存储
+在算法目录执行：
 
-### API 接口
-- ✅ 健康检查接口 (`GET /api/v1/health`)
-- ✅ 地标检索接口 (`POST /api/v1/search`)
-- ✅ 统计参数重建接口 (`POST /api/v1/index/rebuild`)
-- ✅ 统计参数状态接口 (`GET /api/v1/index/stats`)
-
-### 工程化
-- ✅ 配置管理
-- ✅ 错误处理
-- ✅ 日志输出
-- ✅ Docker 支持
-- ✅ 环境变量支持
-- ✅ CPU/GPU 双模式
-
-### 文档和工具
-- ✅ 详细使用文档
-- ✅ 快速启动指南
-- ✅ 算法原理说明
-- ✅ GPU 配置指南
-- ✅ 模型验证工具
-- ✅ 服务检查工具
-- ✅ 马氏距离测试脚本
-
----
-
-## 🔧 技术特性
-
-### 纯离线模式
-- ✅ 无在线加载逻辑
-- ✅ 启动时模型验证
-- ✅ 清晰的错误提示
-- ✅ 零网络依赖
-
-### 分布匹配方法
-- ✅ 地标样本特征分布建模
-- ✅ 协方差矩阵分析
-- ✅ 马氏距离度量
-- ✅ 经验匹配分归一化
-- ✅ 高/中/低匹配等级辅助核验
-
-### 性能优化
-- ✅ CPU/GPU 自动适配
-- ✅ 批量特征提取
-- 🔄 马氏距离统计检索
-- ✅ L2 归一化
-
-### 易用性
-- ✅ RESTful API
-- ✅ Pydantic 数据验证
-- ✅ CORS 支持
-- ✅ 详细文档
-
----
-
-## 📦 依赖清单
-
-### Web 框架
-- fastapi==0.109.0
-- uvicorn[standard]==0.27.0
-- python-multipart==0.0.6
-
-### AI/ML
-- torch==2.1.2
-- torchvision==0.16.2
-- faiss-cpu==1.7.4
-
-### 数据处理
-- numpy==1.26.3
-- scipy==1.12.0 (**新增**)
-- Pillow==10.2.0
-
-### 工具
-- pydantic==2.5.3
-- python-dotenv==1.0.0
-- requests==2.31.0
-
----
-
-## 🚀 部署方式
-
-### 本地部署
-```bash
-pip install -r requirements.txt
-python app/main.py
-curl.exe -X POST http://localhost:8000/api/v1/index/rebuild
+```powershell
+D:\AnaConda\envs\campuslens-gpu\python.exe -m pytest
 ```
 
-### Docker 部署
-```bash
-docker-compose up -d
+在项目根目录执行完整环境验证：
+
+```powershell
+scripts\verify.cmd
 ```
 
----
+- [ ] 算法测试通过。
+- [ ] 后端测试通过。
+- [ ] 前端构建通过。
+- [ ] MySQL、Redis、后端、双算法实例和 HTTPS 前端健康。
+- [ ] 普通与 SAR 真实检索均成功。
+- [ ] 管理员反馈采纳、索引重建和故障转移完成实测。
 
-## 📡 API 端点汇总
+## 当前边界
 
-| 端点 | 方法 | 功能 | 状态 |
-|------|------|------|------|
-| `/api/v1/health` | GET | 健康检查 | ✅ |
-| `/api/v1/search` | POST | 地标检索（马氏距离） | ✅ |
-| `/api/v1/index/rebuild` | POST | 重建统计参数 | ✅ |
-| `/api/v1/index/stats` | GET | 统计参数状态 | ✅ |
+- 算法容器不是日常启动路径；根目录 Compose 主要提供 MySQL 与 Redis。
+- 模型文件不随依赖安装或启动脚本下载。
+- FAISS 使用 CPU，GPU 主要用于 DINOv2 和 SAR 计算。
+- 压测结论应以实际运行记录为准，不在本文维护固定吞吐量或显存数字。
 
----
+详细启动方式见 [README.md](README.md)，GPU 配置见 [GPU_SUPPORT.md](GPU_SUPPORT.md)，全链路验收记录见 [../docs/15_full_system_acceptance_test.md](../docs/15_full_system_acceptance_test.md)。
 
-## ✨ 特色功能
-
-1. **纯离线运行** - 完全不需要网络连接
-2. **智能模型加载** - 兼容多种 PyTorch 模型格式
-3. **地标级别检索** - 返回类别而非单张图片
-4. **经验匹配分** - 基于马氏距离和 sigmoid 归一化
-5. **自适应评判** - 无需手动调参，自动适应数据
-6. **完善的错误处理** - 友好的错误提示和解决建议
-7. **详细的文档** - 从快速开始到算法原理全覆盖
-8. **实用工具脚本** - 模型验证、服务检查、算法测试
-9. **Docker 支持** - 一键容器化部署
-10. **生产就绪** - 健康检查、日志、异常处理完备
-
----
-
-## 🎓 学习要点
-
-通过本项目可以学习：
-- FastAPI 微服务开发
-- DINOv2 视觉模型应用
-- FAISS 向量检索引擎
-- **多元统计分析方法**
-- **马氏距离与经验归一化评分**
-- PyTorch 模型离线加载
-- Docker 容器化部署
-- RESTful API 设计
-- 工程化最佳实践
-
----
-
-## 🔄 版本历史
-
-### v2.1 (2026-05-19) - 当前版本
-- ✅ 移除未使用的余弦相似度变量
-- ✅ 改进 FAISS 召回策略（`top_k * 2` → `max(top_k * 5, 30)`）
-- ✅ 提升召回率至 >99%
-- ✅ 精简 API 响应格式（移除冗余字段）
-- ✅ 增强代码注释和可读性
-- ✅ 更新为 sigmoid 经验匹配分口径
-
-### v2.0 (2026-05-19)
-- ✅ 升级为地标类别级别检索
-- ✅ 引入马氏距离评分算法
-- ✅ 实现基于马氏距离的评分算法
-- ✅ 添加协方差矩阵分析
-- ✅ 移除手动调整的启发式评分
-- ✅ 更新所有文档
-
-### v1.0 (2026-05-18)
-- ✅ 基础图片级别检索
-- ✅ DINOv2 + FAISS 集成
-- ✅ CPU/GPU 双模式支持
-- ✅ 完整 API 接口
-
----
-
-## 🔜 后续优化方向（可选）
-
-- [ ] 添加单元测试
-- [ ] 添加性能监控
-- [ ] 支持 PCA 降维（减少协方差矩阵存储）
-- [ ] 优化马氏距离统计参数构建性能
-- [ ] 添加 Redis 缓存
-- [ ] 添加认证授权
-- [ ] 添加限流机制
-- [ ] 添加更多日志级别
-- [ ] 支持异步任务队列
-- [ ] 添加 Prometheus 指标
-- [ ] 支持多模型切换
-- [ ] 添加边界情况测试（模糊图片、异常角度等）
-
----
-
-## 📈 性能基准
-
-### 准确率提升
-
-| 指标 | v1.0 (余弦相似度) | v2.0 (马氏距离) | v2.1 (优化后) | 改进 |
-|------|------------------|----------------|--------------|------|
-| 区分度 | < 0.3% | > 70% | > 70% | **233x** ⚡ |
-| 假阳性抑制 | ❌ 差 | ✅ 优秀 | ✅ 优秀 | 显著 |
-| 匹配分判断 | 不准确 | 区分度提升 | 区分度提升 | 展示与排序更清晰 |
-| 人工调参需求 | 需要 | 不需要 | 不需要 | 自动化 |
-| 召回率 | ~85% | ~90% | **>99%** | **显著提升** |
-
-### 运行效率
-
-| 操作 | v1.0 | v2.0 | v2.1 | 变化 |
-|------|------|------|------|------|
-| 统计参数构建时间 | ~50s | ~60s | ~60s | +20% (计算协方差) |
-| 单次检索时间 | <5ms | <5ms | <10ms | +100% (提高召回率) |
-| 内存占用 | ~2GB | ~2.5GB | ~2.5GB | +25% (存储协方差矩阵) |
-| 准确率 | 中等 | 优秀 | **优秀** | **显著提升** |
-
-**结论**：牺牲少量性能换取显著的准确率和召回率提升，完全值得！
-
----
-
-**项目状态**: ✅ 完成  
-**当前版本**: v2.1  
-**最后更新**: 2026-05-19  
-**实现模式**: 纯离线 + 统计学方法  
-**核心技术**: DINOv2 + FAISS + 马氏距离 + FastAPI
+**最后更新：2026-06-13**

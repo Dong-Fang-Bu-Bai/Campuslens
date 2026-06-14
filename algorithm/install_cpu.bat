@@ -4,20 +4,24 @@ echo Switching to CPU versions
 echo ========================================
 echo.
 
-echo Step 1: Uninstalling GPU versions...
-pip uninstall -y torch torchvision faiss-gpu
+set "PYTHON=%CAMPUSLENS_ALGORITHM_PYTHON%"
+if "%PYTHON%"=="" if exist "D:\AnaConda\envs\campuslens-gpu\python.exe" set "PYTHON=D:\AnaConda\envs\campuslens-gpu\python.exe"
+if "%PYTHON%"=="" set "PYTHON=.venv\Scripts\python.exe"
+
+echo Step 1: Removing current PyTorch packages...
+"%PYTHON%" -m pip uninstall -y torch torchvision
 
 echo.
 echo Step 2: Installing CPU versions...
-pip install torch==2.1.2 torchvision==0.16.2 faiss-cpu==1.7.4
+"%PYTHON%" -m pip install -r requirements-cpu.txt -r requirements-test.txt
 
 echo.
 echo ========================================
-echo ✅ CPU installation complete!
+echo [OK] CPU installation complete!
 echo ========================================
 echo.
 echo Verifying...
-python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}'); import faiss; print('FAISS CPU version installed')"
+"%PYTHON%" -c "import torch, faiss; print(f'CUDA available: {torch.cuda.is_available()}'); print('FAISS CPU version installed')"
 echo.
 echo Restart the service to use CPU mode.
 pause

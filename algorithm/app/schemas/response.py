@@ -16,6 +16,14 @@ class SearchResponse(BaseModel):
     results: List[SearchResult]
     lowConfidence: bool = False  # 兼容字段，表示所有候选均为低匹配等级
     message: str = "检索成功"
+    sarApplied: Optional[bool] = None
+    trustLevel: Optional[str] = None
+    modelVersion: Optional[str] = None
+    baseModelVersion: Optional[str] = None
+    indexVersion: Optional[str] = None
+    sarStateVersion: Optional[str] = None
+    instanceId: Optional[str] = None
+    instanceRole: Optional[str] = None
 
 
 class IndexStatsResponse(BaseModel):
@@ -23,3 +31,33 @@ class IndexStatsResponse(BaseModel):
     totalVectors: Optional[int] = None
     dimension: Optional[int] = None
     indexedLandmarks: Optional[int] = None
+
+
+class AdaptationTopResult(BaseModel):
+    rank: int
+    landmarkCode: str
+    score: float
+    mahalanobisDistance: Optional[float] = None
+
+
+class CorrectionSampleRequest(BaseModel):
+    sampleId: int
+    feedbackId: int
+    searchRecordId: int
+    imageUrl: str
+    confirmedLandmarkCode: str
+    predictedLandmarkCode: Optional[str] = None
+    feedbackType: str
+    comment: Optional[str] = None
+    topResults: List[AdaptationTopResult]
+
+
+class CorrectionSampleResponse(BaseModel):
+    suggestAccept: bool
+    reviewScore: float
+    reason: str
+    sarEligible: bool
+    nextAction: str
+    modelVersion: Optional[str] = None
+    activated: bool = False
+    adaptationError: Optional[str] = None
