@@ -1,5 +1,6 @@
 package com.campuslens.controller;
 
+import com.campuslens.model.AdminFeedbackDetail;
 import com.campuslens.model.AdminFeedbackRecord;
 import com.campuslens.model.AdminLoginRequest;
 import com.campuslens.model.AdminLoginResponse;
@@ -7,31 +8,47 @@ import com.campuslens.model.AdminSearchRecord;
 import com.campuslens.model.AuthLoginRequest;
 import com.campuslens.model.AuthRegisterRequest;
 import com.campuslens.model.AuthResponse;
+import com.campuslens.model.CheckInRecord;
+import com.campuslens.model.CheckInReply;
+import com.campuslens.model.CheckInReplyRequest;
+import com.campuslens.model.CheckInRequest;
 import com.campuslens.model.FeedbackRequest;
 import com.campuslens.model.FeedbackResponse;
 import com.campuslens.model.FeedbackStatusRequest;
 import com.campuslens.model.HealthResponse;
+import com.campuslens.model.GuestIdentityRequest;
+import com.campuslens.model.GuestIdentityResponse;
 import com.campuslens.model.LandmarkDetail;
 import com.campuslens.model.LandmarkImage;
 import com.campuslens.model.LandmarkSummary;
 import com.campuslens.model.LandmarkUpsertRequest;
+import com.campuslens.model.LikeResponse;
 import com.campuslens.model.SearchResponse;
+import com.campuslens.model.SearchJobStatus;
+import com.campuslens.model.SearchJobSubmission;
 import com.campuslens.model.SessionUser;
+import com.campuslens.model.UserSearchRecord;
 import com.campuslens.service.AdminService;
 import com.campuslens.service.AuthService;
+import com.campuslens.service.CheckInService;
 import com.campuslens.service.FeedbackService;
 import com.campuslens.service.LandmarkService;
+import com.campuslens.service.IndexRebuildService;
+import com.campuslens.service.GuestIdentityService;
 import com.campuslens.service.SearchRecordService;
 import com.campuslens.service.SearchService;
+import com.campuslens.service.SearchJobService;
 import com.campuslens.service.SessionService;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -43,32 +60,49 @@ import org.springframework.web.multipart.MultipartFile;
 public class ApiController {
   private final LandmarkService landmarkService;
   private final SearchService searchService;
+  private final SearchJobService searchJobService;
   private final FeedbackService feedbackService;
   private final SearchRecordService searchRecordService;
   private final AdminService adminService;
   private final AuthService authService;
   private final SessionService sessionService;
+  private final CheckInService checkInService;
+  private final IndexRebuildService indexRebuildService;
+  private final GuestIdentityService guestIdentityService;
 
   public ApiController(
       LandmarkService landmarkService,
       SearchService searchService,
+      SearchJobService searchJobService,
       FeedbackService feedbackService,
       SearchRecordService searchRecordService,
       AdminService adminService,
       AuthService authService,
-      SessionService sessionService) {
+      SessionService sessionService,
+      CheckInService checkInService,
+      IndexRebuildService indexRebuildService,
+      GuestIdentityService guestIdentityService) {
     this.landmarkService = landmarkService;
     this.searchService = searchService;
+    this.searchJobService = searchJobService;
     this.feedbackService = feedbackService;
     this.searchRecordService = searchRecordService;
     this.adminService = adminService;
     this.authService = authService;
     this.sessionService = sessionService;
+    this.checkInService = checkInService;
+    this.indexRebuildService = indexRebuildService;
+    this.guestIdentityService = guestIdentityService;
   }
 
   @GetMapping("/health")
   public HealthResponse health() {
     return new HealthResponse("ok", "CampusLens backend is running");
+  }
+
+  @PostMapping("/guests")
+  public GuestIdentityResponse guestIdentity(@Valid @RequestBody GuestIdentityRequest request) {
+    return guestIdentityService.allocate(request.clientToken());
   }
 
   @GetMapping("/landmarks")
@@ -84,12 +118,24 @@ public class ApiController {
   }
 
   @PostMapping("/search/upload")
-  public SearchResponse upload(
+  public ResponseEntity<SearchJobSubmission> upload(
       @RequestPart("file") MultipartFile file,
-      @RequestPart(value = "guestId", required = false) String guestId,
+      @RequestParam(value = "guestId", required = false) String guestId,
+      @RequestParam(value = "sarMode", required = false, defaultValue = "false") boolean sarMode,
+      @RequestHeader("Idempotency-Key") String idempotencyKey,
       @RequestHeader(value = "Authorization", required = false) String authorization) {
     SessionUser user = sessionService.find(authorization).orElse(null);
-    return searchService.search(file, user, guestId);
+    return ResponseEntity.accepted().body(searchJobService.submit(
+        file, user, guestId, idempotencyKey, sarMode));
+  }
+
+  @GetMapping("/search/jobs/{jobId}")
+  public SearchJobStatus searchJob(
+      @PathVariable String jobId,
+      @RequestHeader(value = "X-Search-Job-Token", required = false) String jobToken,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.find(authorization).orElse(null);
+    return searchJobService.status(jobId, user, jobToken);
   }
 
   @PostMapping("/feedback")
@@ -108,6 +154,50 @@ public class ApiController {
   @PostMapping("/auth/login")
   public AuthResponse login(@Valid @RequestBody AuthLoginRequest request) {
     return authService.login(request);
+  }
+
+  @GetMapping("/me/search-records")
+  public List<UserSearchRecord> mySearchRecords(
+      @RequestParam(value = "limit", defaultValue = "20") int limit,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.requireUser(authorization);
+    return searchRecordService.listForUser(user.userId(), limit);
+  }
+
+  @GetMapping("/check-ins")
+  public List<CheckInRecord> checkIns(
+      @RequestParam(value = "landmarkId", required = false) Long landmarkId,
+      @RequestParam(value = "limit", defaultValue = "50") int limit,
+      @RequestParam(value = "guestId", required = false) String guestId,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.find(authorization).orElse(null);
+    return checkInService.list(landmarkId, limit, user, guestId);
+  }
+
+  @PostMapping("/check-ins")
+  public CheckInRecord createCheckIn(
+      @Valid @RequestBody CheckInRequest request,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.find(authorization).orElse(null);
+    return checkInService.create(request, user);
+  }
+
+  @PostMapping("/check-ins/{id}/like")
+  public LikeResponse toggleCheckInLike(
+      @PathVariable Long id,
+      @RequestParam(value = "guestId", required = false) String guestId,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.find(authorization).orElse(null);
+    return checkInService.toggleLike(id, user, guestId);
+  }
+
+  @PostMapping("/check-ins/{id}/replies")
+  public CheckInReply addCheckInReply(
+      @PathVariable Long id,
+      @Valid @RequestBody CheckInReplyRequest request,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.find(authorization).orElse(null);
+    return checkInService.addReply(id, request, user);
   }
 
   @PostMapping("/admin/auth/login")
@@ -129,6 +219,14 @@ public class ApiController {
     return feedbackService.listRecent();
   }
 
+  @GetMapping("/admin/feedback/{id}")
+  public AdminFeedbackDetail adminFeedbackDetail(
+      @PathVariable Long id,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    sessionService.requireAdmin(authorization);
+    return feedbackService.detail(id);
+  }
+
   @PostMapping("/admin/feedback/{id}/status")
   public FeedbackResponse updateFeedbackStatus(
       @PathVariable Long id,
@@ -136,6 +234,28 @@ public class ApiController {
       @RequestHeader(value = "Authorization", required = false) String authorization) {
     sessionService.requireAdmin(authorization);
     return feedbackService.updateStatus(id, request);
+  }
+
+  @GetMapping("/admin/algorithm/runtime")
+  public Map<String, Object> algorithmRuntime(
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    sessionService.requireAdmin(authorization);
+    return indexRebuildService.runtime();
+  }
+
+  @PostMapping("/admin/index/rebuild")
+  public ResponseEntity<Map<String, Object>> rebuildIndex(
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    sessionService.requireAdmin(authorization);
+    return ResponseEntity.accepted().body(indexRebuildService.start());
+  }
+
+  @GetMapping("/admin/index/rebuild/{jobId}")
+  public Map<String, Object> rebuildIndexStatus(
+      @PathVariable String jobId,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    sessionService.requireAdmin(authorization);
+    return indexRebuildService.status(jobId);
   }
 
   @PostMapping("/admin/landmarks")

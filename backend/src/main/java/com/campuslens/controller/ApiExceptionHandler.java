@@ -2,6 +2,11 @@ package com.campuslens.controller;
 
 import com.campuslens.service.AdminRequiredException;
 import com.campuslens.service.AuthRequiredException;
+import com.campuslens.service.SearchJobConflictException;
+import com.campuslens.service.SearchJobNotFoundException;
+import com.campuslens.service.SearchQueueFullException;
+import com.campuslens.service.SearchQueueUnavailableException;
+import com.campuslens.service.SearchMaintenanceException;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -39,5 +44,34 @@ public class ApiExceptionHandler {
   @ExceptionHandler(MaxUploadSizeExceededException.class)
   public ResponseEntity<Map<String, String>> uploadTooLarge() {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "图片大小超过限制"));
+  }
+
+  @ExceptionHandler(SearchQueueFullException.class)
+  public ResponseEntity<Map<String, String>> queueFull(SearchQueueFullException ex) {
+    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+        .header("Retry-After", "5")
+        .body(Map.of("message", ex.getMessage()));
+  }
+
+  @ExceptionHandler(SearchQueueUnavailableException.class)
+  public ResponseEntity<Map<String, String>> queueUnavailable(SearchQueueUnavailableException ex) {
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("message", ex.getMessage()));
+  }
+
+  @ExceptionHandler(SearchMaintenanceException.class)
+  public ResponseEntity<Map<String, String>> maintenance(SearchMaintenanceException ex) {
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+        .header("Retry-After", "3")
+        .body(Map.of("message", ex.getMessage()));
+  }
+
+  @ExceptionHandler(SearchJobConflictException.class)
+  public ResponseEntity<Map<String, String>> jobConflict(SearchJobConflictException ex) {
+    return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", ex.getMessage()));
+  }
+
+  @ExceptionHandler(SearchJobNotFoundException.class)
+  public ResponseEntity<Map<String, String>> jobNotFound(SearchJobNotFoundException ex) {
+    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", ex.getMessage()));
   }
 }

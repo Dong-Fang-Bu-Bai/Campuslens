@@ -1,12 +1,27 @@
 server:
   port: 8080
+  tomcat:
+    threads:
+      max: ${CAMPUSLENS_TOMCAT_MAX_THREADS:120}
+      min-spare: ${CAMPUSLENS_TOMCAT_MIN_SPARE_THREADS:10}
+    accept-count: ${CAMPUSLENS_TOMCAT_ACCEPT_COUNT:100}
+    connection-timeout: ${CAMPUSLENS_TOMCAT_CONNECTION_TIMEOUT:20s}
 
 spring:
+  data:
+    redis:
+      host: ${CAMPUSLENS_REDIS_HOST:127.0.0.1}
+      port: ${CAMPUSLENS_REDIS_PORT:6379}
+      timeout: ${CAMPUSLENS_REDIS_TIMEOUT:2s}
   datasource:
     url: ${CAMPUSLENS_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/campuslens?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
     username: ${CAMPUSLENS_DATASOURCE_USERNAME:campuslens}
     password: ${CAMPUSLENS_DATASOURCE_PASSWORD:campuslens123}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${CAMPUSLENS_HIKARI_MAX_POOL_SIZE:20}
+      minimum-idle: ${CAMPUSLENS_HIKARI_MIN_IDLE:5}
+      connection-timeout: ${CAMPUSLENS_HIKARI_CONNECTION_TIMEOUT_MS:30000}
   sql:
     init:
       mode: never
@@ -22,5 +37,25 @@ spring:
       max-request-size: 10MB
 
 campuslens:
+  dataset-dir: ${CAMPUSLENS_DATASET_DIR:../datasets/landmarks}
   algorithm:
     base-url: http://localhost:8000
+    base-urls: ${CAMPUSLENS_ALGORITHM_URLS:http://localhost:8000,http://localhost:8001}
+    connect-timeout-ms: ${CAMPUSLENS_ALGORITHM_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${CAMPUSLENS_ALGORITHM_READ_TIMEOUT_MS:20000}
+    unhealthy-cooldown-ms: ${CAMPUSLENS_ALGORITHM_UNHEALTHY_COOLDOWN_MS:10000}
+  async:
+    adaptation:
+      core-size: ${CAMPUSLENS_ADAPTATION_CORE_SIZE:2}
+      max-size: ${CAMPUSLENS_ADAPTATION_MAX_SIZE:4}
+      queue-capacity: ${CAMPUSLENS_ADAPTATION_QUEUE_CAPACITY:100}
+  search:
+    worker-enabled: ${CAMPUSLENS_SEARCH_WORKER_ENABLED:true}
+    queue-capacity: ${CAMPUSLENS_SEARCH_QUEUE_CAPACITY:500}
+    batch-size: ${CAMPUSLENS_SEARCH_BATCH_SIZE:2}
+    batch-wait-ms: ${CAMPUSLENS_SEARCH_BATCH_WAIT_MS:100}
+    lease-seconds: ${CAMPUSLENS_SEARCH_LEASE_SECONDS:90}
+    max-attempts: ${CAMPUSLENS_SEARCH_MAX_ATTEMPTS:3}
+    worker-delay-ms: ${CAMPUSLENS_SEARCH_WORKER_DELAY_MS:100}
+    recovery-delay-ms: ${CAMPUSLENS_SEARCH_RECOVERY_DELAY_MS:15000}
+    job-token-secret: ${CAMPUSLENS_JOB_TOKEN_SECRET:campuslens-local-job-secret}

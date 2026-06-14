@@ -1,4 +1,19 @@
 services:
+  redis:
+    image: redis:7.4-alpine
+    container_name: campuslens-redis
+    restart: unless-stopped
+    ports:
+      - "${CAMPUSLENS_REDIS_PORT:-6379}:6379"
+    volumes:
+      - campuslens_redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   mysql:
     image: mysql:8.4
     container_name: campuslens-mysql
@@ -13,8 +28,6 @@ services:
       - "${CAMPUSLENS_DB_PORT:-3306}:3306"
     volumes:
       - campuslens_mysql_data:/var/lib/mysql
-      - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
-      - ./database/seed_landmarks.sql:/docker-entrypoint-initdb.d/02_seed_landmarks.sql:ro
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
@@ -26,3 +39,4 @@ services:
 
 volumes:
   campuslens_mysql_data:
+  campuslens_redis_data:

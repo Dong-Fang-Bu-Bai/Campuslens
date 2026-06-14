@@ -1,0 +1,9 @@
+name: campuslens-gpu
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - -r requirements-gpu.txt
+      - -r requirements-test.txt

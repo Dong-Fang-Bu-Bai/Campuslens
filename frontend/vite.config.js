@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import os from 'os'
+import fs from 'fs'
+import path from 'path'
 
 // 自定义插件：重写 Vite 的默认地址打印逻辑，提供极简标注且防止重复
 function networkLabelPlugin() {
@@ -14,7 +16,7 @@ function networkLabelPlugin() {
           const port = address.port
           const interfaces = os.networkInterfaces()
           
-          console.log(`\n  \x1b[32m➜\x1b[0m  \x1b[1mLocal:      \x1b[0mhttp://localhost:${port}/`)
+          console.log(`\n  \x1b[32m>\x1b[0m  \x1b[1mLocal:      \x1b[0mhttps://localhost:${port}/`)
           
           const paddedLabels = {
             'WLAN': 'WLAN:       ',
@@ -42,7 +44,7 @@ function networkLabelPlugin() {
                 }
                 
                 const prefix = paddedLabels[label] || `${label}: `
-                console.log(`  \x1b[32m➜\x1b[0m  \x1b[1m${prefix}\x1b[0mhttp://${net.address}:${port}/`)
+                console.log(`  \x1b[32m>\x1b[0m  \x1b[1m${prefix}\x1b[0mhttps://${net.address}:${port}/`)
               }
             }
           }
@@ -53,10 +55,18 @@ function networkLabelPlugin() {
   }
 }
 
+const certPath = path.resolve('certs', 'campuslens-dev.p12')
+
 export default defineConfig({
   plugins: [vue(), networkLabelPlugin()],
   server: {
+    host: '0.0.0.0',
     port: 5173,
+    strictPort: true,
+    https: {
+      pfx: fs.readFileSync(certPath),
+      passphrase: 'campuslens-dev'
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:8080',

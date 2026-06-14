@@ -5,10 +5,36 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
+
+const props = defineProps({
+  theme: {
+    type: String,
+    default: 'dark'
+  }
+})
 
 const canvasRef = ref(null)
 let animationFrameId = null
+
+// 高性能本地色彩缓存对象，在 60fps 渲染循环中避免 getComputedStyle 瓶颈
+const themeColors = {
+  particleRgb: '255, 255, 255',
+  clickParticleRgb: '59, 130, 246',
+  linkRgb: '240, 249, 255'
+}
+
+function updateThemeColors() {
+  const styles = getComputedStyle(document.body)
+  themeColors.particleRgb = styles.getPropertyValue('--bg-particle-rgb').trim() || '255, 255, 255'
+  themeColors.clickParticleRgb = styles.getPropertyValue('--bg-particle-click-rgb').trim() || '59, 130, 246'
+  themeColors.linkRgb = styles.getPropertyValue('--bg-link-rgb').trim() || '240, 249, 255'
+}
+
+watch(() => props.theme, () => {
+  // 延迟 50ms 以确保 styles.css 的类已经应用到 DOM 节点上
+  setTimeout(updateThemeColors, 50)
+})
 
 // 粒子类定义
 class Particle {
@@ -64,15 +90,13 @@ class Particle {
     }
   }
 
-  draw(ctx) {
+  draw(ctx, colors) {
     ctx.beginPath()
     ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2)
     if (this.isClickParticle) {
-      // 蓝色星尘爆破
-      ctx.fillStyle = `rgba(59, 130, 246, ${this.alpha})`
+      ctx.fillStyle = `rgba(${colors.clickParticleRgb}, ${this.alpha})`
     } else {
-      // 常驻粒子
-      ctx.fillStyle = `rgba(255, 255, 255, ${this.alpha})`
+      ctx.fillStyle = `rgba(${colors.particleRgb}, ${this.alpha})`
     }
     ctx.fill()
   }
@@ -83,6 +107,9 @@ onMounted(() => {
   if (!canvas) return
   const ctx = canvas.getContext('2d')
   
+  // 挂载后立即初始化颜色变量，确保在首帧渲染前取得正确的颜色
+  updateThemeColors()
+
   let width = canvas.width = window.innerWidth
   let height = canvas.height = window.innerHeight
 
@@ -113,8 +140,8 @@ onMounted(() => {
 
   // 监听鼠标移动
   const handleMouseMove = (e) => {
-    // 如果鼠标位于地图区域内部，重置鼠标位置以防吸附和跟随连线
-    if (e.target && e.target.closest('.map-board')) {
+    // 如果鼠标位于地图区域内部或卡片展示区域内部，重置鼠标位置以防吸附和跟随连线
+    if (e.target && (e.target.closest('.map-board') || e.target.closest('.result-carousel-container'))) {
       mouse.x = null
       mouse.y = null
       return
@@ -134,8 +161,8 @@ onMounted(() => {
     // 仅响应鼠标左键点击
     if (e.button !== 0) return
     
-    // 如果在地图区域内部点击，不触发爆发粒子
-    if (e.target && e.target.closest('.map-board')) {
+    // 如果在地图区域内部或卡片展示区域内部点击，不触发爆发粒子
+    if (e.target && (e.target.closest('.map-board') || e.target.closest('.result-carousel-container'))) {
       return
     }
 
@@ -165,7 +192,7 @@ onMounted(() => {
         continue
       }
       
-      p.draw(ctx)
+      p.draw(ctx, themeColors)
     }
 
     // 2. 粒子连线逻辑
@@ -187,7 +214,7 @@ onMounted(() => {
           ctx.beginPath()
           ctx.moveTo(p1.x, p1.y)
           ctx.lineTo(p2.x, p2.y)
-          ctx.strokeStyle = `rgba(240, 249, 255, ${alpha})` // 超高亮蓝白连线
+          ctx.strokeStyle = `rgba(${themeColors.linkRgb}, ${alpha})` // 动态配置连线颜色
           ctx.lineWidth = 1.3
           ctx.stroke()
         }
@@ -205,7 +232,7 @@ onMounted(() => {
           ctx.beginPath()
           ctx.moveTo(p1.x, p1.y)
           ctx.lineTo(mouse.x, mouse.y)
-          ctx.strokeStyle = `rgba(224, 242, 254, ${alpha})` // 更加醒目的天空蓝白连线
+          ctx.strokeStyle = `rgba(${themeColors.linkRgb}, ${alpha})` // 与鼠标连线也使用动态连线色
           ctx.lineWidth = 1.5
           ctx.stroke()
         }

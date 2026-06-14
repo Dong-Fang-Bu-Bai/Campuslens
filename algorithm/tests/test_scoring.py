@@ -1,5 +1,6 @@
 import unittest
 
+from app.config import Config
 from app.utils.scoring import mahalanobis_match_score, match_level
 
 
@@ -12,14 +13,16 @@ class ScoringTests(unittest.TestCase):
 
     def test_score_decreases_as_distance_grows(self):
         near = mahalanobis_match_score(100)
-        center = mahalanobis_match_score(900)
+        center = mahalanobis_match_score(Config.MATCH_SCORE_CENTER_DISTANCE)
         far = mahalanobis_match_score(5000)
 
         self.assertGreater(near, center)
         self.assertGreater(center, far)
 
     def test_center_distance_maps_to_midpoint(self):
-        self.assertAlmostEqual(mahalanobis_match_score(900), 0.5, places=6)
+        self.assertAlmostEqual(
+            mahalanobis_match_score(Config.MATCH_SCORE_CENTER_DISTANCE), 0.5, places=6
+        )
 
     def test_match_level_thresholds(self):
         self.assertEqual(match_level(0.80), "high")
