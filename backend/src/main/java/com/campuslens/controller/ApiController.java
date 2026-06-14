@@ -8,14 +8,13 @@ import com.campuslens.model.AdminSearchRecord;
 import com.campuslens.model.AuthLoginRequest;
 import com.campuslens.model.AuthRegisterRequest;
 import com.campuslens.model.AuthResponse;
-<<<<<<< HEAD
-import com.campuslens.model.FeedbackRecord;
-=======
 import com.campuslens.model.CheckInRecord;
 import com.campuslens.model.CheckInReply;
 import com.campuslens.model.CheckInReplyRequest;
 import com.campuslens.model.CheckInRequest;
->>>>>>> origin/dev
+import com.campuslens.model.AuditLog;
+import com.campuslens.model.FeedbackRecord;
+import com.campuslens.model.FeedbackStats;
 import com.campuslens.model.FeedbackRequest;
 import com.campuslens.model.FeedbackResponse;
 import com.campuslens.model.FeedbackStatusRequest;
@@ -288,6 +287,21 @@ public class ApiController {
       @RequestHeader(value = "Authorization", required = false) String authorization) {
     sessionService.requireAdmin(authorization);
     return landmarkService.addImage(id, file, angle, lightCondition);
+  }
+
+  @GetMapping("/admin/feedback/stats")
+  public FeedbackStats feedbackStats(
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    sessionService.requireAdmin(authorization);
+    return feedbackService.getStats();
+  }
+
+  @GetMapping("/admin/feedback/{id}/audit-logs")
+  public List<AuditLog> feedbackAuditLogs(
+      @PathVariable Long id,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    sessionService.requireAdmin(authorization);
+    return feedbackService.listAuditLogs(id);
   }
 
   @GetMapping("/search/{searchRecordId}/feedback")

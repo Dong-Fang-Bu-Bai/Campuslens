@@ -2,15 +2,16 @@ package com.campuslens.service;
 
 import com.campuslens.model.AdminFeedbackDetail;
 import com.campuslens.model.AdminFeedbackRecord;
-<<<<<<< HEAD
-import com.campuslens.model.FeedbackRecord;
-=======
 import com.campuslens.model.CorrectionSampleInfo;
->>>>>>> origin/dev
+import com.campuslens.model.AuditLog;
+import com.campuslens.model.FeedbackRecord;
 import com.campuslens.model.FeedbackRequest;
 import com.campuslens.model.FeedbackResponse;
+import com.campuslens.model.FeedbackStats;
+import com.campuslens.model.FeedbackStats.DailyTrend;
 import com.campuslens.model.FeedbackStatusRequest;
 import com.campuslens.model.SessionUser;
+import com.campuslens.repository.AuditLogRepository;
 import java.sql.PreparedStatement;
 import java.util.List;
 import java.util.Objects;
@@ -28,16 +29,19 @@ public class FeedbackService {
   private final SearchRecordService searchRecordService;
   private final AuthService authService;
   private final CorrectionSampleService correctionSampleService;
+  private final AuditLogRepository auditLogRepository;
 
   public FeedbackService(
       JdbcTemplate jdbcTemplate,
       SearchRecordService searchRecordService,
       AuthService authService,
-      CorrectionSampleService correctionSampleService) {
+      CorrectionSampleService correctionSampleService,
+      AuditLogRepository auditLogRepository) {
     this.jdbcTemplate = jdbcTemplate;
     this.searchRecordService = searchRecordService;
     this.authService = authService;
     this.correctionSampleService = correctionSampleService;
+    this.auditLogRepository = auditLogRepository;
   }
 
   public FeedbackResponse submit(FeedbackRequest request, SessionUser user) {
@@ -115,13 +119,24 @@ public class FeedbackService {
     if (!FEEDBACK_STATUSES.contains(request.status())) {
       throw new IllegalArgumentException("反馈状态只能为 pending、accepted 或 ignored");
     }
+    // Get old status for audit log
+    String oldStatus = jdbcTemplate.queryForObject(
+        "SELECT status FROM feedback WHERE id = ?", String.class, id);
+    if (oldStatus == null) {
+      throw new IllegalArgumentException("反馈记录不存在");
+    }
+
     int updated = jdbcTemplate.update(
         "UPDATE feedback SET status = ? WHERE id = ?",
-        request.status(),
-        id);
+        request.status(), id);
     if (updated == 0) {
       throw new IllegalArgumentException("反馈记录不存在");
     }
+
+    // Record audit log
+    auditLogRepository.save(id, "status_change", oldStatus, request.status(),
+        null, null);
+
     if ("accepted".equals(request.status())) {
       correctionSampleService.createAndNotify(id);
       return new FeedbackResponse(id, request.status(), "反馈已采纳，图片已加入待发布样本，等待索引重建");
@@ -167,6 +182,48 @@ public class FeedbackService {
       throw new IllegalArgumentException("反馈记录不存在");
     }
     return rows.get(0);
+  }
+
+  public List<AuditLog> listAuditLogs(Long feedbackId) {
+    return auditLogRepository.findByFeedbackId(feedbackId);
+  }
+
+  public FeedbackStats getStats() {
+    // Aggregate counts
+    var row = jdbcTemplate.queryForMap("""
+        SELECT
+          COUNT(*) AS total,
+          SUM(CASE WHEN feedback_type = 'correct' THEN 1 ELSE 0 END) AS correct,
+          SUM(CASE WHEN feedback_type = 'wrong' THEN 1 ELSE 0 END) AS wrong,
+          SUM(CASE WHEN feedback_type = 'uncertain' THEN 1 ELSE 0 END) AS uncertain,
+          SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
+          SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END) AS accepted,
+          SUM(CASE WHEN status = 'ignored' THEN 1 ELSE 0 END) AS ignored
+        FROM feedback
+        """);
+
+    long total = ((Number) row.get("total")).longValue();
+    long correct = ((Number) row.get("correct")).longValue();
+    long wrong = ((Number) row.get("wrong")).longValue();
+    long uncertain = ((Number) row.get("uncertain")).longValue();
+    long pending = ((Number) row.get("pending")).longValue();
+    long accepted = ((Number) row.get("accepted")).longValue();
+    long ignored = ((Number) row.get("ignored")).longValue();
+    double accuracy = total > 0 ? Math.round(correct * 10000.0 / total) / 100.0 : 0;
+
+    // Daily trend for last 7 days
+    List<DailyTrend> trend = jdbcTemplate.query("""
+        SELECT DATE(created_at) AS dt, COUNT(*) AS cnt
+        FROM feedback
+        WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+        GROUP BY DATE(created_at)
+        ORDER BY dt
+        """, (rs, rowNum) -> new DailyTrend(
+        rs.getString("dt"),
+        rs.getLong("cnt")));
+
+    return new FeedbackStats(total, correct, wrong, uncertain,
+        pending, accepted, ignored, accuracy, trend);
   }
 
   private void validate(FeedbackRequest request, Long userId) {

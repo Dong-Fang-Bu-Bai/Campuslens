@@ -383,6 +383,7 @@
           :selected-feedback-detail="localizedAdminFeedbackDetail"
           :runtime-status="adminRuntimeStatus"
           :rebuild-job="adminRebuildJob"
+          :stats="adminStats"
           :labels="adminLabels"
           @refresh="loadAdminData"
           @update-status="updateFeedbackStatus"
@@ -723,6 +724,7 @@ let guestIdentityVerified = false
 const adminSearchRecords = ref([])
 const adminFeedbackRecords = ref([])
 const adminRuntimeStatus = ref(null)
+const adminStats = ref(null)
 const adminRebuildJob = ref(null)
 const selectedFeedbackDetail = ref(null)
 const userSearchRecords = ref([])
@@ -1521,10 +1523,11 @@ async function openAdmin() {
 
 async function loadAdminData() {
   const headers = authHeaders()
-  const [recordsResponse, feedbackResponse, runtimeResponse] = await Promise.all([
+  const [recordsResponse, feedbackResponse, runtimeResponse, statsResponse] = await Promise.all([
     fetch('/api/admin/search-records', { headers }),
     fetch('/api/admin/feedback', { headers }),
-    fetch('/api/admin/algorithm/runtime', { headers })
+    fetch('/api/admin/algorithm/runtime', { headers }),
+    fetch('/api/admin/feedback/stats', { headers })
   ])
   if (recordsResponse.ok) {
     adminSearchRecords.value = await recordsResponse.json()
@@ -1533,6 +1536,7 @@ async function loadAdminData() {
     adminFeedbackRecords.value = await feedbackResponse.json()
   }
   if (runtimeResponse.ok) adminRuntimeStatus.value = await runtimeResponse.json()
+  if (statsResponse.ok) adminStats.value = await statsResponse.json()
   if (selectedFeedbackDetail.value?.id) {
     await loadFeedbackDetail(selectedFeedbackDetail.value.id)
   }

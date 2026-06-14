@@ -5,6 +5,24 @@
       <p>{{ labels.needAdminDesc }}</p>
     </div>
     <div v-else class="admin-layout">
+      <!-- 反馈统计卡片 -->
+      <article v-if="stats" class="admin-card">
+        <div class="admin-card-head">
+          <div><p class="eyebrow">Stats</p><h3>{{ labels.feedbackStats || '反馈统计' }}</h3></div>
+        </div>
+        <div class="stats-row">
+          <div class="stat-item"><span class="stat-num">{{ stats.totalCount }}</span><span class="stat-label">总反馈</span></div>
+          <div class="stat-item"><span class="stat-num">{{ stats.accuracyRate }}%</span><span class="stat-label">准确率</span></div>
+          <div class="stat-item"><span class="stat-num">{{ stats.pendingCount }}</span><span class="stat-label">待处理</span></div>
+          <div class="stat-item"><span class="stat-num">{{ stats.acceptedCount }}</span><span class="stat-label">已采纳</span></div>
+        </div>
+        <div class="stats-bars">
+          <div class="stats-bar-row"><span class="bar-label">正确</span><span class="bar-fill correct" :style="{ width: stats.correctCount / Math.max(stats.totalCount, 1) * 100 + '%' }"></span><span class="bar-num">{{ stats.correctCount }}</span></div>
+          <div class="stats-bar-row"><span class="bar-label">错误</span><span class="bar-fill wrong" :style="{ width: stats.wrongCount / Math.max(stats.totalCount, 1) * 100 + '%' }"></span><span class="bar-num">{{ stats.wrongCount }}</span></div>
+          <div class="stats-bar-row"><span class="bar-label">不确定</span><span class="bar-fill uncertain" :style="{ width: stats.uncertainCount / Math.max(stats.totalCount, 1) * 100 + '%' }"></span><span class="bar-num">{{ stats.uncertainCount }}</span></div>
+        </div>
+      </article>
+
       <article class="admin-card">
         <div class="admin-card-head">
           <div><p class="eyebrow">SAR Runtime</p><h3>{{ labels.algorithmRuntime }}</h3></div>
@@ -109,6 +127,7 @@ const props = defineProps({
   selectedFeedbackDetail: { type: Object, default: null },
   runtimeStatus: { type: Object, default: null },
   rebuildJob: { type: Object, default: null },
+  stats: { type: Object, default: null },
   labels: { type: Object, required: true }
 })
 
@@ -159,3 +178,23 @@ function adviceLabel(sample) {
   return `${sample.suggestAccept ? props.labels.adviceAccept : props.labels.adviceReview} · ${Math.round(Number(sample.reviewScore) * 100)}%`
 }
 </script>
+
+<style scoped>
+.stats-row {
+  display: flex; gap: 16px; margin-bottom: 20px;
+}
+.stat-item {
+  flex: 1; text-align: center; background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 14px 10px;
+}
+.stat-num { display: block; font-size: 22px; font-weight: 700; color: #3b82f6; }
+.stat-label { display: block; font-size: 11px; color: #94a3b8; margin-top: 4px; }
+.stats-bars { display: flex; flex-direction: column; gap: 8px; }
+.stats-bar-row { display: flex; align-items: center; gap: 10px; }
+.bar-label { width: 40px; font-size: 11px; color: #94a3b8; text-align: right; }
+.bar-num { width: 30px; font-size: 11px; color: #94a3b8; }
+.bar-fill { height: 8px; border-radius: 4px; min-width: 2px; transition: width 0.3s; }
+.bar-fill.correct { background: #10b981; }
+.bar-fill.wrong { background: #ef4444; }
+.bar-fill.uncertain { background: #f59e0b; }
+</style>
