@@ -2,7 +2,7 @@
 
 数据库脚本目录。MySQL 通过 Flyway 管理地标、检索、反馈、社区和游客身份数据；`guest_identity` 使用自增主键生成全局递增的 `guest#number`。
 
-- `schema.sql`：建表脚本。
+- `schema.sql`：V3 当前完整结构核对稿；实际启动仍以 Flyway V1-V15 为准，不与迁移脚本重复执行。
 - `seed_landmarks.sql`：首批地标初始化数据。
 - `migration/`：后续字段变更脚本。
 

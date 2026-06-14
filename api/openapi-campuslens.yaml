@@ -1104,7 +1104,8 @@ components:
           format: int64
         syncStatus:
           type: string
-          enum: [sync_pending, synced, sync_failed]
+          description: 当前主流程使用 pending_index 和 published；其余值仅兼容旧版记录
+          enum: [pending_index, published, sync_pending, synced, sync_failed]
         suggestAccept:
           type: boolean
           nullable: true

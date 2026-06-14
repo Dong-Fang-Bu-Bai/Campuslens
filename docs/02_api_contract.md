@@ -110,12 +110,12 @@ Vue 前端 -> Spring Boot 提交接口 -> MySQL + Redis ready/processing/delayed
 
 反馈提交前会校验任务已进入 `success` 或 `low_confidence` 终态，并校验 `predictedLandmarkId` 来自本次 Top-5。登录任务必须由同一 Bearer 用户提交反馈；游客任务必须携带与检索记录一致的 `guestId`。反馈写入后默认为 `pending`，后台可更新为 `accepted` 或 `ignored`。
 
-第四周 V3 已扩展反馈采纳闭环：管理员将反馈更新为 `accepted` 后，后端会创建 `correction_sample` 记录，并通过异步任务通知算法服务 `/api/v1/adaptation/correction-samples`。算法服务返回 `suggestAccept`、`reviewScore`、`reason`、`sarEligible` 和 `nextAction` 后，后端将校正样本标记为 `synced`；若算法服务不可用或超时，校正样本保留为 `sync_failed`，管理员采纳动作不回滚。
+第四周 V3 已扩展反馈采纳闭环：管理员将反馈更新为 `accepted` 后，后端校验上传原图位于受控 `uploads/` 目录，将图片复制到确认地标的 `pending_index/` 目录，并创建 `correction_sample` 记录，状态为 `pending_index`。管理员触发索引重建后，算法服务使用正式样本和待发布样本构建候选模型与完整索引；验证和原子发布成功后，后端将相关校正样本更新为 `published` 并记录 `publishedIndexVersion`。旧版 `sync_pending`、`synced`、`sync_failed` 仅作为历史数据兼容状态，不再表示当前主流程。
 
 ## 打卡留言规则
 
 - 打卡留言复用 L01-L10 地标 ID 和地图坐标，不新增独立地点字典。
-- 登录用户发布留言、点赞和回复时显示用户名；未登录游客使用 `guestId`，无效游客编号由后端规范化为 `guest#number`。
+- 登录用户发布留言、点赞和回复时显示用户名；未登录游客使用由 `POST /api/guests` 分配且数据库中真实存在的 `guestId`。格式非法或不存在的游客编号会被拒绝。
 - 留言和回复当前只支持一级文本互动，单条内容最长 500 字符。
 - 后台内容删除能力作为后续扩展预留，本周先实现用户端查询、发布、点赞和一级回复。
 
