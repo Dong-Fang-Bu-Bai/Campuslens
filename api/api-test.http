@@ -142,6 +142,10 @@ Content-Type: application/json
 POST {{backend}}/api/check-ins/1/like?guestId={{guestId}}
 Authorization: Bearer {{userToken}}
 
+### 查看单条校园动态及回复树
+GET {{backend}}/api/check-ins/1?guestId={{guestId}}
+Authorization: Bearer {{userToken}}
+
 ### 回复打卡留言
 POST {{backend}}/api/check-ins/1/replies
 Authorization: Bearer {{userToken}}
@@ -149,8 +153,24 @@ Content-Type: application/json
 
 {
   "message": "同一位置傍晚光线也比较稳定。",
-  "guestId": "{{guestId}}"
+  "guestId": "{{guestId}}",
+  "parentReplyId": null
 }
+
+### 回复另一条评论
+POST {{backend}}/api/check-ins/1/replies
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+{
+  "message": "赞同你的拍摄建议。",
+  "guestId": "{{guestId}}",
+  "parentReplyId": 1
+}
+
+### 点赞或取消点赞回复
+POST {{backend}}/api/check-in-replies/1/like?guestId={{guestId}}
+Authorization: Bearer {{userToken}}
 
 ### 查看最近检索记录
 GET {{backend}}/api/admin/search-records

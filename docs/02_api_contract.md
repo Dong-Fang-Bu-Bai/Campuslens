@@ -26,11 +26,17 @@ Vue 前端 -> Spring Boot 提交接口 -> MySQL + Redis ready/processing/delayed
 | `POST /api/feedback` | 提交识别纠错反馈 | M5 庄子杰 |
 | `POST /api/auth/register` | 普通用户注册，用户名唯一，密码至少 8 位，邮箱选填 | M1 / M4 |
 | `POST /api/auth/login` | 用户登录；输入 `admin/admin` 时返回管理员身份并由前端自动进入后台 | M1 / M4 |
+| `GET /api/me/account` | 登录用户或管理员查看自己的账号资料 | M1 / M4 |
+| `PUT /api/me/account/email` | 登录用户或管理员更新或清除自己的邮箱 | M1 / M4 |
+| `PUT /api/me/account/password` | 校验当前密码后更新密码，新密码至少 8 位且不能与当前密码相同 | M1 / M4 |
+| `POST /api/me/account/avatar` | 上传裁剪后的 JPG/PNG 头像，最大 5 MB；服务端校验真实图片并替换旧头像 | M1 / M4 |
 | `GET /api/me/search-records` | 登录用户查看自己的检索历史，返回上传图、最高候选、Top-5 快照和反馈状态 | M1 / M4 |
 | `GET /api/check-ins` | 查询校园打卡留言，可按 `landmarkId` 过滤 | M2 / M4 / M5 |
 | `POST /api/check-ins` | 从本人识图记录的 Top-5 候选发布打卡留言；每条检索记录限一次 | M2 / M4 / M5 |
+| `GET /api/check-ins/{id}` | 查询单条校园动态及完整嵌套回复树 | M2 / M4 / M5 |
 | `POST /api/check-ins/{id}/like` | 点赞或取消点赞打卡留言 | M4 / M5 |
-| `POST /api/check-ins/{id}/replies` | 发表一级回复 | M4 / M5 |
+| `POST /api/check-ins/{id}/replies` | 回复帖子或通过 `parentReplyId` 回复另一条评论 | M4 / M5 |
+| `POST /api/check-in-replies/{id}/like` | 点赞或取消点赞回复 | M4 / M5 |
 
 ## 后台辅助接口
 
@@ -117,8 +123,10 @@ Vue 前端 -> Spring Boot 提交接口 -> MySQL + Redis ready/processing/delayed
 - 新打卡必须提交 `searchRecordId`、Top-5 内的 `landmarkId` 和留言；检索记录须归当前用户或游客所有，状态为 `success` 或 `low_confidence`，且每条记录只能发布一次。V16 前的无来源历史记录继续可读。
 - `publishImage` 默认为 `false`；只有发布者主动开启时，列表响应才通过 `sourceImageUrl` 返回上传图片。
 - 登录用户发布留言、点赞和回复时显示用户名；未登录游客使用由 `POST /api/guests` 分配且数据库中真实存在的 `guestId`。格式非法或不存在的游客编号会被拒绝。
-- 留言和回复当前只支持一级文本互动，单条内容最长 500 字符。
-- 后台内容删除能力作为后续扩展预留，本周先实现用户端查询、发布、点赞和一级回复。
+- 留言和回复单条内容最长 500 字符。`parentReplyId` 为空时回复帖子，非空时必须指向当前帖子下可见的回复；服务端按父子关系返回任意层级回复树。
+- `GET /api/check-ins` 只返回帖子摘要和计数，`replies` 为空；进入详情页后由 `GET /api/check-ins/{id}` 返回完整回复树，避免主列表加载全部讨论。
+- 每条回复返回创建时间、点赞数、当前访问者点赞状态和直接子回复数；登录用户与持久化游客都可切换回复点赞。
+- 后台内容删除能力作为后续扩展预留，当前实现用户端查询、发布、帖子/回复点赞和多级回复。
 
 ## 个人历史规则
 

@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS app_user (
   username VARCHAR(100) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   email VARCHAR(255),
+  avatar_url VARCHAR(500),
   role VARCHAR(50) NOT NULL DEFAULT 'user',
   enabled BOOLEAN NOT NULL DEFAULT TRUE,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -182,20 +183,43 @@ CREATE INDEX idx_check_in_like_target
 CREATE TABLE IF NOT EXISTS check_in_reply (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   check_in_id BIGINT NOT NULL,
+  parent_reply_id BIGINT,
   user_id BIGINT,
   guest_id VARCHAR(100),
   display_name VARCHAR(100) NOT NULL,
   message VARCHAR(500) NOT NULL,
+  like_count INT NOT NULL DEFAULT 0,
+  reply_count INT NOT NULL DEFAULT 0,
   status VARCHAR(50) NOT NULL DEFAULT 'visible',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_check_in_reply_check_in
     FOREIGN KEY (check_in_id) REFERENCES check_in(id),
+  CONSTRAINT fk_check_in_reply_parent
+    FOREIGN KEY (parent_reply_id) REFERENCES check_in_reply(id),
   CONSTRAINT fk_check_in_reply_user
     FOREIGN KEY (user_id) REFERENCES app_user(id)
 );
 
 CREATE INDEX idx_check_in_reply_target
   ON check_in_reply (check_in_id, created_at);
+
+CREATE INDEX idx_check_in_reply_parent
+  ON check_in_reply (parent_reply_id, created_at);
+
+CREATE TABLE IF NOT EXISTS check_in_reply_like (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  reply_id BIGINT NOT NULL,
+  user_id BIGINT,
+  guest_id VARCHAR(100),
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_check_in_reply_like_reply
+    FOREIGN KEY (reply_id) REFERENCES check_in_reply(id),
+  CONSTRAINT fk_check_in_reply_like_user
+    FOREIGN KEY (user_id) REFERENCES app_user(id)
+);
+
+CREATE INDEX idx_check_in_reply_like_target
+  ON check_in_reply_like (reply_id);
 
 CREATE TABLE IF NOT EXISTS correction_sample (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,

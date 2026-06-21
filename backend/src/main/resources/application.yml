@@ -37,6 +37,7 @@ spring:
       max-request-size: 10MB
 
 campuslens:
+  upload-dir: ${CAMPUSLENS_UPLOAD_DIR:uploads}
   dataset-dir: ${CAMPUSLENS_DATASET_DIR:../datasets/landmarks}
   algorithm:
     base-url: http://localhost:8000

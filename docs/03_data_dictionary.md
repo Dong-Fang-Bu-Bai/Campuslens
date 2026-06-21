@@ -128,7 +128,7 @@
 | `publishImage` | Boolean | 是否在公共留言板展示来源上传图片，默认 `false` |
 | `sourceImageUrl` | String | 接口派生字段；仅 `publishImage=true` 时返回来源图片地址 |
 | `likeCount` | Integer | 点赞数量缓存 |
-| `replyCount` | Integer | 一级回复数量缓存 |
+| `replyCount` | Integer | 当前帖子全部可见回复数量缓存 |
 | `status` | String | 当前为 `visible`，为后续后台删除/隐藏预留 |
 | `createdAt` | DateTime | 发布时间 |
 | `updatedAt` | DateTime | 更新时间 |
@@ -139,6 +139,7 @@
 | --- | --- | --- |
 | `id` | Long | 主键 |
 | `checkInId` | Long | 关联打卡留言 |
+| `parentReplyId` | Long | 父回复 ID；为空表示直接回复帖子 |
 | `userId` | Long | 登录用户 ID，游客为空 |
 | `guestId` | String | 游客编号 |
 | `createdAt` | DateTime | 点赞时间 |
@@ -153,8 +154,20 @@
 | `guestId` | String | 游客编号 |
 | `displayName` | String | 展示名 |
 | `message` | String | 回复内容，最长 500 字符 |
+| `likeCount` | Integer | 回复点赞数量缓存 |
+| `replyCount` | Integer | 直接子回复数量缓存 |
 | `status` | String | 当前为 `visible` |
 | `createdAt` | DateTime | 回复时间 |
+
+## CheckInReplyLike 回复点赞
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | Long | 主键 |
+| `replyId` | Long | 关联回复 |
+| `userId` | Long | 登录用户 ID，游客为空 |
+| `guestId` | String | 持久化游客编号 |
+| `createdAt` | DateTime | 点赞时间 |
 
 ## CorrectionSample 校正样本
 
@@ -222,6 +235,7 @@
 | `username` | String | 用户名，唯一 |
 | `passwordHash` | String | PBKDF2 哈希摘要，格式为 `pbkdf2$迭代次数$salt$hash` |
 | `email` | String | 选填邮箱 |
+| `avatarUrl` | String | 选填头像地址；为空时前端按用户编号和用户名生成固定像素头像 |
 | `role` | String | `user` 或 `admin` |
 | `enabled` | Boolean | 是否启用 |
 | `createdAt` | DateTime | 创建时间 |
@@ -247,5 +261,7 @@
 | `V12__harden_async_search_queue.sql` | 增加持久化重试时间和队列到期索引 |
 | `V13__persistent_sar_and_index_rebuild.sql` | 增加 SAR、模型/索引版本、待发布样本路径，并创建索引重建任务表 |
 | `V16__link_check_in_to_search_record.sql` | 为打卡增加检索记录唯一关联和照片公开开关，保留旧记录兼容性 |
+| `V17__nested_check_in_replies.sql` | 为回复增加父子关系、点赞和直接回复计数，创建回复点赞表 |
+| `V18__user_avatar.sql` | 为用户增加可持久化的自定义头像地址 |
 | `V14__algorithm_instance_tracking.sql` | 保存实际处理任务的算法实例编号与主备角色 |
 | `V15__persistent_guest_identity.sql` | 创建持久化游客身份表，使用令牌哈希幂等分配游客编号 |

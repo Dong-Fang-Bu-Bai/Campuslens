@@ -1,60 +1,168 @@
 <template>
   <section class="checkin-page">
-    <article class="checkin-feed v3-panel">
+    <article class="checkin-feed v3-panel" :class="{ 'is-detail': selectedItem }">
       <div class="v3-page-head checkin-board-head">
-        <div>
-          <p class="eyebrow">{{ labels.kicker }}</p>
-          <h3>{{ labels.title }}</h3>
-          <p class="checkin-board-subtitle">{{ labels.boardSubtitle }}</p>
-        </div>
-        <button type="button" class="ghost-btn" @click="$emit('refresh')">{{ labels.refresh }}</button>
+        <template v-if="selectedItem">
+          <button type="button" class="checkin-back-btn" @click="$emit('close-post')">← {{ labels.backToBoard }}</button>
+          <div class="checkin-detail-heading">
+            <p class="eyebrow">{{ labels.detailKicker }}</p>
+            <h3>{{ labels.detailTitle }}</h3>
+          </div>
+        </template>
+        <template v-else>
+          <div>
+            <p class="eyebrow">{{ labels.kicker }}</p>
+            <h3>{{ labels.title }}</h3>
+            <p class="checkin-board-subtitle">{{ labels.boardSubtitle }}</p>
+          </div>
+          <button type="button" class="ghost-btn" @click="$emit('refresh')">{{ labels.refresh }}</button>
+        </template>
       </div>
 
       <div class="checkin-scroll-region">
-        <div v-if="!items.length" class="empty-state compact checkin-empty-feed">
+        <p v-if="interactionError && !selectedItem" class="checkin-interaction-error board-error" role="alert">{{ interactionError }}</p>
+        <div v-if="detailLoading" class="v3-loading">{{ labels.loadingDetail }}</div>
+
+        <div v-else-if="selectedItem" class="checkin-thread-page">
+          <section class="checkin-card checkin-thread-post">
+            <header class="checkin-card-head">
+              <button type="button" class="checkin-place" @click="$emit('select-landmark', selectedItem.landmarkId)">
+                <span>{{ selectedItem.landmarkCode }}</span>{{ selectedItem.landmarkName }}
+              </button>
+              <time>{{ formatTime(selectedItem.createdAt) }}</time>
+            </header>
+            <p class="checkin-message">{{ selectedItem.message }}</p>
+            <button
+              v-if="selectedItem.sourceImageUrl"
+              type="button"
+              class="checkin-image-button detail-image"
+              :aria-label="labels.enlargeImage"
+              @click="openImage(selectedItem)"
+            >
+              <img class="checkin-public-image" :src="selectedItem.sourceImageUrl" :alt="selectedItem.landmarkName" />
+              <span>{{ labels.viewImage }}</span>
+            </button>
+            <div class="checkin-meta">
+              <span class="checkin-author">{{ selectedItem.displayName }}</span>
+              <button
+                type="button"
+                class="engagement-btn like-btn"
+                :class="{ active: selectedItem.likedByMe }"
+                :disabled="postLikePendingIds.includes(selectedItem.id)"
+                @click="$emit('like', selectedItem)"
+              >
+                <span aria-hidden="true">♥</span>
+                {{ postLikePendingIds.includes(selectedItem.id) ? labels.liking : (selectedItem.likedByMe ? labels.liked : labels.like) }}
+                <strong>{{ selectedItem.likeCount }}</strong>
+              </button>
+              <span class="engagement-count"><span aria-hidden="true">●</span>{{ labels.replyCount }} <strong>{{ selectedItem.replyCount }}</strong></span>
+            </div>
+          </section>
+
+          <section class="thread-replies" aria-live="polite">
+            <div class="thread-section-title">
+              <h4>{{ labels.discussion }}</h4>
+              <span>{{ selectedItem.replyCount }} {{ labels.repliesUnit }}</span>
+            </div>
+            <div v-if="!flatReplies.length" class="thread-empty">{{ labels.noReplies }}</div>
+            <article
+              v-for="entry in flatReplies"
+              :key="entry.reply.id"
+              class="thread-reply"
+              :style="{
+                '--reply-indent': `${entry.depth * 26}px`,
+                '--reply-indent-mobile': `${entry.depth * 12}px`
+              }"
+            >
+              <header>
+                <strong>{{ entry.reply.displayName }}</strong>
+                <time>{{ formatTime(entry.reply.createdAt) }}</time>
+              </header>
+              <p>{{ entry.reply.message }}</p>
+              <footer>
+                <button
+                  type="button"
+                  class="engagement-btn like-btn"
+                  :class="{ active: entry.reply.likedByMe }"
+                  :disabled="replyLikePendingIds.includes(entry.reply.id)"
+                  @click="$emit('reply-like', entry.reply)"
+                >
+                  <span aria-hidden="true">♥</span>
+                  {{ replyLikePendingIds.includes(entry.reply.id) ? labels.liking : (entry.reply.likedByMe ? labels.liked : labels.like) }}
+                  <strong>{{ entry.reply.likeCount }}</strong>
+                </button>
+                <button type="button" class="engagement-btn reply-btn" @click="selectReplyTarget(entry.reply)">
+                  <span aria-hidden="true">↩</span>{{ labels.reply }}
+                </button>
+                <span class="reply-count-badge"><span aria-hidden="true">●</span>{{ entry.reply.replyCount }}</span>
+              </footer>
+            </article>
+          </section>
+
+          <form class="thread-reply-composer" @submit.prevent="submitDetailReply">
+            <p v-if="interactionError" class="checkin-interaction-error" role="alert">{{ interactionError }}</p>
+            <div v-if="replyTarget" class="reply-target">
+              <span>{{ labels.replyingTo }} @{{ replyTarget.displayName }}</span>
+              <button type="button" @click="replyTarget = null">{{ labels.cancelReply }}</button>
+            </div>
+            <div class="reply-form">
+              <input ref="replyInput" v-model="replyMessage" maxlength="500" :placeholder="replyTarget ? labels.nestedReplyPlaceholder : labels.replyPlaceholder" />
+              <button type="submit" :disabled="replySubmitting || !replyMessage.trim()">
+                {{ replySubmitting ? labels.replySubmitting : labels.reply }}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div v-else-if="!items.length" class="empty-state compact checkin-empty-feed">
           <h3>{{ labels.empty }}</h3>
           <p>{{ labels.emptyDesc }}</p>
         </div>
         <div v-else class="checkin-list">
-          <section v-for="item in items" :key="item.id" class="checkin-card">
+          <section
+            v-for="item in items"
+            :key="item.id"
+            class="checkin-card checkin-card-summary"
+            role="button"
+            tabindex="0"
+            @click="$emit('open-post', item)"
+            @keydown.enter="$emit('open-post', item)"
+          >
             <header class="checkin-card-head">
-              <button type="button" class="checkin-place" @click="$emit('select-landmark', item.landmarkId)">
+              <button type="button" class="checkin-place" @click.stop="$emit('select-landmark', item.landmarkId)">
                 <span>{{ item.landmarkCode }}</span>{{ item.landmarkName }}
               </button>
               <time>{{ formatTime(item.createdAt) }}</time>
             </header>
-
             <p class="checkin-message">{{ item.message }}</p>
-
             <button
               v-if="item.sourceImageUrl"
               type="button"
               class="checkin-image-button"
               :aria-label="labels.enlargeImage"
-              @click="openImage(item)"
+              @click.stop="openImage(item)"
             >
               <img class="checkin-public-image" :src="item.sourceImageUrl" :alt="item.landmarkName" />
               <span>{{ labels.viewImage }}</span>
             </button>
-
             <div class="checkin-meta">
               <span class="checkin-author">{{ item.displayName }}</span>
-              <button type="button" :class="{ active: item.likedByMe }" @click="$emit('like', item)">
-                {{ item.likedByMe ? labels.liked : labels.like }} · {{ item.likeCount }}
+              <button
+                type="button"
+                class="engagement-btn like-btn"
+                :class="{ active: item.likedByMe }"
+                :disabled="postLikePendingIds.includes(item.id)"
+                @click.stop="$emit('like', item)"
+              >
+                <span aria-hidden="true">♥</span>
+                {{ postLikePendingIds.includes(item.id) ? labels.liking : (item.likedByMe ? labels.liked : labels.like) }}
+                <strong>{{ item.likeCount }}</strong>
               </button>
-              <span>{{ labels.replyCount }} · {{ item.replyCount }}</span>
+              <button type="button" class="engagement-btn reply-btn" @click.stop="$emit('open-post', item)">
+                <span aria-hidden="true">●</span>{{ labels.replyCount }} <strong>{{ item.replyCount }}</strong>
+              </button>
+              <span class="open-thread-hint">{{ labels.openDiscussion }} →</span>
             </div>
-
-            <div class="reply-list" v-if="item.replies?.length">
-              <div v-for="reply in item.replies" :key="reply.id">
-                <strong>{{ reply.displayName }}</strong>
-                <span>{{ reply.message }}</span>
-              </div>
-            </div>
-            <form class="reply-form" @submit.prevent="submitReply(item)">
-              <input v-model="replyDrafts[item.id]" maxlength="500" :placeholder="labels.replyPlaceholder" />
-              <button type="submit">{{ labels.reply }}</button>
-            </form>
           </section>
         </div>
       </div>
@@ -114,11 +222,17 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
 const props = defineProps({
   landmarks: { type: Array, default: () => [] },
   items: { type: Array, default: () => [] },
+  selectedItem: { type: Object, default: null },
+  detailLoading: { type: Boolean, default: false },
+  interactionError: { type: String, default: '' },
+  replySubmitting: { type: Boolean, default: false },
+  postLikePendingIds: { type: Array, default: () => [] },
+  replyLikePendingIds: { type: Array, default: () => [] },
   draft: { type: Object, default: null },
   labels: { type: Object, required: true },
   language: { type: String, default: 'zh' },
@@ -126,15 +240,33 @@ const props = defineProps({
   createError: { type: String, default: '' }
 })
 
-const emit = defineEmits(['create', 'like', 'reply', 'refresh', 'select-landmark', 'cancel-draft'])
+const emit = defineEmits([
+  'create', 'like', 'reply', 'reply-like', 'refresh', 'select-landmark',
+  'open-post', 'close-post', 'cancel-draft'
+])
 const form = reactive({ message: '', publishImage: false })
-const replyDrafts = reactive({})
 const lightboxItem = ref(null)
+const replyInput = ref(null)
+const replyMessage = ref('')
+const replyTarget = ref(null)
 const selectedLandmark = computed(() => props.landmarks.find(item => item.id === props.draft?.landmarkId))
+const flatReplies = computed(() => flattenReplies(props.selectedItem?.replies || []))
 
 watch(() => props.draft?.searchRecordId, () => {
   form.message = ''
   form.publishImage = false
+})
+
+watch(() => props.selectedItem?.id, () => {
+  replyMessage.value = ''
+  replyTarget.value = null
+})
+
+watch(() => props.replySubmitting, (submitting, wasSubmitting) => {
+  if (wasSubmitting && !submitting && !props.interactionError) {
+    replyMessage.value = ''
+    replyTarget.value = null
+  }
 })
 
 function submit() {
@@ -159,17 +291,32 @@ function closeImage() {
   lightboxItem.value = null
 }
 
-function submitReply(item) {
-  const message = (replyDrafts[item.id] || '').trim()
-  if (!message) return
-  emit('reply', item, message)
-  replyDrafts[item.id] = ''
+function flattenReplies(replies, depth = 0) {
+  return replies.flatMap(reply => [
+    { reply, depth: Math.min(depth, 3) },
+    ...flattenReplies(reply.replies || [], depth + 1)
+  ])
+}
+
+function selectReplyTarget(reply) {
+  replyTarget.value = reply
+  nextTick(() => replyInput.value?.focus())
+}
+
+function submitDetailReply() {
+  const message = replyMessage.value.trim()
+  if (!props.selectedItem || !message) return
+  emit('reply', props.selectedItem, {
+    message,
+    parentReplyId: replyTarget.value?.id || null
+  })
 }
 
 function handleEscape(event) {
   if (event.key !== 'Escape') return
   if (lightboxItem.value) closeImage()
   else if (props.draft) cancelDraft()
+  else if (props.selectedItem) emit('close-post')
 }
 
 function formatTime(value) {

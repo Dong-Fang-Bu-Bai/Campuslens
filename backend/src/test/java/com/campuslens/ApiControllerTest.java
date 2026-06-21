@@ -19,6 +19,8 @@ import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResult;
 import com.campuslens.service.AlgorithmSearchException;
 import com.campuslens.service.GuestIdentityService;
 import java.nio.file.Path;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -29,6 +31,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -519,7 +522,7 @@ class ApiControllerTest {
         .andExpect(jsonPath("$.liked").value(true))
         .andExpect(jsonPath("$.likeCount").value(1));
 
-    mockMvc.perform(post("/api/check-ins/" + checkInId + "/replies")
+    String replyResponse = mockMvc.perform(post("/api/check-ins/" + checkInId + "/replies")
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
@@ -528,13 +531,70 @@ class ApiControllerTest {
                 }
                 """.formatted(replyGuestId)))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.displayName").value(replyGuestId));
+        .andExpect(jsonPath("$.displayName").value(replyGuestId))
+        .andExpect(jsonPath("$.parentReplyId").isEmpty())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+    long replyId = extractLong(replyResponse, "id");
 
     mockMvc.perform(get("/api/check-ins")
             .param("guestId", authorGuestId))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].likedByMe").value(true))
         .andExpect(jsonPath("$[0].replyCount").value(1));
+
+    String nestedReplyResponse = mockMvc.perform(post("/api/check-ins/" + checkInId + "/replies")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "message": "同意，夜景很好看",
+                  "guestId": "%s",
+                  "parentReplyId": %d
+                }
+                """.formatted(authorGuestId, replyId)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.parentReplyId").value(replyId))
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+    long nestedReplyId = extractLong(nestedReplyResponse, "id");
+
+    mockMvc.perform(post("/api/check-in-replies/" + replyId + "/like")
+            .param("guestId", authorGuestId))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.liked").value(true))
+        .andExpect(jsonPath("$.likeCount").value(1));
+
+    mockMvc.perform(post("/api/check-in-replies/" + nestedReplyId + "/like")
+            .param("guestId", authorGuestId))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.replyId").value(nestedReplyId))
+        .andExpect(jsonPath("$.liked").value(true))
+        .andExpect(jsonPath("$.likeCount").value(1));
+
+    mockMvc.perform(get("/api/check-ins/" + checkInId)
+            .param("guestId", authorGuestId))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.replyCount").value(2))
+        .andExpect(jsonPath("$.replies[0].id").value(replyId))
+        .andExpect(jsonPath("$.replies[0].likedByMe").value(true))
+        .andExpect(jsonPath("$.replies[0].likeCount").value(1))
+        .andExpect(jsonPath("$.replies[0].replyCount").value(1))
+        .andExpect(jsonPath("$.replies[0].replies[0].parentReplyId").value(replyId))
+        .andExpect(jsonPath("$.replies[0].replies[0].likedByMe").value(true))
+        .andExpect(jsonPath("$.replies[0].replies[0].likeCount").value(1));
+
+    mockMvc.perform(post("/api/check-ins/" + checkInId + "/replies")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "message": "无效父回复",
+                  "guestId": "%s",
+                  "parentReplyId": 999999
+                }
+                """.formatted(authorGuestId)))
+        .andExpect(status().isBadRequest());
 
     mockMvc.perform(post("/api/check-ins")
             .contentType(MediaType.APPLICATION_JSON)
@@ -722,6 +782,129 @@ class ApiControllerTest {
         .andExpect(jsonPath("$.message").value("用户名已存在"));
   }
 
+  @Test
+  void loggedInUserCanManageAccountProfileAndPassword() throws Exception {
+    String token = register("accountuser01", "password123");
+
+    mockMvc.perform(get("/api/me/account")
+            .header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.username").value("accountuser01"))
+        .andExpect(jsonPath("$.role").value("user"))
+        .andExpect(jsonPath("$.admin").value(false));
+
+    mockMvc.perform(put("/api/me/account/email")
+            .header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "email": "accountuser01@example.com"
+                }
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.account.email").value("accountuser01@example.com"));
+
+    mockMvc.perform(put("/api/me/account/email")
+            .header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "email": "not-an-email"
+                }
+                """))
+        .andExpect(status().isBadRequest());
+
+    mockMvc.perform(put("/api/me/account/password")
+            .header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "currentPassword": "wrong-password",
+                  "newPassword": "newpassword456"
+                }
+                """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("当前密码不正确"));
+
+    mockMvc.perform(put("/api/me/account/password")
+            .header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "currentPassword": "password123",
+                  "newPassword": "newpassword456"
+                }
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.message").value("密码修改成功"));
+
+    mockMvc.perform(post("/api/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "username": "accountuser01",
+                  "password": "password123"
+                }
+                """))
+        .andExpect(status().isBadRequest());
+
+    mockMvc.perform(post("/api/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "username": "accountuser01",
+                  "password": "newpassword456"
+                }
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.email").value("accountuser01@example.com"));
+
+    mockMvc.perform(get("/api/me/account"))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void loggedInUserCanUploadAndReplaceCroppedAvatar() throws Exception {
+    String token = register("avataruser01", "password123");
+    MockMultipartFile firstAvatar = avatarFile("first-avatar.png", 64, 0xFF2563EB);
+
+    String firstResponse = mockMvc.perform(multipart("/api/me/account/avatar")
+            .file(firstAvatar)
+            .header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.account.username").value("avataruser01"))
+        .andExpect(jsonPath("$.account.avatarUrl").value(org.hamcrest.Matchers.startsWith("/uploads/avatars/")))
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+    String firstUrl = extractString(firstResponse, "avatarUrl");
+
+    mockMvc.perform(get(firstUrl))
+        .andExpect(status().isOk());
+
+    MockMultipartFile secondAvatar = avatarFile("second-avatar.jpg", 96, 0xFFF97316);
+    String secondResponse = mockMvc.perform(multipart("/api/me/account/avatar")
+            .file(secondAvatar)
+            .header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+    String secondUrl = extractString(secondResponse, "avatarUrl");
+    assertThat(secondUrl).isNotEqualTo(firstUrl);
+
+    mockMvc.perform(get("/api/me/account")
+            .header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.avatarUrl").value(secondUrl));
+
+    mockMvc.perform(multipart("/api/me/account/avatar")
+            .file(new MockMultipartFile("file", "fake.png", "image/png", "not-an-image".getBytes()))
+            .header("Authorization", "Bearer " + token))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("头像文件不是有效图片"));
+  }
+
   private String login(String username, String password) throws Exception {
     String response = mockMvc.perform(post("/api/auth/login")
             .contentType(MediaType.APPLICATION_JSON)
@@ -754,6 +937,20 @@ class ApiControllerTest {
         .getResponse()
         .getContentAsString();
     return response.replaceAll(".*\"token\":\"([^\"]+)\".*", "$1");
+  }
+
+  private MockMultipartFile avatarFile(String filename, int size, int color) throws Exception {
+    BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
+    for (int y = 0; y < size; y++) {
+      for (int x = 0; x < size; x++) {
+        image.setRGB(x, y, color);
+      }
+    }
+    String format = filename.endsWith(".png") ? "png" : "jpg";
+    ByteArrayOutputStream output = new ByteArrayOutputStream();
+    ImageIO.write(image, format, output);
+    String contentType = "png".equals(format) ? "image/png" : "image/jpeg";
+    return new MockMultipartFile("file", filename, contentType, output.toByteArray());
   }
 
   private String allocateGuest() throws Exception {

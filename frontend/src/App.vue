@@ -1,6 +1,6 @@
 <template>
   <main class="app-shell" :class="shellClasses">
-    <aside class="side-panel" :class="{ 'collapsed': isSidebarCollapsed }">
+    <aside id="primary-navigation" class="side-panel" :class="{ 'collapsed': isSidebarCollapsed }">
       <div class="brand-header">
         <div class="brand-logo">
           <img src="/logo.png" alt="CampusLens" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />
@@ -44,10 +44,6 @@
           <span class="active-line"></span>
           {{ t('校园地图', 'Campus Map') }}
         </button>
-        <button :class="{ active: activeView === 'feedback' }" @click="changeView('feedback')">
-          <span class="active-line"></span>
-          {{ t('结果反馈', 'Feedback') }}
-        </button>
         <button :class="{ active: activeView === 'history' }" @click="openHistory">
           <span class="active-line"></span>
           {{ t('识别记录', 'History') }}
@@ -56,12 +52,24 @@
           <span class="active-line"></span>
           {{ t('校园留言', 'Campus Moments') }}
         </button>
+        <button v-if="currentUser" :class="{ active: activeView === 'account' }" @click="openAccount">
+          <span class="active-line"></span>
+          {{ t('账号管理', 'Account') }}
+        </button>
         <button v-if="isAdmin" :class="{ active: activeView === 'admin' }" @click="openAdmin">
           <span class="active-line"></span>
           {{ t('管理中心', 'Admin Center') }}
         </button>
       </nav>
     </aside>
+
+    <button
+      v-if="!isSidebarCollapsed"
+      type="button"
+      class="mobile-sidebar-scrim"
+      :aria-label="t('关闭导航菜单', 'Close navigation menu')"
+      @click="isSidebarCollapsed = true"
+    ></button>
 
     <section class="content-area">
       <header class="top-bar">
@@ -89,7 +97,15 @@
             <template v-else>
               <div class="top-admin-status">
                 <span class="admin-badge">{{ isAdmin ? 'Admin' : 'User' }}</span>
-                <span class="admin-username">{{ currentUser.username }}</span>
+                <button type="button" class="top-account-trigger" :title="t('进入账号管理', 'Open account settings')" @click="openAccount">
+                  <UserAvatar
+                    :avatar-url="accountProfile?.avatarUrl || currentUser.avatarUrl"
+                    :seed="`${currentUser.userId || 'user'}:${currentUser.username || 'campuslens'}`"
+                    :alt="t('用户头像', 'User avatar')"
+                    :size="34"
+                  />
+                  <span class="admin-username">{{ currentUser.username }}</span>
+                </button>
                 <button v-if="isAdmin" type="button" class="top-action-btn" @click="openAdmin">{{ t('进入后台', 'Console') }}</button>
                 <button type="button" class="top-action-btn logout" @click="handleLogout">{{ t('退出', 'Logout') }}</button>
               </div>
@@ -141,15 +157,27 @@
               <button v-if="!loading" type="button" class="ghost-btn" @click="resumeSearchJob">{{ t('继续查询', 'Resume') }}</button>
             </div>
 
+            <article class="detail-panel" v-if="localizedSelectedLandmark && results.length">
+              <p class="eyebrow">{{ localizedSelectedLandmark.code }}</p>
+              <h3>{{ localizedSelectedLandmark.name }}</h3>
+              <p class="detail-location">{{ localizedSelectedLandmark.locationText }}</p>
+              <p class="detail-description">{{ localizedSelectedLandmark.description }}</p>
+              <div class="detail-grid">
+                <span>{{ t('类型', 'Type') }}</span><strong>{{ localizedSelectedLandmark.type }}</strong>
+                <span>{{ t('地图坐标', 'Map Coordinates') }}</span><strong>{{ localizedSelectedLandmark.mapX }}%, {{ localizedSelectedLandmark.mapY }}%</strong>
+              </div>
+              <button type="button" class="secondary-btn inline-action" @click="changeView('map')">{{ t('查看地图位置', 'Show on Map') }}</button>
+            </article>
 
             <div 
               v-if="results.length" 
               class="result-carousel-container" 
-              @wheel.prevent="cycleResults($event.deltaY > 0 ? 1 : -1)"
+              @wheel.stop.prevent="cycleResults($event.deltaY > 0 ? 1 : -1)"
               @mousedown="handleDragStart"
               @mouseup="handleDragEnd"
               @mouseleave="handleDragEnd"
               @touchstart="handleTouchStart"
+              @touchmove.prevent
               @touchend="handleTouchEnd"
             >
               <div 
@@ -193,18 +221,6 @@
               <p>{{ t('从左侧选择一张校园照片，识别完成后将在这里展示候选地标。', 'Choose a campus photo on the left. Landmark candidates will appear here when recognition is complete.') }}</p>
             </article>
           </div>
-
-          <article class="detail-panel" v-if="localizedSelectedLandmark && results.length">
-            <p class="eyebrow">{{ localizedSelectedLandmark.code }}</p>
-            <h3>{{ localizedSelectedLandmark.name }}</h3>
-            <p class="detail-location">{{ localizedSelectedLandmark.locationText }}</p>
-            <p>{{ localizedSelectedLandmark.description }}</p>
-            <div class="detail-grid">
-              <span>{{ t('类型', 'Type') }}</span><strong>{{ localizedSelectedLandmark.type }}</strong>
-              <span>{{ t('地图坐标', 'Map Coordinates') }}</span><strong>{{ localizedSelectedLandmark.mapX }}%, {{ localizedSelectedLandmark.mapY }}%</strong>
-            </div>
-            <button type="button" class="secondary-btn inline-action" @click="changeView('map')">{{ t('查看地图位置', 'Show on Map') }}</button>
-          </article>
         </section>
 
         <section v-else-if="activeView === 'map'" class="map-layout" key="map">
@@ -367,6 +383,12 @@
           key="checkins"
           :landmarks="localizedLandmarks"
           :items="localizedCheckIns"
+          :selected-item="localizedCheckInDetail"
+          :detail-loading="checkInDetailLoading"
+          :interaction-error="checkInInteractionError"
+          :reply-submitting="checkInReplySubmitting"
+          :post-like-pending-ids="checkInLikePendingIds"
+          :reply-like-pending-ids="replyLikePendingIds"
           :draft="checkInDraft"
           :labels="checkInLabels"
           :language="preferences.language"
@@ -375,9 +397,34 @@
           @refresh="loadCheckIns"
           @create="createCheckIn"
           @like="toggleCheckInLike"
+          @reply-like="toggleCheckInReplyLike"
           @reply="replyCheckIn"
+          @open-post="openCheckInPost"
+          @close-post="closeCheckInPost"
           @select-landmark="selectMapLandmark"
           @cancel-draft="cancelCheckInDraft"
+        />
+
+        <AccountPanel
+          v-else-if="activeView === 'account'"
+          key="account"
+          :profile="accountProfile"
+          :loading="accountLoading"
+          :email-submitting="accountEmailSubmitting"
+          :password-submitting="accountPasswordSubmitting"
+          :email-message="accountEmailMessage"
+          :email-error="accountEmailError"
+          :password-message="accountPasswordMessage"
+          :password-error="accountPasswordError"
+          :avatar-submitting="accountAvatarSubmitting"
+          :avatar-message="accountAvatarMessage"
+          :avatar-error="accountAvatarError"
+          :labels="accountLabels"
+          @refresh="loadAccount"
+          @update-email="updateAccountEmail"
+          @update-password="updateAccountPassword"
+          @update-avatar="updateAccountAvatar"
+          @logout="handleLogout"
         />
 
         <AdminPanel
@@ -412,6 +459,9 @@
       :class="isSidebarCollapsed ? 'collapsed' : 'expanded'"
       @click="isSidebarCollapsed = !isSidebarCollapsed"
       :title="isSidebarCollapsed ? t('展开侧边栏', 'Expand Sidebar') : t('收起侧边栏', 'Collapse Sidebar')"
+      :aria-label="isSidebarCollapsed ? t('打开导航菜单', 'Open navigation menu') : t('关闭导航菜单', 'Close navigation menu')"
+      :aria-expanded="!isSidebarCollapsed"
+      aria-controls="primary-navigation"
     >
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="toggle-arrow"><polyline points="15 18 9 12 15 6"></polyline></svg>
     </button>
@@ -453,14 +503,16 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import AdminPanel from './components/AdminPanel.vue'
+import AccountPanel from './components/AccountPanel.vue'
 import AuthPanel from './components/AuthPanel.vue'
 import CheckInBoard from './components/CheckInBoard.vue'
 import HistoryView from './components/HistoryView.vue'
 import LandmarkModal from './components/LandmarkModal.vue'
 import InteractiveBackground from './components/InteractiveBackground.vue'
 import PreferencesDock from './components/PreferencesDock.vue'
+import UserAvatar from './components/UserAvatar.vue'
 import { getLunarDateString } from './utils/lunar.js'
 
 const isSidebarCollapsed = ref(false)
@@ -684,9 +736,10 @@ const jobState = reactive({
   startedAt: 0
 })
 const initialView = new URLSearchParams(window.location.search).get('view')
-const availableViews = ['results', 'map', 'feedback', 'history', 'checkins', 'auth', 'admin']
+const availableViews = ['results', 'map', 'history', 'checkins', 'account', 'auth', 'admin']
 const activeView = ref(availableViews.includes(initialView) ? initialView : 'results')
-isSidebarCollapsed.value = (activeView.value === 'auth')
+const mobileNavigationQuery = window.matchMedia('(max-width: 1120px)')
+isSidebarCollapsed.value = ['auth', 'account'].includes(activeView.value) || mobileNavigationQuery.matches
 const feedbackMessage = ref('')
 const feedbackError = ref(false)
 const authMessage = ref('')
@@ -726,6 +779,17 @@ const adminRebuildJob = ref(null)
 const selectedFeedbackDetail = ref(null)
 const userSearchRecords = ref([])
 const historyLoading = ref(false)
+const accountProfile = ref(profileFromUser(currentUser.value))
+const accountLoading = ref(false)
+const accountEmailSubmitting = ref(false)
+const accountPasswordSubmitting = ref(false)
+const accountEmailMessage = ref('')
+const accountEmailError = ref(false)
+const accountPasswordMessage = ref('')
+const accountPasswordError = ref(false)
+const accountAvatarSubmitting = ref(false)
+const accountAvatarMessage = ref('')
+const accountAvatarError = ref(false)
 const jobStatusLabel = computed(() => ({
   queued: t('正在等待识别...', 'Waiting to begin...'),
   processing: t('正在识别照片...', 'Analyzing your photo...'),
@@ -735,6 +799,12 @@ const jobPending = computed(() => Boolean(jobState.jobId) && ['queued', 'process
 const feedbackEligible = computed(() => ['success', 'low_confidence'].includes(searchMeta.status))
 const checkInEligible = computed(() => feedbackEligible.value && Boolean(searchMeta.searchRecordId))
 const checkIns = ref([])
+const checkInDetail = ref(null)
+const checkInDetailLoading = ref(false)
+const checkInInteractionError = ref('')
+const checkInReplySubmitting = ref(false)
+const checkInLikePendingIds = ref([])
+const replyLikePendingIds = ref([])
 const checkInDraft = ref(null)
 const checkInSubmitting = ref(false)
 const checkInCreateError = ref('')
@@ -872,6 +942,15 @@ const localizedCheckIns = computed(() => {
   })
 })
 
+const localizedCheckInDetail = computed(() => {
+  if (!checkInDetail.value) return null
+  const matched = localizedLandmarks.value.find(item => item.id === checkInDetail.value.landmarkId)
+  return {
+    ...checkInDetail.value,
+    landmarkName: matched ? matched.name : checkInDetail.value.landmarkName
+  }
+})
+
 function navigateToView(view) {
   if (activeView.value === view) return
   if (historyIndex.value < viewHistory.value.length - 1) {
@@ -977,6 +1056,7 @@ const viewTitle = computed(() => ({
   feedback: t('识别结果反馈', 'Search Feedback'),
   history: t('识别记录', 'Search History'),
   checkins: t('校园留言', 'Campus Moments'),
+  account: t('账号管理', 'Account Settings'),
   auth: authMode.value === 'login' ? t('用户登录', 'Login') : t('用户注册', 'Register'),
   admin: t('管理中心', 'Admin Center')
 }[activeView.value]))
@@ -1011,15 +1091,25 @@ const historyLabels = computed(() => ({
 }))
 
 const checkInLabels = computed(() => ({
-  kicker: t('校园动态', 'Campus Moments'),
-  composeKicker: t('分享此刻', 'Share a Moment'),
-  title: t('校园打卡留言板', 'Campus Check-in Board'),
-  boardSubtitle: t('真实识图记录留下的校园观察与交流', 'Campus notes and conversations backed by real searches'),
+  kicker: t('校园分享', 'Campus Stories'),
+  composeKicker: t('记录校园', 'Share a Moment'),
+  title: t('校园动态', 'Campus Moments'),
+  boardSubtitle: t('浏览同学们在校园地标留下的见闻、路线提醒与拍照心得', 'Explore campus observations, route tips, and photo notes shared at real landmarks'),
+  detailKicker: t('帖子讨论', 'Post Discussion'),
+  detailTitle: t('动态详情', 'Post Details'),
+  backToBoard: t('返回校园动态', 'Back to Campus Moments'),
+  loadingDetail: t('正在加载帖子与回复...', 'Loading post and replies...'),
+  discussion: t('评论与回复', 'Discussion'),
+  repliesUnit: t('条回复', 'replies'),
+  noReplies: t('还没有回复，来分享第一条看法吧。', 'No replies yet. Start the conversation.'),
+  openDiscussion: t('查看讨论', 'Open discussion'),
+  liking: t('处理中', 'Updating'),
+  replySubmitting: t('发送中...', 'Sending...'),
   refresh: t('刷新', 'Refresh'),
   landmark: t('打卡地点', 'Landmark'),
   sourceRecord: t('关联识别', 'Linked search'),
   publicPhoto: t('在公共留言板展示本次上传照片', 'Show this uploaded photo on the public board'),
-  composeTitle: t('发布识图打卡', 'Publish Search Check-in'),
+  composeTitle: t('发布校园动态', 'Publish Campus Moment'),
   cancel: t('取消', 'Cancel'),
   close: t('关闭', 'Close'),
   submitting: t('发布中...', 'Publishing...'),
@@ -1027,13 +1117,16 @@ const checkInLabels = computed(() => ({
   enlargeImage: t('点击放大打卡图片', 'Enlarge check-in image'),
   message: t('留言内容', 'Message'),
   placeholder: t('记录当前地标的观察、路线提醒或拍照建议', 'Share an observation, route note, or photo tip'),
-  submit: t('发布打卡', 'Post'),
-  empty: t('暂无留言', 'No posts yet'),
-  emptyDesc: t('完成一次校园地标识别后，即可从候选结果分享打卡留言。', 'Complete a landmark search, then share a check-in from one of the results.'),
+  submit: t('发布动态', 'Post'),
+  empty: t('暂无校园动态', 'No posts yet'),
+  emptyDesc: t('完成地标识别后，可以从候选结果分享校园见闻。', 'Complete a landmark search, then share a campus moment from one of the results.'),
   like: t('点赞', 'Like'),
   liked: t('已赞', 'Liked'),
   reply: t('回复', 'Reply'),
-  replyPlaceholder: t('写一条一级回复', 'Write a reply'),
+  replyPlaceholder: t('写下你的看法或补充', 'Write a reply'),
+  nestedReplyPlaceholder: t('回复这条评论', 'Reply to this comment'),
+  replyingTo: t('正在回复', 'Replying to'),
+  cancelReply: t('取消', 'Cancel'),
   replyCount: t('回复', 'Replies')
 }))
 
@@ -1047,6 +1140,63 @@ const authLabels = computed(() => ({
   emailPlaceholder: t('选填，用于完善账户信息', 'Optional, for your account profile'),
   submitLogin: t('登录', 'Sign In'),
   submitRegister: t('注册并登录', 'Register & Sign In')
+}))
+
+const accountLabels = computed(() => ({
+  kicker: t('个人中心', 'Personal Center'),
+  subtitle: t('集中管理你的 CampusLens 账号资料与登录安全。', 'Manage your CampusLens profile and sign-in security.'),
+  refresh: t('刷新资料', 'Refresh'),
+  admin: t('管理员账号', 'Administrator'),
+  user: t('登录用户', 'Member'),
+  active: t('账号正常', 'Active'),
+  profileKicker: t('账号资料', 'Profile'),
+  profileTitle: t('基本信息', 'Account Details'),
+  avatarAlt: t('用户头像', 'User avatar'),
+  changeAvatar: t('更改头像', 'Change avatar'),
+  avatarTypeError: t('头像仅支持 JPG 或 PNG 图片', 'Avatar must be a JPG or PNG image.'),
+  avatarSizeError: t('头像大小不能超过 5 MB', 'Avatar must be no larger than 5 MB.'),
+  username: t('用户名', 'Username'),
+  email: t('邮箱', 'Email'),
+  role: t('账号角色', 'Role'),
+  userId: t('用户编号', 'User ID'),
+  noEmail: t('暂未设置', 'Not set'),
+  securityTitle: t('账号受登录令牌保护', 'Protected by session token'),
+  securityDesc: t('修改密码时需要验证当前密码，账号资料仅本人可访问。', 'Your current password is required for password changes, and only you can access this profile.'),
+  contactKicker: t('联系方式', 'Contact'),
+  emailTitle: t('管理邮箱', 'Manage Email'),
+  emailExistsDesc: t('当前账号已绑定邮箱，可按需更新。', 'This account already has an email. You can replace it when needed.'),
+  emailMissingDesc: t('当前账号尚未设置邮箱，可添加邮箱完善账号资料。', 'No email is set yet. Add one to complete your profile.'),
+  currentEmail: t('当前邮箱', 'Current Email'),
+  newEmail: t('新邮箱', 'New Email'),
+  addEmail: t('添加邮箱', 'Add Email'),
+  changeEmail: t('更改邮箱', 'Change Email'),
+  emailPlaceholder: t('name@example.com', 'name@example.com'),
+  saveEmail: t('保存邮箱', 'Save Email'),
+  cancel: t('取消', 'Cancel'),
+  passwordKicker: t('登录安全', 'Security'),
+  passwordTitle: t('修改密码', 'Change Password'),
+  passwordDesc: t('新密码至少 8 位。修改成功后，请在下次登录时使用新密码。', 'Use at least 8 characters. Your new password applies to future sign-ins.'),
+  currentPassword: t('当前密码', 'Current Password'),
+  currentPasswordPlaceholder: t('输入当前登录密码', 'Enter current password'),
+  newPassword: t('新密码', 'New Password'),
+  newPasswordPlaceholder: t('至少 8 位', 'At least 8 characters'),
+  confirmPassword: t('确认新密码', 'Confirm Password'),
+  confirmPasswordPlaceholder: t('再次输入新密码', 'Re-enter new password'),
+  passwordMismatch: t('两次输入的新密码不一致', 'The new passwords do not match.'),
+  changePassword: t('更新密码', 'Update Password'),
+  saving: t('正在保存...', 'Saving...'),
+  sessionTitle: t('退出当前账号', 'End This Session'),
+  sessionDesc: t('退出后，本机保存的登录状态将被清除。', 'Signing out removes the saved login state from this device.'),
+  logout: t('退出登录', 'Sign Out'),
+  cropper: {
+    kicker: t('头像设置', 'Avatar Setup'),
+    title: t('调整头像显示区域', 'Adjust Avatar Crop'),
+    hint: t('拖动图片调整位置，使用滑块缩放；圆形区域即最终头像。', 'Drag to reposition and use the slider to zoom. The circular area is your final avatar.'),
+    zoom: t('缩放', 'Zoom'),
+    cancel: t('取消', 'Cancel'),
+    save: t('保存头像', 'Save Avatar'),
+    saving: t('正在上传...', 'Uploading...')
+  }
 }))
 
 const modalLabels = computed(() => ({
@@ -1146,6 +1296,7 @@ function searchFailureMessage(errorCode) {
 }
 
 onMounted(async () => {
+  mobileNavigationQuery.addEventListener('change', handleNavigationBreakpoint)
   try {
     await ensureGuestIdentity()
   } catch (err) {
@@ -1192,7 +1343,19 @@ onMounted(async () => {
   }
 
   restoreSearchJob()
+  if (activeView.value === 'account') {
+    if (currentUser.value) await loadAccount()
+    else openAuth()
+  }
 })
+
+onBeforeUnmount(() => {
+  mobileNavigationQuery.removeEventListener('change', handleNavigationBreakpoint)
+})
+
+function handleNavigationBreakpoint(event) {
+  isSidebarCollapsed.value = ['auth', 'account'].includes(activeView.value) || event.matches
+}
 
 function dismissWelcome() {
   localStorage.setItem('campuslens.welcomeDismissed', 'true')
@@ -1481,12 +1644,10 @@ function switchAuthMode(mode) {
 }
 
 watch(activeView, (newView) => {
-  if (newView === 'auth') {
+  if (newView === 'auth' && !authError.value) {
     clearAuth()
-    isSidebarCollapsed.value = true
-  } else {
-    isSidebarCollapsed.value = false
   }
+  isSidebarCollapsed.value = ['auth', 'account'].includes(newView) || mobileNavigationQuery.matches
 })
 
 function updateAuthForm(nextForm) {
@@ -1518,6 +1679,7 @@ async function submitAuth() {
     }
     const data = await response.json()
     currentUser.value = data
+    accountProfile.value = profileFromUser(data)
     localStorage.setItem('campuslens.currentUser', JSON.stringify(data))
     authMessage.value = data.message
     authForm.password = ''
@@ -1535,12 +1697,134 @@ async function submitAuth() {
 
 function handleLogout() {
   currentUser.value = null
+  accountProfile.value = null
   localStorage.removeItem('campuslens.currentUser')
   authMessage.value = ''
   authError.value = false
   authForm.password = ''
-  if (activeView.value === 'admin' || activeView.value === 'auth') {
+  if (activeView.value === 'admin' || activeView.value === 'auth' || activeView.value === 'account') {
     navigateToView('results')
+  }
+}
+
+async function openAccount() {
+  if (!currentUser.value) {
+    openAuth()
+    return
+  }
+  navigateToView('account')
+  await loadAccount()
+}
+
+async function loadAccount() {
+  if (!currentUser.value) return
+  accountLoading.value = true
+  accountEmailMessage.value = ''
+  accountPasswordMessage.value = ''
+  accountAvatarMessage.value = ''
+  try {
+    const response = await fetch('/api/me/account', { headers: authHeaders() })
+    if (response.status === 401) {
+      expireSession()
+      return
+    }
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}))
+      throw new Error(body.message || t('账号资料加载失败', 'Failed to load account details'))
+    }
+    const profile = await response.json()
+    accountProfile.value = profile
+    currentUser.value = { ...currentUser.value, ...profile }
+    localStorage.setItem('campuslens.currentUser', JSON.stringify(currentUser.value))
+  } catch (err) {
+    accountProfile.value ||= profileFromUser(currentUser.value)
+    accountEmailError.value = true
+    accountEmailMessage.value = err.message
+  } finally {
+    accountLoading.value = false
+  }
+}
+
+async function updateAccountEmail(email) {
+  accountEmailSubmitting.value = true
+  accountEmailMessage.value = ''
+  accountEmailError.value = false
+  try {
+    const response = await fetch('/api/me/account/email', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ email })
+    })
+    const body = await response.json().catch(() => ({}))
+    if (response.status === 401) {
+      expireSession()
+      return
+    }
+    if (!response.ok) throw new Error(body.message || t('邮箱更新失败', 'Failed to update email'))
+    accountProfile.value = body.account
+    currentUser.value = { ...currentUser.value, email: body.account.email }
+    localStorage.setItem('campuslens.currentUser', JSON.stringify(currentUser.value))
+    accountEmailMessage.value = t('邮箱已更新', 'Email updated')
+  } catch (err) {
+    accountEmailError.value = true
+    accountEmailMessage.value = err.message
+  } finally {
+    accountEmailSubmitting.value = false
+  }
+}
+
+async function updateAccountPassword(payload) {
+  accountPasswordSubmitting.value = true
+  accountPasswordMessage.value = ''
+  accountPasswordError.value = false
+  try {
+    const response = await fetch('/api/me/account/password', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(payload)
+    })
+    const body = await response.json().catch(() => ({}))
+    if (response.status === 401) {
+      expireSession()
+      return
+    }
+    if (!response.ok) throw new Error(body.message || t('密码修改失败', 'Failed to change password'))
+    accountPasswordMessage.value = t('密码修改成功', 'Password changed successfully')
+  } catch (err) {
+    accountPasswordError.value = true
+    accountPasswordMessage.value = err.message
+  } finally {
+    accountPasswordSubmitting.value = false
+  }
+}
+
+async function updateAccountAvatar(file) {
+  accountAvatarSubmitting.value = true
+  accountAvatarMessage.value = ''
+  accountAvatarError.value = false
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await fetch('/api/me/account/avatar', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: formData
+    })
+    const body = await response.json().catch(() => ({}))
+    if (response.status === 401) {
+      expireSession()
+      return
+    }
+    if (!response.ok) throw new Error(body.message || t('头像更新失败', 'Failed to update avatar'))
+    accountProfile.value = body.account
+    currentUser.value = { ...currentUser.value, avatarUrl: body.account.avatarUrl }
+    localStorage.setItem('campuslens.currentUser', JSON.stringify(currentUser.value))
+    accountAvatarMessage.value = t('头像已更新', 'Avatar updated')
+  } catch (err) {
+    accountAvatarError.value = true
+    accountAvatarMessage.value = err.message
+  } finally {
+    accountAvatarSubmitting.value = false
   }
 }
 
@@ -1551,6 +1835,17 @@ async function openAdmin() {
     return
   }
   openAuth()
+}
+
+function expireSession() {
+  currentUser.value = null
+  accountProfile.value = null
+  localStorage.removeItem('campuslens.currentUser')
+  authMode.value = 'login'
+  clearAuth()
+  authError.value = true
+  authMessage.value = t('登录状态已失效，请重新登录', 'Your session expired. Please sign in again.')
+  navigateToView('auth')
 }
 
 async function loadAdminData() {
@@ -1668,6 +1963,8 @@ function openHistoryCheckIn(record, item) {
 }
 
 async function openCheckIns() {
+  checkInDetail.value = null
+  checkInInteractionError.value = ''
   await loadCheckIns()
   navigateToView('checkins')
 }
@@ -1677,6 +1974,33 @@ async function loadCheckIns() {
   const response = await fetch(`/api/check-ins?limit=50&guestId=${encodeURIComponent(guestId.value)}`, { headers: authHeaders() })
   if (response.ok) {
     checkIns.value = await response.json()
+  }
+}
+
+async function openCheckInPost(item) {
+  checkInDetail.value = item
+  checkInInteractionError.value = ''
+  checkInDetailLoading.value = true
+  try {
+    await loadCheckInDetail(item.id)
+  } finally {
+    checkInDetailLoading.value = false
+  }
+}
+
+function closeCheckInPost() {
+  checkInDetail.value = null
+  checkInDetailLoading.value = false
+  checkInInteractionError.value = ''
+}
+
+async function loadCheckInDetail(id) {
+  await ensureGuestIdentity()
+  const response = await fetch(`/api/check-ins/${id}?guestId=${encodeURIComponent(guestId.value)}`, {
+    headers: authHeaders()
+  })
+  if (response.ok) {
+    checkInDetail.value = await response.json()
   }
 }
 
@@ -1705,26 +2029,95 @@ async function createCheckIn(payload) {
 }
 
 async function toggleCheckInLike(item) {
-  await ensureGuestIdentity()
-  const response = await fetch(`/api/check-ins/${item.id}/like?guestId=${encodeURIComponent(guestId.value)}`, {
-    method: 'POST',
-    headers: authHeaders()
-  })
-  if (response.ok) {
-    await loadCheckIns()
+  if (checkInLikePendingIds.value.includes(item.id)) return
+  checkInLikePendingIds.value = [...checkInLikePendingIds.value, item.id]
+  checkInInteractionError.value = ''
+  try {
+    await ensureGuestIdentity()
+    const response = await fetch(`/api/check-ins/${item.id}/like?guestId=${encodeURIComponent(guestId.value)}`, {
+      method: 'POST',
+      headers: authHeaders()
+    })
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}))
+      throw new Error(body.message || t('点赞失败，请稍后重试', 'Unable to update like. Please try again.'))
+    }
+    const result = await response.json()
+    checkIns.value = checkIns.value.map(post => post.id === item.id
+      ? { ...post, likedByMe: result.liked, likeCount: result.likeCount }
+      : post)
+    if (checkInDetail.value?.id === item.id) {
+      checkInDetail.value = { ...checkInDetail.value, likedByMe: result.liked, likeCount: result.likeCount }
+    }
+  } catch (err) {
+    checkInInteractionError.value = err.message || t('点赞失败，请稍后重试', 'Unable to update like. Please try again.')
+  } finally {
+    checkInLikePendingIds.value = checkInLikePendingIds.value.filter(id => id !== item.id)
   }
 }
 
-async function replyCheckIn(item, message) {
-  await ensureGuestIdentity()
-  const response = await fetch(`/api/check-ins/${item.id}/replies`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ message, guestId: guestId.value })
-  })
-  if (response.ok) {
+async function replyCheckIn(item, payload) {
+  if (checkInReplySubmitting.value) return
+  checkInReplySubmitting.value = true
+  checkInInteractionError.value = ''
+  try {
+    await ensureGuestIdentity()
+    const response = await fetch(`/api/check-ins/${item.id}/replies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({
+        message: payload.message,
+        parentReplyId: payload.parentReplyId,
+        guestId: guestId.value
+      })
+    })
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}))
+      throw new Error(body.message || t('回复发送失败，请稍后重试', 'Unable to send reply. Please try again.'))
+    }
     await loadCheckIns()
+    await loadCheckInDetail(item.id)
+  } catch (err) {
+    checkInInteractionError.value = err.message || t('回复发送失败，请稍后重试', 'Unable to send reply. Please try again.')
+  } finally {
+    checkInReplySubmitting.value = false
   }
+}
+
+async function toggleCheckInReplyLike(reply) {
+  if (!checkInDetail.value || replyLikePendingIds.value.includes(reply.id)) return
+  replyLikePendingIds.value = [...replyLikePendingIds.value, reply.id]
+  checkInInteractionError.value = ''
+  try {
+    await ensureGuestIdentity()
+    const response = await fetch(`/api/check-in-replies/${reply.id}/like?guestId=${encodeURIComponent(guestId.value)}`, {
+      method: 'POST',
+      headers: authHeaders()
+    })
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}))
+      throw new Error(body.message || t('回复点赞失败，请稍后重试', 'Unable to update reply like. Please try again.'))
+    }
+    const result = await response.json()
+    checkInDetail.value = {
+      ...checkInDetail.value,
+      replies: updateReplyTree(checkInDetail.value.replies || [], reply.id, current => ({
+        ...current,
+        likedByMe: result.liked,
+        likeCount: result.likeCount
+      }))
+    }
+  } catch (err) {
+    checkInInteractionError.value = err.message || t('回复点赞失败，请稍后重试', 'Unable to update reply like. Please try again.')
+  } finally {
+    replyLikePendingIds.value = replyLikePendingIds.value.filter(id => id !== reply.id)
+  }
+}
+
+function updateReplyTree(replies, replyId, updater) {
+  return replies.map(reply => reply.id === replyId
+    ? updater(reply)
+    : { ...reply, replies: updateReplyTree(reply.replies || [], replyId, updater) })
 }
 
 function cycleResults(step) {
@@ -1763,6 +2156,18 @@ function loadStoredUser() {
     return raw ? JSON.parse(raw) : null
   } catch {
     return null
+  }
+}
+
+function profileFromUser(user) {
+  if (!user) return null
+  return {
+    userId: user.userId ?? user.id ?? null,
+    username: user.username || '',
+    email: user.email || null,
+    avatarUrl: user.avatarUrl || null,
+    role: user.role || 'user',
+    admin: user.admin ?? user.role === 'admin'
   }
 }
 
