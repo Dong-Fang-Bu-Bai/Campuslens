@@ -282,6 +282,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CheckInRecord"
+        "400":
+          description: 检索记录状态不可用或地标不属于该记录 Top-5
+        "401":
+          description: 检索记录不属于当前登录用户或游客
+        "409":
+          description: 该检索记录已经发布过打卡
   /api/check-ins/{id}/like:
     post:
       summary: 点赞或取消点赞打卡留言
@@ -851,14 +857,22 @@ components:
           format: date-time
     CheckInRequest:
       type: object
-      required: [landmarkId, message]
+      required: [searchRecordId, landmarkId, message]
       properties:
+        searchRecordId:
+          type: integer
+          format: int64
+          description: 当前用户或游客拥有的成功/低置信度检索记录
         landmarkId:
           type: integer
           format: int64
         message:
           type: string
           maxLength: 500
+        publishImage:
+          type: boolean
+          default: false
+          description: 是否在公共留言板展示该检索记录的上传图片
         guestId:
           type: string
           nullable: true
@@ -894,6 +908,15 @@ components:
         id:
           type: integer
           format: int64
+        searchRecordId:
+          type: integer
+          format: int64
+          nullable: true
+          description: 历史兼容记录可能为空
+        sourceImageUrl:
+          type: string
+          nullable: true
+          description: 仅发布者选择公开照片时返回
         landmarkId:
           type: integer
           format: int64

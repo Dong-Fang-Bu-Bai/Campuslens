@@ -10,7 +10,7 @@
           <h1>{{ t('校园慧眼', 'CampusLens') }}</h1>
         </div>
       </div>
-      <p class="intro">{{ t('上传校园照片，查看 Top-5 地标、位置标注和反馈入口。', 'Upload campus photos to view Top-5 landmarks, map markers, and feedback.') }}</p>
+      <p class="intro">{{ t('上传一张校园照片，快速识别地标并查看位置与介绍。', 'Upload a campus photo to identify landmarks and explore their locations and stories.') }}</p>
 
       <form class="upload-panel" @submit.prevent="submitSearch">
         <label class="file-drop" :class="{ active: selectedFile }">
@@ -19,14 +19,14 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
           </span>
           <strong>{{ selectedFile ? selectedFile.name : t('选择校园照片', 'Choose Campus Photo') }}</strong>
-          <small>{{ t('支持 JPG、PNG、WebP，不超过 8MB', 'Supports JPG, PNG, WebP up to 8MB') }}</small>
+          <small>{{ t('支持 JPG、PNG 或 WebP，单张不超过 8 MB', 'JPG, PNG, or WebP · up to 8 MB') }}</small>
         </label>
         <label class="sar-mode-toggle">
           <input v-model="sarMode" type="checkbox" />
-          <span><strong>{{ t('SAR 深度思考', 'SAR Deep Thinking') }}</strong><small>{{ t('持续适应测试域，耗时更长', 'Persistent adaptation; slower') }}</small></span>
+          <span><strong>{{ t('增强识别', 'Enhanced Recognition') }}</strong><small>{{ t('适合复杂角度或光线，处理时间稍长', 'Better for challenging angles or lighting; may take longer') }}</small></span>
         </label>
         <button class="primary-btn" :disabled="loading || jobPending" :class="{ 'is-loading': loading }">
-          <span class="btn-text">{{ loading ? jobStatusLabel : t('上传并检索', 'Upload & Search') }}</span>
+          <span class="btn-text">{{ loading ? jobStatusLabel : t('上传并识别', 'Upload & Identify') }}</span>
           <span class="btn-shine"></span>
         </button>
         <p v-if="error" class="error-text">
@@ -38,27 +38,27 @@
       <nav class="module-list" aria-label="模块状态">
         <button :class="{ active: activeView === 'results' }" @click="changeView('results')">
           <span class="active-line"></span>
-          {{ t('Top-5 结果', 'Top-5 Results') }}
+          {{ t('识别结果', 'Results') }}
         </button>
         <button :class="{ active: activeView === 'map' }" @click="changeView('map')">
           <span class="active-line"></span>
-          {{ t('地图导览', 'Map Tour') }}
+          {{ t('校园地图', 'Campus Map') }}
         </button>
         <button :class="{ active: activeView === 'feedback' }" @click="changeView('feedback')">
           <span class="active-line"></span>
-          {{ t('反馈纠错', 'Feedback') }}
+          {{ t('结果反馈', 'Feedback') }}
         </button>
         <button :class="{ active: activeView === 'history' }" @click="openHistory">
           <span class="active-line"></span>
-          {{ t('个人历史', 'My History') }}
+          {{ t('识别记录', 'History') }}
         </button>
         <button :class="{ active: activeView === 'checkins' }" @click="openCheckIns">
           <span class="active-line"></span>
-          {{ t('打卡留言', 'Check-in Board') }}
+          {{ t('校园留言', 'Campus Moments') }}
         </button>
         <button v-if="isAdmin" :class="{ active: activeView === 'admin' }" @click="openAdmin">
           <span class="active-line"></span>
-          {{ t('管理后台', 'Admin Panel') }}
+          {{ t('管理中心', 'Admin Center') }}
         </button>
       </nav>
     </aside>
@@ -75,7 +75,7 @@
             </button>
           </div>
           <div>
-            <p class="eyebrow">V3 {{ t('构造阶段', 'Release v3') }}</p>
+            <p class="eyebrow">Campus Landmark Intelligence</p>
             <h2>{{ viewTitle }}</h2>
           </div>
         </div>
@@ -83,7 +83,7 @@
           <div class="top-bar-login">
             <template v-if="!currentUser">
               <button type="button" class="top-login-trigger-btn" @click="openAuth">
-                {{ t('登录/注册', 'Login / Register') }}
+                {{ t('登录 / 注册', 'Login / Register') }}
               </button>
             </template>
             <template v-else>
@@ -110,33 +110,33 @@
           <div class="results-main">
             <div class="ai-analytical-header">
               <div class="stat-card">
-                <span class="stat-label">{{ t('检索记录', 'Record ID') }}</span>
-                <span class="stat-value">#{{ searchMeta.searchRecordId }}</span>
-                <span class="stat-desc">{{ searchMeta.uploadImageUrl ? t('已保存上传图片', 'Uploaded image saved') : t('等待上传校园照片', 'Awaiting campus photo') }}</span>
+                <span class="stat-label">{{ t('本次识别', 'Current Search') }}</span>
+                <span class="stat-value">{{ searchMeta.searchRecordId ? `#${searchMeta.searchRecordId}` : '—' }}</span>
+                <span class="stat-desc">{{ searchMeta.uploadImageUrl ? t('照片已安全接收', 'Photo received') : t('等待上传校园照片', 'Waiting for a campus photo') }}</span>
               </div>
               <div class="stat-card">
                 <span class="stat-label">{{ t('候选数量', 'Candidates') }}</span>
                 <span class="stat-value">{{ results.length }}</span>
-                <span class="stat-desc">{{ t('后端返回的 Top-5 候选地标', 'Top-5 landmark recommendations') }}</span>
+                <span class="stat-desc">{{ t('按相似程度排列候选地标', 'Landmark candidates ranked by similarity') }}</span>
               </div>
               <div class="stat-card">
-                <span class="stat-label">{{ t('检索状态', 'Search Status') }}</span>
-                <span class="stat-value">{{ searchMeta.lowConfidence ? t('需核验', 'Verify') : t('可展示', 'Available') }}</span>
-                <span class="stat-desc">{{ searchMeta.message }}</span>
+                <span class="stat-label">{{ t('识别状态', 'Recognition Status') }}</span>
+                <span class="stat-value">{{ !searchMeta.status ? t('待开始', 'Ready') : searchMeta.lowConfidence ? t('建议确认', 'Review') : t('识别完成', 'Complete') }}</span>
+                <span class="stat-desc">{{ searchMeta.message || t('上传照片后即可开始识别', 'Upload a photo to begin recognition') }}</span>
               </div>
             </div>
 
             <p v-if="searchMeta.lowConfidence" class="warning-text">
               {{ searchMeta.message }}
             </p>
-            <p v-if="searchMeta.modelVersion" class="sar-result-meta">
-              {{ t('SAR更新', 'SAR update') }}：{{ searchMeta.sarApplied ? t('已参与', 'Applied') : t('未参与', 'Skipped') }} ·
-              {{ t('信任等级', 'Trust') }}：{{ searchMeta.trustLevel || '-' }} · {{ searchMeta.modelVersion }}
+            <p v-if="searchMeta.trustLevel || searchMeta.sarApplied" class="sar-result-meta">
+              {{ t('增强识别', 'Enhanced recognition') }}：{{ searchMeta.sarApplied ? t('已启用', 'Enabled') : t('未启用', 'Off') }} ·
+              {{ t('结果可信度', 'Result confidence') }}：{{ searchMeta.trustLevel || '-' }}
             </p>
             <div v-if="jobState.status === 'queued' || jobState.status === 'processing'" class="job-progress" role="status">
               <div>
                 <strong>{{ jobStatusLabel }}</strong>
-                <span>{{ t('任务', 'Task') }} #{{ jobState.searchRecordId }} · {{ t('已尝试', 'Attempt') }} {{ jobState.attemptCount }} {{ t('次', 'times') }}</span>
+                <span>{{ t('正在处理照片', 'Processing your photo') }}<template v-if="jobState.attemptCount > 1"> · {{ t(`第 ${jobState.attemptCount} 次尝试`, `Attempt ${jobState.attemptCount}`) }}</template></span>
               </div>
               <button v-if="!loading" type="button" class="ghost-btn" @click="resumeSearchJob">{{ t('继续查询', 'Resume') }}</button>
             </div>
@@ -181,6 +181,7 @@
                       <span class="result-meta">{{ confidenceLabel(item.confidenceLevel) }}<template v-if="item.mahalanobisDistance != null"> · D={{ Number(item.mahalanobisDistance).toFixed(2) }}</template></span>
                       <button @click.stop="openModal(item)">{{ t('详情', 'Detail') }}</button>
                       <button :disabled="!feedbackEligible" @click.stop="openFeedback(item)">{{ t('反馈', 'Feedback') }}</button>
+                      <button :disabled="!checkInEligible" @click.stop="beginCheckIn(searchMeta, item)">{{ t('打卡', 'Check in') }}</button>
                     </div>
                   </div>
                 </div>
@@ -188,12 +189,12 @@
               </div>
             </div>
             <article v-else class="empty-state">
-              <h3>{{ t('暂无检索结果', 'No Search Results') }}</h3>
-              <p>{{ t('请上传 JPG、PNG 或 WebP 图片后重新检索。', 'Please upload a JPG, PNG, or WebP photo to search.') }}</p>
+              <h3>{{ t('等待识别校园地标', 'Ready to Identify a Landmark') }}</h3>
+              <p>{{ t('从左侧选择一张校园照片，识别完成后将在这里展示候选地标。', 'Choose a campus photo on the left. Landmark candidates will appear here when recognition is complete.') }}</p>
             </article>
           </div>
 
-          <article class="detail-panel" v-if="localizedSelectedLandmark">
+          <article class="detail-panel" v-if="localizedSelectedLandmark && results.length">
             <p class="eyebrow">{{ localizedSelectedLandmark.code }}</p>
             <h3>{{ localizedSelectedLandmark.name }}</h3>
             <p class="detail-location">{{ localizedSelectedLandmark.locationText }}</p>
@@ -201,7 +202,6 @@
             <div class="detail-grid">
               <span>{{ t('类型', 'Type') }}</span><strong>{{ localizedSelectedLandmark.type }}</strong>
               <span>{{ t('地图坐标', 'Map Coordinates') }}</span><strong>{{ localizedSelectedLandmark.mapX }}%, {{ localizedSelectedLandmark.mapY }}%</strong>
-              <span>{{ t('推荐打卡点', 'Recommended Spot') }}</span><strong>{{ t('正门口 / 广场旁', 'Main Entrance / Plaza') }}</strong>
             </div>
             <button type="button" class="secondary-btn inline-action" @click="changeView('map')">{{ t('查看地图位置', 'Show on Map') }}</button>
           </article>
@@ -252,8 +252,8 @@
             </div>
           </div>
           <aside class="map-summary">
-            <h3>{{ t('静态地图标注', 'Static Map Annotation') }}</h3>
-            <p>{{ t('基于校园平面图百分比坐标标注，后续可替换为更精确的 GIS 或室内导览数据。', 'Marked based on the coordinates of the campus map. These can be replaced with more precise GIS or indoor navigation data in the future.') }}</p>
+            <h3>{{ t('校园地标分布', 'Campus Landmarks') }}</h3>
+            <p>{{ t('点击地图标记或下方地标名称，即可查看位置与详细介绍。', 'Select a map marker or landmark name to explore its location and details.') }}</p>
             <div class="legend-list">
               <button
                 v-for="item in localizedLandmarks"
@@ -269,19 +269,19 @@
         </section>
 
         <section v-else-if="activeView === 'feedback'" class="feedback-page" key="feedback">
-          <div class="feedback-layout">
+          <div v-if="feedbackEligible" class="feedback-layout">
             <aside class="history-panel">
-              <h3>{{ t('本次检索记录', 'Current Search Record') }}</h3>
-              <p class="panel-desc">{{ t('反馈将绑定当前 searchRecordId 和候选地标编号，第二周保留 pending 状态。', 'Feedback will be bound to searchRecordId and candidate code, remaining in pending status for review.') }}</p>
+              <h3>{{ t('本次识别', 'Current Search') }}</h3>
+              <p class="panel-desc">{{ t('你的反馈会与本次识别结果一并保存，便于后续审核与改进。', 'Your feedback will be saved with this search for review and future improvements.') }}</p>
               
               <div class="history-list">
                 <div class="history-item">
                   <div class="history-meta">
-                    <span class="history-time">{{ t('检索记录', 'Search Record') }} #{{ feedback.searchRecordId }}</span>
-                    <span class="history-status active">{{ t('待反馈', 'Pending') }}</span>
+                    <span class="history-time">{{ t('识别编号', 'Search') }} #{{ feedback.searchRecordId }}</span>
+                    <span class="history-status active">{{ t('等待提交', 'Ready to submit') }}</span>
                   </div>
                   <strong>{{ localizedSelectedLandmark?.code }} {{ localizedSelectedLandmark?.name }}</strong>
-                  <p>{{ t('预测地标 ID', 'Predicted ID') }}：{{ feedback.predictedLandmarkId }} · {{ t('反馈类型', 'Feedback Type') }}：{{ feedbackTypeLabel(feedback.feedbackType) }}</p>
+                  <p>{{ t('当前选择', 'Selected landmark') }}：{{ localizedSelectedLandmark?.name || '-' }} · {{ t('反馈类型', 'Feedback type') }}：{{ feedbackTypeLabel(feedback.feedbackType) }}</p>
                 </div>
                 <div v-for="item in localizedResults.slice(0, 3)" :key="item.landmarkCode" class="history-item">
                   <div class="history-meta">
@@ -289,14 +289,14 @@
                     <span class="history-status" :class="{ active: item.confidenceLevel !== 'low', wrong: item.confidenceLevel === 'low' }">{{ confidenceLabel(item.confidenceLevel) }}</span>
                   </div>
                   <strong>{{ item.landmarkCode }} {{ item.name }}</strong>
-                  <p>{{ t('匹配分', 'Score') }}：{{ Math.round(item.score * 100) }}%<template v-if="item.mahalanobisDistance != null"> · {{ t('马氏距离', 'M-dist') }}：{{ Number(item.mahalanobisDistance).toFixed(2) }}</template></p>
+                  <p>{{ t('匹配分', 'Score') }}：{{ Math.round(item.score * 100) }}%</p>
                 </div>
               </div>
             </aside>
 
             <article class="feedback-card">
               <h3>{{ t('提交反馈纠错', 'Submit Feedback') }}</h3>
-              <p>{{ t('当前阶段记录反馈入口和字段衔接，审核、采纳和统计在后续迭代完善。', 'In this phase, we record the feedback and match the fields. Audit, adoption, and analytics will be added in future updates.') }}</p>
+              <p>{{ t('请告诉我们识别结果是否准确。反馈经审核后将用于持续提升识别效果。', 'Tell us whether the result is accurate. Reviewed feedback helps improve future searches.') }}</p>
               <form @submit.prevent="submitFeedback">
                 <label>
                   {{ t('反馈类型', 'Feedback Type') }}
@@ -307,7 +307,7 @@
                   </select>
                 </label>
                 <label>
-                  {{ t('正确地标', 'Correct Landmark') }}
+                  {{ t('实际地标', 'Actual Landmark') }}
                   <select v-model.number="feedback.confirmedLandmarkId">
                     <option :value="null">{{ t('暂不选择', 'Not selected') }}</option>
                     <option v-for="item in localizedLandmarks" :key="item.id" :value="item.id">{{ item.name }}</option>
@@ -315,17 +315,23 @@
                 </label>
                 <label>
                   {{ t('补充说明', 'Additional Info') }}
-                  <textarea v-model="feedback.comment" rows="4" :placeholder="t('例如：实际是学术大讲堂入口', 'e.g. Actually the entrance of Academic Auditorium')"></textarea>
+                  <textarea v-model="feedback.comment" rows="4" :placeholder="t('可补充拍摄位置、角度或实际地标信息', 'Add the location, angle, or correct landmark if helpful')"></textarea>
                 </label>
                 <button class="primary-btn">
                   <span class="btn-text">{{ t('提交反馈', 'Submit') }}</span>
                 </button>
-                <p v-if="feedbackMessage" class="success-text">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <p v-if="feedbackMessage" :class="feedbackError ? 'error-text' : 'success-text'">
+                  <svg v-if="!feedbackError" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                   {{ feedbackMessage }}
                 </p>
               </form>
             </article>
+          </div>
+          <div v-else class="empty-state feedback-empty-state">
+            <h3>{{ t('还没有可反馈的识别结果', 'No result available for feedback') }}</h3>
+            <p>{{ t('请先上传校园照片并完成识别，再从候选地标进入反馈页面。', 'Upload a campus photo and complete a search, then open feedback from a landmark candidate.') }}</p>
+            <button type="button" class="secondary-btn inline-action" @click="changeView('results')">{{ t('返回识别页面', 'Go to Search') }}</button>
           </div>
         </section>
 
@@ -353,6 +359,7 @@
           :language="preferences.language"
           @refresh="loadUserHistory"
           @open-feedback="openHistoryFeedback"
+          @open-check-in="openHistoryCheckIn"
         />
 
         <CheckInBoard
@@ -360,13 +367,17 @@
           key="checkins"
           :landmarks="localizedLandmarks"
           :items="localizedCheckIns"
+          :draft="checkInDraft"
           :labels="checkInLabels"
           :language="preferences.language"
+          :submitting="checkInSubmitting"
+          :create-error="checkInCreateError"
           @refresh="loadCheckIns"
           @create="createCheckIn"
           @like="toggleCheckInLike"
           @reply="replyCheckIn"
           @select-landmark="selectMapLandmark"
+          @cancel-draft="cancelCheckInDraft"
         />
 
         <AdminPanel
@@ -415,7 +426,7 @@
               <img src="/logo.png" alt="CampusLens" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />
             </div>
             <p class="welcome-eyebrow">CampusLens</p>
-            <h2 class="welcome-title">{{ t('欢迎使用 CampusLens 校园慧眼', 'Welcome to CampusLens') }}</h2>
+            <h2 class="welcome-title">{{ t('欢迎来到校园慧眼', 'Welcome to CampusLens') }}</h2>
             
             <div class="welcome-divider"></div>
             
@@ -431,7 +442,7 @@
             </div>
             
             <button type="button" class="primary-btn welcome-enter-btn" @click="dismissWelcome">
-              <span class="btn-text">{{ t('进入系统', 'Enter System') }}</span>
+              <span class="btn-text">{{ t('开始探索', 'Start Exploring') }}</span>
               <span class="btn-shine"></span>
             </button>
           </div>
@@ -577,7 +588,7 @@ const demoLandmarks = [
     englishType: 'Gymnasium',
     summary: '配备多功能运动场地的现代化综合室内健身体育馆。', 
     englishSummary: 'A modern comprehensive indoor sports hall equipped with multifunctional fields.',
-    description: '体育馆位于文雍路西侧，是一座设施完善的现代化多功能场馆，服务全校体育教学、文体赛事和日常锻炼，极极具动感的网架几何外形十分夺目。', 
+    description: '体育馆位于文雍路西侧，是一座设施完善的现代化多功能场馆，服务全校体育教学、文体赛事和日常锻炼，富有动感的网架结构具有很高辨识度。',
     englishDescription: 'Located west of Wenyong Road, the Gymnasium is a well-equipped modern facility for physical education, sports events, and daily exercises. Its dynamic space frame geometry makes it highly striking.',
     locationText: '文雍路西侧', 
     englishLocation: 'West side of Wenyong Road',
@@ -594,7 +605,7 @@ const demoLandmarks = [
     englishType: 'Natatorium',
     summary: '配备先进循环系统的室内温水游泳馆。', 
     englishSummary: 'An indoor heated natatorium equipped with advanced water circulation systems.',
-    description: '游泳馆位于体育馆北侧，配有标准泳道 and 水循环系统，是日常游泳教学、水上运动训练以及师生消暑运动的首选场馆。', 
+    description: '游泳馆位于体育馆北侧，配有标准泳道与先进水循环系统，是开展游泳教学、水上运动训练和日常锻炼的重要场馆。',
     englishDescription: 'Located north of the Gymnasium, the Natatorium features standard lanes and water circulation systems, making it the preferred place for swimming classes, water training, and cooling off.',
     locationText: '体育馆北侧', 
     englishLocation: 'North side of the Gymnasium',
@@ -609,7 +620,7 @@ const demoLandmarks = [
     englishName: 'The First Dining Hall', 
     type: '生活服务', 
     englishType: 'Dining Services',
-    summary: '大众膳食生活服务中心，提供多风味特色餐饮。', 
+    summary: '面向师生的综合餐饮空间，提供多种风味与实惠餐食。',
     englishSummary: 'A public dining service center offering various regional and local cuisines.',
     description: '第一饭堂位于尚学路西侧，汇集了全国各地的特色美食与实惠膳食，是学生日常用餐和生活交流的主要生活服务场所。', 
     englishDescription: 'Situated west of Shangxue Road, the First Dining Hall offers diverse local delicacies and affordable meals, serving as a primary hub for students\' daily dining and social activities.',
@@ -626,8 +637,8 @@ const demoLandmarks = [
     englishName: 'The Second Dining Hall', 
     type: '生活服务', 
     englishType: 'Dining Services',
-    summary: '东区师生自选精致餐饮中心，兼备休闲社交空间。', 
-    englishSummary: 'A delicate cafeteria for East Campus students, combining dining and social spaces.',
+    summary: '服务东区师生的现代餐饮空间，兼具用餐与休闲功能。',
+    englishSummary: 'A modern dining hall for the East Campus community, combining meals with comfortable social spaces.',
     description: '第二饭堂邻近东二门附近，与第一饭堂同属生活服务类建筑，内部设有现代化的自选餐厅与休闲卡座，主打精品小吃和社交就餐，为东区师生提供高品质膳食体验。', 
     englishDescription: 'Located near the Second East Gate, the Second Dining Hall features self-serve counters and cozy seating. It focuses on premium snacks and social dining, providing high-quality meals for students and staff.',
     locationText: '东二门附近', 
@@ -643,7 +654,7 @@ const demoLandmarks = [
     englishName: 'Hotel', 
     type: '建筑', 
     englishType: 'Hotel',
-    summary: '校内接待与住宿场所，设施齐全服务高档。', 
+    summary: '校内接待与住宿场所，环境舒适，配套设施完善。',
     englishSummary: 'A well-equipped guest house and hotel inside the campus.',
     description: '中心酒店位于北门内侧，主要用于校内接待和住宿服务，大厅宽敞，周边绿化环抱，为来访专家和宾客提供舒适静谧的居住环境。', 
     englishDescription: 'Located just inside the North Gate, the Center Hotel is used for university receptions and accommodation. It features a spacious lobby and green surroundings, offering visiting experts a quiet and comfortable stay.',
@@ -656,13 +667,7 @@ const demoLandmarks = [
 ]
 
 const landmarks = ref(demoLandmarks)
-const results = ref(demoLandmarks.slice(0, 5).map((item, index) => ({
-  ...item,
-  rank: index + 1,
-  landmarkId: item.id,
-  landmarkCode: item.code,
-  score: [0.92, 0.87, 0.81, 0.76, 0.71][index]
-})))
+const results = ref([])
 const selectedId = ref(1)
 const selectedFile = ref(null)
 const sarMode = ref(false)
@@ -683,22 +688,23 @@ const availableViews = ['results', 'map', 'feedback', 'history', 'checkins', 'au
 const activeView = ref(availableViews.includes(initialView) ? initialView : 'results')
 isSidebarCollapsed.value = (activeView.value === 'auth')
 const feedbackMessage = ref('')
+const feedbackError = ref(false)
 const authMessage = ref('')
 const authError = ref(false)
 const searchMeta = reactive({
-  searchRecordId: 1,
+  searchRecordId: null,
   uploadImageUrl: '',
   lowConfidence: false,
-  message: '尚未上传图片',
+  message: '',
   status: '',
   sarApplied: false,
   trustLevel: '',
   modelVersion: ''
 })
 const feedback = reactive({
-  searchRecordId: 1,
-  predictedLandmarkId: 1,
-  confirmedLandmarkId: 1,
+  searchRecordId: null,
+  predictedLandmarkId: null,
+  confirmedLandmarkId: null,
   feedbackType: 'correct',
   comment: ''
 })
@@ -721,13 +727,17 @@ const selectedFeedbackDetail = ref(null)
 const userSearchRecords = ref([])
 const historyLoading = ref(false)
 const jobStatusLabel = computed(() => ({
-  queued: t('任务排队中...', 'Job queued...'),
-  processing: t('任务识别中...', 'Analyzing image...'),
-  failed: t('检索失败', 'Search failed')
-}[jobState.status] || t('提交任务中...', 'Submitting task...')))
+  queued: t('正在等待识别...', 'Waiting to begin...'),
+  processing: t('正在识别照片...', 'Analyzing your photo...'),
+  failed: t('识别失败', 'Recognition failed')
+}[jobState.status] || t('正在提交照片...', 'Submitting your photo...')))
 const jobPending = computed(() => Boolean(jobState.jobId) && ['queued', 'processing'].includes(jobState.status))
 const feedbackEligible = computed(() => ['success', 'low_confidence'].includes(searchMeta.status))
+const checkInEligible = computed(() => feedbackEligible.value && Boolean(searchMeta.searchRecordId))
 const checkIns = ref([])
+const checkInDraft = ref(null)
+const checkInSubmitting = ref(false)
+const checkInCreateError = ref('')
 const activeResultIndex = ref(0)
 const preferences = reactive(loadPreferences())
 
@@ -956,18 +966,19 @@ const selectedLandmark = computed(() => landmarks.value.find((item) => item.id =
 const isAdmin = computed(() => currentUser.value?.role === 'admin')
 const shellClasses = computed(() => ({
   'sidebar-collapsed': isSidebarCollapsed.value,
+  'view-checkins': activeView.value === 'checkins',
   [`theme-${preferences.theme}`]: true,
   [`backdrop-${preferences.backdrop}`]: true
 }))
 
 const viewTitle = computed(() => ({
-  results: t('图片检索结果', 'Image Search Results'),
+  results: t('校园地标识别', 'Landmark Search'),
   map: t('校园地图导览', 'Campus Map'),
-  feedback: t('用户反馈纠错', 'Feedback'),
-  history: t('个人历史记录', 'My History'),
-  checkins: t('打卡留言板', 'Check-in Board'),
+  feedback: t('识别结果反馈', 'Search Feedback'),
+  history: t('识别记录', 'Search History'),
+  checkins: t('校园留言', 'Campus Moments'),
   auth: authMode.value === 'login' ? t('用户登录', 'Login') : t('用户注册', 'Register'),
-  admin: t('管理员后台', 'Admin Console')
+  admin: t('管理中心', 'Admin Center')
 }[activeView.value]))
 
 const preferenceLabels = computed(() => ({
@@ -976,31 +987,49 @@ const preferenceLabels = computed(() => ({
   language: t('语言', 'Language')
 }))
 
-const themeLabel = computed(() => ({ dark: '曜黑', light: '落日', contrast: '幻夜' }[preferences.theme]))
+const themeLabel = computed(() => ({
+  dark: t('曜黑', 'Obsidian'),
+  light: t('落日', 'Sunset'),
+  contrast: t('幻夜', 'Nebula')
+}[preferences.theme]))
 const languageLabel = computed(() => preferences.language === 'zh' ? '中文' : 'EN')
 
 const historyLabels = computed(() => ({
+  kicker: t('识别足迹', 'Search History'),
   title: t('个人历史记录', 'My Search History'),
   refresh: t('刷新', 'Refresh'),
   needLogin: t('需要登录', 'Login Required'),
-  needLoginDesc: t('登录后可查看自己的服务端检索记录。', 'Sign in to view server-side records.'),
-  loading: t('正在读取历史记录...', 'Loading history...'),
-  empty: t('暂无历史记录', 'No records'),
-  emptyDesc: t('上传图片后，记录会出现在这里。', 'Upload an image and records will appear here.'),
-  noCandidate: t('无候选', 'No candidate'),
-  noMessage: t('无提示信息', 'No message'),
-  score: t('匹配分', 'Score')
+  needLoginDesc: t('登录后即可查看和继续使用你的识别记录。', 'Sign in to view and continue from your previous searches.'),
+  loading: t('正在加载识别记录...', 'Loading your search history...'),
+  empty: t('还没有识别记录', 'No search history yet'),
+  emptyDesc: t('上传第一张校园照片，识别结果会保存在这里。', 'Upload your first campus photo and the result will appear here.'),
+  noCandidate: t('暂未识别到地标', 'No landmark identified'),
+  noMessage: t('识别已完成', 'Search completed'),
+  score: t('匹配分', 'Score'),
+  feedback: t('反馈', 'Feedback'),
+  checkIn: t('打卡', 'Check in')
 }))
 
 const checkInLabels = computed(() => ({
+  kicker: t('校园动态', 'Campus Moments'),
+  composeKicker: t('分享此刻', 'Share a Moment'),
   title: t('校园打卡留言板', 'Campus Check-in Board'),
+  boardSubtitle: t('真实识图记录留下的校园观察与交流', 'Campus notes and conversations backed by real searches'),
   refresh: t('刷新', 'Refresh'),
   landmark: t('打卡地点', 'Landmark'),
+  sourceRecord: t('关联识别', 'Linked search'),
+  publicPhoto: t('在公共留言板展示本次上传照片', 'Show this uploaded photo on the public board'),
+  composeTitle: t('发布识图打卡', 'Publish Search Check-in'),
+  cancel: t('取消', 'Cancel'),
+  close: t('关闭', 'Close'),
+  submitting: t('发布中...', 'Publishing...'),
+  viewImage: t('查看大图', 'View image'),
+  enlargeImage: t('点击放大打卡图片', 'Enlarge check-in image'),
   message: t('留言内容', 'Message'),
   placeholder: t('记录当前地标的观察、路线提醒或拍照建议', 'Share an observation, route note, or photo tip'),
   submit: t('发布打卡', 'Post'),
   empty: t('暂无留言', 'No posts yet'),
-  emptyDesc: t('选择地标并发布第一条打卡留言。', 'Choose a landmark and post the first note.'),
+  emptyDesc: t('完成一次校园地标识别后，即可从候选结果分享打卡留言。', 'Complete a landmark search, then share a check-in from one of the results.'),
   like: t('点赞', 'Like'),
   liked: t('已赞', 'Liked'),
   reply: t('回复', 'Reply'),
@@ -1009,39 +1038,42 @@ const checkInLabels = computed(() => ({
 }))
 
 const authLabels = computed(() => ({
-  subtitle: t('校园地标智能检索与导览系统', 'Intelligent Landmark Retrieval & Tour System'),
+  subtitle: t('校园地标智能识别与导览', 'Intelligent Campus Landmark Recognition and Guide'),
   login: t('登录', 'Login'),
   register: t('注册', 'Register'),
   username: t('用户名', 'Username'),
   password: t('密码', 'Password'),
   email: t('邮箱', 'Email'),
-  emailPlaceholder: t('选填，用于绑定', 'Optional, for binding'),
+  emailPlaceholder: t('选填，用于完善账户信息', 'Optional, for your account profile'),
   submitLogin: t('登录', 'Sign In'),
   submitRegister: t('注册并登录', 'Register & Sign In')
 }))
 
 const modalLabels = computed(() => ({
   closeTitle: t('关闭 (Esc)', 'Close (Esc)'),
-  introTitle: t('地标实景详细介绍', 'Detailed Landmark Introduction'),
-  gridTitle: t('深度解析指标', 'Analytical Metrics'),
+  introTitle: t('地标介绍', 'About this landmark'),
+  gridTitle: t('地标信息', 'Landmark details'),
   typeLabel: t('地标类型', 'Landmark Type'),
-  mapCoords: t('地图百分比坐标', 'Map Percentage Coords'),
-  recommendIndex: t('推荐打卡指数', 'Recommend Rating'),
-  verifyStatus: t('验证状态', 'Verification Status'),
-  verifiedText: t('已校验并收录', 'Verified & Cataloged'),
+  mapCoords: t('校园地图位置', 'Campus map position'),
+  verifyStatus: t('资料状态', 'Information status'),
+  verifiedText: t('已收录', 'Available'),
   showMap: t('在地图中查看', 'View on Map')
 }))
 
 const adminLabels = computed(() => ({
+  runtimeKicker: t('识别服务', 'Recognition Service'),
+  recordsKicker: t('访问记录', 'Search Activity'),
+  feedbackKicker: t('用户反馈', 'User Feedback'),
+  detailKicker: t('审核详情', 'Review Details'),
   needAdmin: t('需要管理员登录', 'Admin Login Required'),
   needAdminDesc: t('请通过右上角“登录/注册”进入登录页，管理员账号登录成功后会自动进入后台。', 'Please sign in with an administrator account via the button at the top right to access the console.'),
   searchRecords: t('检索记录', 'Search Records'),
   refresh: t('刷新', 'Refresh'),
-  id: t('ID', 'ID'),
-  bestCandidate: t('最高候选', 'Best Candidate'),
+  id: t('编号', 'ID'),
+  bestCandidate: t('首选结果', 'Top Result'),
   status: t('状态', 'Status'),
-  visitor: t('游客', 'User/Guest'),
-  noCandidate: t('无候选', 'No candidate'),
+  visitor: t('访问用户', 'Visitor'),
+  noCandidate: t('未识别到地标', 'No landmark identified'),
   feedbackProcess: t('反馈处理', 'Feedback Processing'),
   predicted: t('预测', 'Predicted'),
   confirmed: t('确认', 'Confirmed'),
@@ -1050,39 +1082,50 @@ const adminLabels = computed(() => ({
   ignore: t('忽略', 'Ignore'),
   feedbackDetail: t('反馈详情', 'Feedback Detail'),
   selectFeedback: t('请选择反馈记录', 'Please select a feedback record'),
-  selectFeedbackDesc: t('详情会展示上传图片、Top-5 快照、算法采纳建议和校正样本同步状态。', 'The detail view displays the uploaded image, Top-5 candidates snapshot, algorithm recommendations, and synchronization status.'),
+  selectFeedbackDesc: t('选择一条反馈后，可查看原图、候选结果、处理建议和更新进度。', 'Select feedback to review the image, candidate results, recommendation, and update progress.'),
   searchRecord: t('检索记录', 'Search Record'),
-  syncStatus: t('校正同步', 'Correction Sync'),
-  advice: t('采纳建议', 'Recommendation'),
+  syncStatus: t('更新进度', 'Update Progress'),
+  advice: t('处理建议', 'Recommendation'),
   noComment: t('无补充说明', 'No description provided'),
   noCommentAdmin: t('暂无补充说明', 'No comments yet'),
   matchScore: t('匹配分', 'Score'),
   statusSuccess: t('成功', 'Success'),
   statusLowConfidence: t('低匹配', 'Low Match'),
-  statusEmptyResult: t('空结果', 'Empty'),
-  statusAlgorithmUnavailable: t('算法不可用', 'Algorithm Offline'),
+  statusEmptyResult: t('未找到结果', 'No Result'),
+  statusAlgorithmUnavailable: t('识别服务暂不可用', 'Service Unavailable'),
   feedbackPending: t('待处理', 'Pending'),
   feedbackAccepted: t('已采纳', 'Accepted'),
   feedbackIgnored: t('已忽略', 'Ignored'),
   typeCorrect: t('识别正确', 'Correct'),
   typeWrong: t('识别错误', 'Incorrect'),
   typeUncertain: t('不确定', 'Uncertain'),
-  syncPending: t('同步中', 'Syncing'),
-  synced: t('已同步', 'Synced'),
-  syncFailed: t('同步失败', 'Sync Failed'),
-  syncNone: t('未生成', 'Not Generated'),
-  advicePending: t('待生成', 'Pending'),
-  adviceWait: t('等待算法建议', 'Awaiting advice'),
+  syncPending: t('等待更新', 'Update Pending'),
+  synced: t('已更新', 'Updated'),
+  syncFailed: t('更新失败', 'Update Failed'),
+  syncNone: t('尚未开始', 'Not Started'),
+  advicePending: t('等待处理', 'Awaiting Review'),
+  adviceWait: t('正在生成建议', 'Preparing Recommendation'),
   adviceAccept: t('建议采纳', 'Recommend Accept'),
   adviceReview: t('建议复核', 'Recommend Review'),
-  algorithmRuntime: t('算法运行状态', 'Algorithm Runtime'),
-  rebuildIndex: t('重建索引', 'Rebuild Index'),
-  baseModelVersion: t('基准模型', 'Base Model'),
-  indexVersion: t('索引版本', 'Index Version'),
-  sarStateVersion: t('SAR 状态', 'SAR State'),
-  updateCount: t('更新次数', 'Updates'),
-  lastResetReason: t('最近回退', 'Last Reset'),
-  runtimeState: t('运行状态', 'Runtime State')
+  algorithmRuntime: t('识别服务状态', 'Recognition Service'),
+  rebuildIndex: t('更新识别库', 'Update Search Index'),
+  baseModelVersion: t('基础模型版本', 'Base Model Version'),
+  indexVersion: t('识别库版本', 'Search Index Version'),
+  sarStateVersion: t('增强识别状态', 'Enhanced Recognition State'),
+  updateCount: t('累计更新', 'Total Updates'),
+  lastResetReason: t('最近恢复原因', 'Last Recovery Reason'),
+  runtimeState: t('当前状态', 'Current Status'),
+  rebuildTask: t('识别库更新', 'Index Update'),
+  anonymousVisitor: t('未登录访客', 'Guest Visitor'),
+  runtimeHealthy: t('运行正常', 'Healthy'),
+  runtimeDegraded: t('部分功能受限', 'Degraded'),
+  runtimeUnavailable: t('暂不可用', 'Unavailable'),
+  rebuildQueued: t('等待开始', 'Queued'),
+  rebuildBuilding: t('正在生成识别库', 'Building'),
+  rebuildValidating: t('正在校验', 'Validating'),
+  rebuildPublishing: t('正在发布', 'Publishing'),
+  rebuildComplete: t('更新完成', 'Complete'),
+  rebuildFailed: t('更新失败', 'Failed')
 }))
 
 function confidenceLabel(value) {
@@ -1093,6 +1136,15 @@ function confidenceLabel(value) {
   }[value] || t('待核验', 'To Verify')
 }
 
+function searchFailureMessage(errorCode) {
+  return {
+    algorithm_unavailable: t('识别服务暂时不可用，请稍后重试', 'Recognition is temporarily unavailable. Please try again later.'),
+    queue_timeout: t('等待时间过长，请重新提交照片', 'The wait took too long. Please submit the photo again.'),
+    job_timeout: t('本次识别超时，请重新尝试', 'This search timed out. Please try again.'),
+    upload_missing: t('上传照片已失效，请重新选择照片', 'The uploaded photo is no longer available. Please choose it again.')
+  }[errorCode] || t('本次识别未能完成，请重新尝试', 'The search could not be completed. Please try again.')
+}
+
 onMounted(async () => {
   try {
     await ensureGuestIdentity()
@@ -1101,19 +1153,20 @@ onMounted(async () => {
   }
   const dismissed = localStorage.getItem('campuslens.welcomeDismissed')
   if (!dismissed) {
-    welcomePoem.value = poems[Math.floor(Math.random() * poems.length)]
     const today = new Date()
     const lang = preferences.language
     if (lang === 'zh') {
+      welcomePoem.value = poems[Math.floor(Math.random() * poems.length)]
       const dateStr = today.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
       const weekdayStr = today.toLocaleDateString('zh-CN', { weekday: 'long' })
       welcomeDate.value.solar = `${dateStr}  ${weekdayStr}`
       welcomeDate.value.lunar = getLunarDateString(today)
     } else {
+      welcomePoem.value = 'Every corner of campus has a story worth discovering.'
       const dateStr = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
       const weekdayStr = today.toLocaleDateString('en-US', { weekday: 'long' })
       welcomeDate.value.solar = `${dateStr}, ${weekdayStr}`
-      welcomeDate.value.lunar = 'Lunar calendar only supports Chinese'
+      welcomeDate.value.lunar = 'A new day to explore the campus'
     }
     showWelcomeModal.value = true
   }
@@ -1192,15 +1245,14 @@ async function submitSearch() {
       body: form
     })
     if (!response.ok) {
-      const body = await response.json().catch(() => ({}))
       if (response.status === 429) {
         const retryAfter = response.headers.get('Retry-After') || '5'
-        throw new Error(t(`${body.message || '检索队列已满'}，请在 ${retryAfter} 秒后重试`, `${body.message || 'Queue full'}, please retry in ${retryAfter} seconds`))
+        throw new Error(t(`当前使用人数较多，请在 ${retryAfter} 秒后重试`, `The service is busy. Please try again in ${retryAfter} seconds.`))
       }
       if (response.status === 503) {
-        throw new Error(body.message || t('任务队列暂不可用，请稍后重试', 'Task queue unavailable, please retry later'))
+        throw new Error(t('识别服务暂时不可用，请稍后重试', 'Recognition is temporarily unavailable. Please try again later.'))
       }
-      throw new Error(body.message || t('检索请求失败', 'Search request failed'))
+      throw new Error(t('照片提交失败，请检查网络后重试', 'Could not submit the photo. Check your connection and try again.'))
     }
     const data = await response.json()
     uploadIdempotencyKey.value = ''
@@ -1215,7 +1267,7 @@ async function submitSearch() {
     persistSearchJob()
     searchMeta.searchRecordId = data.searchRecordId
     searchMeta.status = data.status
-    searchMeta.message = t('任务已进入检索队列', 'Job entered retrieval queue')
+    searchMeta.message = t('照片已提交，正在识别地标', 'Photo submitted. Identifying landmarks...')
     navigateToView('results')
     await pollSearchJob()
   } catch (err) {
@@ -1244,7 +1296,9 @@ function applySearchResult(data) {
     searchMeta.searchRecordId = data.searchRecordId
     searchMeta.uploadImageUrl = data.uploadImageUrl || ''
     searchMeta.lowConfidence = Boolean(data.lowConfidence)
-    searchMeta.message = data.message || t('检索完成', 'Search completed')
+    searchMeta.message = data.lowConfidence
+      ? t('识别完成，建议结合照片确认候选结果', 'Search complete. Please review the candidates against your photo.')
+      : t('识别完成，已为你整理候选地标', 'Search complete. Your landmark candidates are ready.')
     searchMeta.status = data.status
     searchMeta.sarApplied = Boolean(data.sarApplied)
     searchMeta.trustLevel = data.trustLevel || ''
@@ -1271,8 +1325,7 @@ async function pollSearchJob() {
       try {
         const response = await fetch(`/api/search/jobs/${jobState.jobId}`, { headers })
         if (!response.ok) {
-          const body = await response.json().catch(() => ({}))
-          throw new Error(body.message || t('查询任务状态失败', 'Failed to retrieve job status'))
+          throw new Error(t('暂时无法获取识别进度', 'Unable to retrieve search progress right now.'))
         }
         const data = await response.json()
         jobState.status = data.status
@@ -1284,14 +1337,14 @@ async function pollSearchJob() {
           clearSearchJob()
           loading.value = false
         } else if (data.status === 'failed') {
-          error.value = data.message || t('检索任务失败', 'Search job failed')
+          error.value = searchFailureMessage(data.errorCode)
           searchMeta.message = error.value
           searchMeta.lowConfidence = true
           clearSearchJob()
           loading.value = false
         }
       } catch (err) {
-        error.value = t(`${err.message}，任务仍在服务端运行，可刷新页面后继续查看`, `${err.message}. Task is still running on the server; you can refresh to view progress later.`)
+        error.value = t(`${err.message}。识别仍在继续，可稍后刷新查看结果`, `${err.message} The search is still running; refresh later to view the result.`)
         loading.value = false
         return
       }
@@ -1370,7 +1423,7 @@ function jumpModalToMap() {
 
 function openFeedback(item) {
   if (!feedbackEligible.value) {
-    error.value = t('只有成功或低置信度检索任务允许提交反馈', 'Only successful or low-confidence search jobs allow feedback')
+    error.value = t('只有已完成的识别结果可以提交反馈', 'Feedback is available after a search is completed.')
     return
   }
   feedback.predictedLandmarkId = item.landmarkId
@@ -1382,8 +1435,10 @@ function openFeedback(item) {
 
 async function submitFeedback() {
   feedbackMessage.value = ''
+  feedbackError.value = false
   if (!feedbackEligible.value) {
-    feedbackMessage.value = t('只有成功或低置信度检索任务允许提交反馈', 'Only successful or low-confidence search jobs allow feedback')
+    feedbackMessage.value = t('只有已完成的识别结果可以提交反馈', 'Feedback is available after a search is completed.')
+    feedbackError.value = true
     return
   }
   try {
@@ -1398,10 +1453,11 @@ async function submitFeedback() {
       const body = await response.json().catch(() => ({}))
       throw new Error(body.message || t('反馈提交失败', 'Feedback submission failed'))
     }
-    const data = await response.json()
-    feedbackMessage.value = t(`反馈已提交，记录编号：${data.feedbackId}`, `Feedback submitted. Record ID: ${data.feedbackId}`)
+    await response.json()
+    feedbackMessage.value = t('反馈提交成功，感谢你帮助我们改进识别效果', 'Feedback submitted. Thank you for helping improve recognition quality.')
   } catch (err) {
     feedbackMessage.value = err.message
+    feedbackError.value = true
   }
 }
 
@@ -1586,6 +1642,31 @@ function openHistoryFeedback(record, item) {
   navigateToView('feedback')
 }
 
+function beginCheckIn(record, item) {
+  if (!['success', 'low_confidence'].includes(record.status) || !record.searchRecordId) return
+  checkInDraft.value = {
+    searchRecordId: record.searchRecordId,
+    landmarkId: item.landmarkId,
+    sourceImageUrl: record.uploadImageUrl || ''
+  }
+  checkInCreateError.value = ''
+  loadCheckIns().then(() => navigateToView('checkins'))
+}
+
+function cancelCheckInDraft() {
+  if (checkInSubmitting.value) return
+  checkInDraft.value = null
+  checkInCreateError.value = ''
+}
+
+function openHistoryCheckIn(record, item) {
+  beginCheckIn({
+    searchRecordId: record.id,
+    status: record.status,
+    uploadImageUrl: record.uploadImageUrl
+  }, item)
+}
+
 async function openCheckIns() {
   await loadCheckIns()
   navigateToView('checkins')
@@ -1600,14 +1681,26 @@ async function loadCheckIns() {
 }
 
 async function createCheckIn(payload) {
-  await ensureGuestIdentity()
-  const response = await fetch('/api/check-ins', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ ...payload, guestId: guestId.value })
-  })
-  if (response.ok) {
-    await loadCheckIns()
+  checkInSubmitting.value = true
+  checkInCreateError.value = ''
+  try {
+    await ensureGuestIdentity()
+    const response = await fetch('/api/check-ins', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ ...payload, guestId: guestId.value })
+    })
+    if (response.ok) {
+      checkInDraft.value = null
+      await loadCheckIns()
+    } else {
+      const body = await response.json().catch(() => ({}))
+      checkInCreateError.value = body.message || t('打卡发布失败', 'Failed to publish check-in')
+    }
+  } catch (err) {
+    checkInCreateError.value = err.message || t('打卡发布失败', 'Failed to publish check-in')
+  } finally {
+    checkInSubmitting.value = false
   }
 }
 
@@ -1714,7 +1807,7 @@ async function ensureGuestIdentity() {
     }).then(async response => {
       const body = await response.json().catch(() => ({}))
       if (!response.ok || !/^guest#[1-9]\d*$/.test(body.guestId || '')) {
-        throw new Error(body.message || t('游客身份初始化失败', 'Failed to initialize guest identity'))
+        throw new Error(body.message || t('暂时无法建立访客会话，请确认服务已启动后刷新页面', 'Could not start a guest session. Make sure the service is running, then refresh the page.'))
       }
       saveGuestId(body.guestId)
       guestIdentityVerified = true

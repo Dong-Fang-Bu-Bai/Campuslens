@@ -114,16 +114,19 @@
 
 ## CheckIn 打卡留言
 
-第四周 V3 新增。用于校园留言板，复用 `landmark` 作为打卡地点来源。
+第四周 V3 新增，V16 起绑定真实识图记录。新打卡必须引用发布者本人状态为 `success` 或 `low_confidence` 的检索记录，地标必须来自该记录 Top-5；一条检索记录只能发布一次。V16 以前的历史记录允许不绑定检索记录。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` | Long | 主键 |
+| `searchRecordId` | Long | 来源检索记录；历史兼容记录可为空，新打卡必填且唯一 |
 | `landmarkId` | Long | 打卡地标 |
 | `userId` | Long | 登录用户 ID，游客为空 |
 | `guestId` | String | 游客编号 |
 | `displayName` | String | 前端展示名，登录用户为用户名，游客为 `guest#number` |
 | `message` | String | 留言内容，最长 500 字符 |
+| `publishImage` | Boolean | 是否在公共留言板展示来源上传图片，默认 `false` |
+| `sourceImageUrl` | String | 接口派生字段；仅 `publishImage=true` 时返回来源图片地址 |
 | `likeCount` | Integer | 点赞数量缓存 |
 | `replyCount` | Integer | 一级回复数量缓存 |
 | `status` | String | 当前为 `visible`，为后续后台删除/隐藏预留 |
@@ -243,5 +246,6 @@
 | `V11__async_search_jobs.sql` | 为检索记录增加异步任务、幂等、lease 和错误字段 |
 | `V12__harden_async_search_queue.sql` | 增加持久化重试时间和队列到期索引 |
 | `V13__persistent_sar_and_index_rebuild.sql` | 增加 SAR、模型/索引版本、待发布样本路径，并创建索引重建任务表 |
+| `V16__link_check_in_to_search_record.sql` | 为打卡增加检索记录唯一关联和照片公开开关，保留旧记录兼容性 |
 | `V14__algorithm_instance_tracking.sql` | 保存实际处理任务的算法实例编号与主备角色 |
 | `V15__persistent_guest_identity.sql` | 创建持久化游客身份表，使用令牌哈希幂等分配游客编号 |

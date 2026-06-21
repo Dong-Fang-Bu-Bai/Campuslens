@@ -9,6 +9,8 @@ import com.campuslens.model.SessionUser;
 import java.sql.PreparedStatement;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
@@ -18,17 +20,24 @@ import org.springframework.stereotype.Service;
 public class CheckInService {
   private final JdbcTemplate jdbcTemplate;
   private final GuestIdentityService guestIdentityService;
+  private final SearchRecordService searchRecordService;
 
-  public CheckInService(JdbcTemplate jdbcTemplate, GuestIdentityService guestIdentityService) {
+  public CheckInService(
+      JdbcTemplate jdbcTemplate,
+      GuestIdentityService guestIdentityService,
+      SearchRecordService searchRecordService) {
     this.jdbcTemplate = jdbcTemplate;
     this.guestIdentityService = guestIdentityService;
+    this.searchRecordService = searchRecordService;
   }
 
   public List<CheckInRecord> list(Long landmarkId, int limit, SessionUser user, String guestId) {
     int safeLimit = Math.max(1, Math.min(limit, 100));
     String viewerGuestId = user == null ? guestIdentityService.optionalExisting(guestId) : null;
     String sql = """
-        SELECT ci.id, ci.landmark_id, l.code, l.name, l.location_text, l.map_x, l.map_y,
+        SELECT ci.id, ci.search_record_id,
+               CASE WHEN ci.publish_image THEN sr.upload_image_url ELSE NULL END AS source_image_url,
+               ci.landmark_id, l.code, l.name, l.location_text, l.map_x, l.map_y,
                ci.user_id, ci.guest_id, ci.display_name, ci.message,
                ci.like_count, ci.reply_count, ci.created_at,
                CASE WHEN EXISTS (
@@ -38,6 +47,7 @@ public class CheckInService {
                ) THEN TRUE ELSE FALSE END AS liked_by_me
         FROM check_in ci
         JOIN landmark l ON ci.landmark_id = l.id
+        LEFT JOIN search_record sr ON ci.search_record_id = sr.id
         WHERE ci.status = 'visible'
         """ + (landmarkId == null ? "" : " AND ci.landmark_id = ? ") + """
         ORDER BY ci.created_at DESC, ci.id DESC
@@ -48,6 +58,8 @@ public class CheckInService {
         : new Object[] {user == null ? null : user.userId(), user == null ? null : user.userId(), viewerGuestId, viewerGuestId, landmarkId, safeLimit};
     return jdbcTemplate.query(sql, (rs, rowNum) -> new CheckInRecord(
         rs.getLong("id"),
+        rs.getObject("search_record_id") == null ? null : rs.getLong("search_record_id"),
+        rs.getString("source_image_url"),
         rs.getLong("landmark_id"),
         rs.getString("code"),
         rs.getString("name"),
@@ -68,22 +80,46 @@ public class CheckInService {
   public CheckInRecord create(CheckInRequest request, SessionUser user) {
     ensureLandmarkExists(request.landmarkId());
     String guestId = user == null ? guestIdentityService.requireExisting(request.guestId()) : null;
+    validateSource(request, user, guestId);
     String displayName = user == null ? guestId : user.username();
     KeyHolder keyHolder = new GeneratedKeyHolder();
-    jdbcTemplate.update(connection -> {
-      PreparedStatement ps = connection.prepareStatement("""
-          INSERT INTO check_in (landmark_id, user_id, guest_id, display_name, message)
-          VALUES (?, ?, ?, ?, ?)
-          """, new String[] {"id"});
-      ps.setLong(1, request.landmarkId());
-      ps.setObject(2, user == null ? null : user.userId());
-      ps.setString(3, guestId);
-      ps.setString(4, displayName);
-      ps.setString(5, request.message().trim());
-      return ps;
-    }, keyHolder);
+    try {
+      jdbcTemplate.update(connection -> {
+        PreparedStatement ps = connection.prepareStatement("""
+            INSERT INTO check_in (
+              search_record_id, landmark_id, user_id, guest_id, display_name, message, publish_image
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, new String[] {"id"});
+        ps.setLong(1, request.searchRecordId());
+        ps.setLong(2, request.landmarkId());
+        ps.setObject(3, user == null ? null : user.userId());
+        ps.setString(4, guestId);
+        ps.setString(5, displayName);
+        ps.setString(6, request.message().trim());
+        ps.setBoolean(7, request.publishImage());
+        return ps;
+      }, keyHolder);
+    } catch (DuplicateKeyException ex) {
+      throw new CheckInConflictException("该检索记录已经发布过打卡");
+    }
     Long id = Objects.requireNonNull(keyHolder.getKey()).longValue();
     return find(id, user, guestId);
+  }
+
+  private void validateSource(CheckInRequest request, SessionUser user, String guestId) {
+    SearchRecordService.CheckInSource source = searchRecordService.checkInSource(request.searchRecordId());
+    if (!Set.of("success", "low_confidence").contains(source.status())) {
+      throw new IllegalArgumentException("只有成功或低置信度检索记录可以发布打卡");
+    }
+    boolean owned = user == null
+        ? source.userId() == null && Objects.equals(source.guestId(), guestId)
+        : Objects.equals(source.userId(), user.userId());
+    if (!owned) {
+      throw new AuthRequiredException("无权使用该检索记录发布打卡");
+    }
+    if (!searchRecordService.containsResult(request.searchRecordId(), request.landmarkId())) {
+      throw new IllegalArgumentException("打卡地标必须来自该检索记录的 Top-5 结果");
+    }
   }
 
   public LikeResponse toggleLike(Long checkInId, SessionUser user, String guestId) {

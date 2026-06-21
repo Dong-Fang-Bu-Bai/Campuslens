@@ -30,11 +30,7 @@
               </div>
               <div class="grid-item">
                 <span>{{ labels.mapCoords }}</span>
-                <strong>X: {{ landmark.mapX }}%, Y: {{ landmark.mapY }}%</strong>
-              </div>
-              <div class="grid-item">
-                <span>{{ labels.recommendIndex }}</span>
-                <strong style="color: #fbbf24;">★★★★★</strong>
+                <strong>{{ landmark.mapX }}% · {{ landmark.mapY }}%</strong>
               </div>
               <div class="grid-item">
                 <span>{{ labels.verifyStatus }}</span>

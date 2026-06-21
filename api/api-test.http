@@ -7,6 +7,7 @@
 @jobId = 请复制上传接口返回的 jobId
 @jobToken = 请复制上传接口返回的 jobToken
 @rebuildJobId = 请复制索引重建接口返回的 rebuildJobId
+@checkInSearchRecordId = 请复制本人成功或低置信度检索返回的 searchRecordId
 
 ### 后端健康检查
 GET {{backend}}/api/health
@@ -130,8 +131,10 @@ Authorization: Bearer {{userToken}}
 Content-Type: application/json
 
 {
+  "searchRecordId": {{checkInSearchRecordId}},
   "landmarkId": 1,
   "message": "图书馆门口完成打卡，入口角度适合拍摄识别样本。",
+  "publishImage": false,
   "guestId": "{{guestId}}"
 }
 

@@ -143,10 +143,12 @@ CREATE TABLE IF NOT EXISTS feedback (
 CREATE TABLE IF NOT EXISTS check_in (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   landmark_id BIGINT NOT NULL,
+  search_record_id BIGINT,
   user_id BIGINT,
   guest_id VARCHAR(100),
   display_name VARCHAR(100) NOT NULL,
   message VARCHAR(500) NOT NULL,
+  publish_image BOOLEAN NOT NULL DEFAULT FALSE,
   like_count INT NOT NULL DEFAULT 0,
   reply_count INT NOT NULL DEFAULT 0,
   status VARCHAR(50) NOT NULL DEFAULT 'visible',
@@ -154,6 +156,9 @@ CREATE TABLE IF NOT EXISTS check_in (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_check_in_landmark
     FOREIGN KEY (landmark_id) REFERENCES landmark(id),
+  CONSTRAINT fk_check_in_search_record
+    FOREIGN KEY (search_record_id) REFERENCES search_record(id),
+  CONSTRAINT uk_check_in_search_record UNIQUE (search_record_id),
   CONSTRAINT fk_check_in_user
     FOREIGN KEY (user_id) REFERENCES app_user(id)
 );

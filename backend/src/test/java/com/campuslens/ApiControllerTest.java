@@ -36,6 +36,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -48,6 +49,9 @@ class ApiControllerTest {
 
   @Autowired
   private GuestIdentityService guestIdentityService;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @MockBean
   private AlgorithmSearchClient algorithmSearchClient;
@@ -481,16 +485,27 @@ class ApiControllerTest {
   void checkInBoardSupportsPostLikeAndReply() throws Exception {
     String authorGuestId = allocateGuest();
     String replyGuestId = allocateGuest();
+    mockSearch(new AlgorithmSearchResponse(
+        List.of(
+            new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12),
+            new AlgorithmSearchResult(2, "L02", "学术大讲堂", 0.72, "medium", 6.45)),
+        false,
+        "Search successful"));
+    long searchRecordId = uploadWithGuest(authorGuestId);
     String createResponse = mockMvc.perform(post("/api/check-ins")
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
+                  "searchRecordId": %d,
                   "landmarkId": 1,
                   "message": "图书馆门口完成打卡",
+                  "publishImage": false,
                   "guestId": "%s"
                 }
-                """.formatted(authorGuestId)))
+                """.formatted(searchRecordId, authorGuestId)))
         .andExpect(status().isOk())
+        .andExpect(jsonPath("$.searchRecordId").value(searchRecordId))
+        .andExpect(jsonPath("$.sourceImageUrl").isEmpty())
         .andExpect(jsonPath("$.landmarkCode").value("L01"))
         .andExpect(jsonPath("$.displayName").value(authorGuestId))
         .andReturn()
@@ -520,6 +535,68 @@ class ApiControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].likedByMe").value(true))
         .andExpect(jsonPath("$[0].replyCount").value(1));
+
+    mockMvc.perform(post("/api/check-ins")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(checkInJson(searchRecordId, 1, authorGuestId, true)))
+        .andExpect(status().isConflict());
+
+    mockMvc.perform(post("/api/check-ins")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(checkInJson(searchRecordId, 1, replyGuestId, true)))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void checkInValidatesSourceAndControlsPhotoVisibility() throws Exception {
+    mockSearch(new AlgorithmSearchResponse(
+        List.of(
+            new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12),
+            new AlgorithmSearchResult(2, "L02", "学术大讲堂", 0.72, "medium", 6.45)),
+        false,
+        "Search successful"));
+    String ownerToken = register("checkinowner01", "password123");
+    String otherToken = register("checkinowner02", "password123");
+    long publicRecordId = uploadWithToken(ownerToken);
+
+    mockMvc.perform(post("/api/check-ins")
+            .header("Authorization", "Bearer " + otherToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(checkInJson(publicRecordId, 1, null, true)))
+        .andExpect(status().isUnauthorized());
+
+    mockMvc.perform(post("/api/check-ins")
+            .header("Authorization", "Bearer " + ownerToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(checkInJson(publicRecordId, 1, null, true)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.sourceImageUrl").isString());
+
+    long invalidCandidateRecordId = uploadWithToken(ownerToken);
+    mockMvc.perform(post("/api/check-ins")
+            .header("Authorization", "Bearer " + ownerToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(checkInJson(invalidCandidateRecordId, 3, null, false)))
+        .andExpect(status().isBadRequest());
+
+    long failedRecordId = uploadWithToken(ownerToken);
+    jdbcTemplate.update("UPDATE search_record SET status = 'failed' WHERE id = ?", failedRecordId);
+    mockMvc.perform(post("/api/check-ins")
+            .header("Authorization", "Bearer " + ownerToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(checkInJson(failedRecordId, 1, null, false)))
+        .andExpect(status().isBadRequest());
+
+    jdbcTemplate.update("""
+        INSERT INTO check_in (landmark_id, guest_id, display_name, message)
+        VALUES (1, 'legacy-guest', 'legacy-guest', '历史打卡仍可读取')
+        """);
+    String list = mockMvc.perform(get("/api/check-ins"))
+        .andExpect(status().isOk())
+        .andReturn().getResponse().getContentAsString();
+    assertThat(list).contains("\"searchRecordId\":null");
+    assertThat(list).contains("\"guestId\":\"legacy-guest\"");
+    assertThat(list).contains("\"sourceImageUrl\":\"/uploads/");
   }
 
   @Test
@@ -719,6 +796,31 @@ class ApiControllerTest {
         .getContentAsString();
     waitForJob(response, token);
     return extractLong(response, "searchRecordId");
+  }
+
+  private long uploadWithGuest(String guestId) throws Exception {
+    MockMultipartFile file = new MockMultipartFile(
+        "file", "check-in.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {1, 2, 3});
+    String response = mockMvc.perform(multipart("/api/search/upload")
+            .file(file)
+            .param("guestId", guestId)
+            .header("Idempotency-Key", UUID.randomUUID().toString()))
+        .andExpect(status().isAccepted())
+        .andReturn().getResponse().getContentAsString();
+    waitForJob(response, null);
+    return extractLong(response, "searchRecordId");
+  }
+
+  private String checkInJson(long searchRecordId, long landmarkId, String guestId, boolean publishImage) {
+    String guestField = guestId == null ? "" : ",\n  \"guestId\": \"" + guestId + "\"";
+    return """
+        {
+          "searchRecordId": %d,
+          "landmarkId": %d,
+          "message": "识图记录关联打卡",
+          "publishImage": %s%s
+        }
+        """.formatted(searchRecordId, landmarkId, publishImage, guestField);
   }
 
   private void mockSearch(AlgorithmSearchResponse response) {

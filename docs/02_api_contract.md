@@ -28,7 +28,7 @@ Vue 前端 -> Spring Boot 提交接口 -> MySQL + Redis ready/processing/delayed
 | `POST /api/auth/login` | 用户登录；输入 `admin/admin` 时返回管理员身份并由前端自动进入后台 | M1 / M4 |
 | `GET /api/me/search-records` | 登录用户查看自己的检索历史，返回上传图、最高候选、Top-5 快照和反馈状态 | M1 / M4 |
 | `GET /api/check-ins` | 查询校园打卡留言，可按 `landmarkId` 过滤 | M2 / M4 / M5 |
-| `POST /api/check-ins` | 发布打卡留言，登录用户显示用户名，游客显示 `guest#number` | M2 / M4 / M5 |
+| `POST /api/check-ins` | 从本人识图记录的 Top-5 候选发布打卡留言；每条检索记录限一次 | M2 / M4 / M5 |
 | `POST /api/check-ins/{id}/like` | 点赞或取消点赞打卡留言 | M4 / M5 |
 | `POST /api/check-ins/{id}/replies` | 发表一级回复 | M4 / M5 |
 
@@ -114,7 +114,8 @@ Vue 前端 -> Spring Boot 提交接口 -> MySQL + Redis ready/processing/delayed
 
 ## 打卡留言规则
 
-- 打卡留言复用 L01-L10 地标 ID 和地图坐标，不新增独立地点字典。
+- 新打卡必须提交 `searchRecordId`、Top-5 内的 `landmarkId` 和留言；检索记录须归当前用户或游客所有，状态为 `success` 或 `low_confidence`，且每条记录只能发布一次。V16 前的无来源历史记录继续可读。
+- `publishImage` 默认为 `false`；只有发布者主动开启时，列表响应才通过 `sourceImageUrl` 返回上传图片。
 - 登录用户发布留言、点赞和回复时显示用户名；未登录游客使用由 `POST /api/guests` 分配且数据库中真实存在的 `guestId`。格式非法或不存在的游客编号会被拒绝。
 - 留言和回复当前只支持一级文本互动，单条内容最长 500 字符。
 - 后台内容删除能力作为后续扩展预留，本周先实现用户端查询、发布、点赞和一级回复。
