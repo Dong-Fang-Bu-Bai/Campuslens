@@ -35,6 +35,9 @@ public class AuthService {
     if (exists(username)) {
       throw new IllegalArgumentException("用户名已存在");
     }
+    if (emailExists(email, null)) {
+      throw new IllegalArgumentException("邮箱已被其他账号绑定");
+    }
 
     KeyHolder keyHolder = new GeneratedKeyHolder();
     jdbcTemplate.update(connection -> {
@@ -100,6 +103,9 @@ public class AuthService {
   public AccountUpdateResponse updateEmail(Long userId, AccountEmailUpdateRequest request) {
     UserRow user = findUser(userId);
     String email = normalizeEmail(request.email());
+    if (emailExists(email, userId)) {
+      throw new IllegalArgumentException("邮箱已被其他账号绑定");
+    }
     jdbcTemplate.update("UPDATE app_user SET email = ? WHERE id = ?", email, userId);
     AccountProfile account = new AccountProfile(
         user.id(), user.username(), email, user.avatarUrl(), user.role(), "admin".equals(user.role()));
@@ -127,6 +133,19 @@ public class AuthService {
         "SELECT COUNT(*) FROM app_user WHERE username = ?",
         Integer.class,
         username);
+    return count != null && count > 0;
+  }
+
+  private boolean emailExists(String email, Long excludedUserId) {
+    if (email == null) {
+      return false;
+    }
+    Integer count = excludedUserId == null
+        ? jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM app_user WHERE LOWER(email) = LOWER(?)", Integer.class, email)
+        : jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM app_user WHERE LOWER(email) = LOWER(?) AND id <> ?",
+            Integer.class, email, excludedUserId);
     return count != null && count > 0;
   }
 
@@ -158,9 +177,9 @@ public class AuthService {
 
   private String normalizeEmail(String email) {
     if (email == null || email.isBlank()) {
-      return null;
+      throw new IllegalArgumentException("邮箱不能为空");
     }
-    return email.trim();
+    return email.trim().toLowerCase(java.util.Locale.ROOT);
   }
 
   private void validatePassword(String password) {

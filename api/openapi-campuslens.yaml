@@ -183,7 +183,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/AuthResponse"
         "400":
-          description: 用户名重复、密码过短或参数错误
+          description: 用户名或邮箱重复、密码过短或参数错误
   /api/auth/login:
     post:
       summary: 用户登录；admin/admin 会返回管理员身份
@@ -203,6 +203,44 @@ paths:
                 $ref: "#/components/schemas/AuthResponse"
         "400":
           description: 用户名或密码错误
+  /api/auth/password-reset/code:
+    post:
+      summary: 向账号绑定邮箱发送密码重置验证码
+      description: 输入绑定邮箱；无论邮箱是否已绑定均返回相同提示，同一账号 60 秒内不会重复发送。
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetCodeRequest"
+      responses:
+        "200":
+          description: 请求已受理
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasswordResetResponse"
+  /api/auth/password-reset/confirm:
+    post:
+      summary: 使用邮箱验证码设置新密码
+      description: 验证码 10 分钟有效、最多校验 5 次且只能使用一次；成功后撤销已有会话。
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetConfirmRequest"
+      responses:
+        "200":
+          description: 密码重置成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasswordResetResponse"
+        "400":
+          description: 验证码无效、过期或参数错误
   /api/me/account:
     get:
       summary: 查询当前登录账号资料
@@ -1131,7 +1169,7 @@ components:
           type: integer
     AuthRegisterRequest:
       type: object
-      required: [username, password]
+      required: [username, password, email]
       properties:
         username:
           type: string
@@ -1144,8 +1182,8 @@ components:
         email:
           type: string
           format: email
-          nullable: true
-          description: 选填，用于绑定
+          maxLength: 160
+          description: 必填且唯一，用于账号密码找回
     AuthLoginRequest:
       type: object
       required: [username, password]
@@ -1156,6 +1194,37 @@ components:
         password:
           type: string
           example: password123
+    PasswordResetCodeRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 160
+          example: student01@example.com
+    PasswordResetConfirmRequest:
+      type: object
+      required: [email, code, newPassword]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 160
+          example: student01@example.com
+        code:
+          type: string
+          pattern: "^[0-9]{6}$"
+          example: "123456"
+        newPassword:
+          type: string
+          minLength: 8
+          example: newpassword123
+    PasswordResetResponse:
+      type: object
+      properties:
+        message:
+          type: string
     AuthResponse:
       type: object
       properties:

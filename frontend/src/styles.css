@@ -1915,6 +1915,28 @@ h3 {
   color: var(--color-success);
 }
 
+.auth-text-action,
+.auth-back-action {
+  display: block;
+  margin: -8px 0 18px auto;
+  padding: 0;
+  border: 0;
+  color: #60a5fa;
+  background: transparent;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.auth-back-action {
+  margin: 14px auto 0;
+  color: var(--text-secondary);
+}
+
+.auth-text-action:hover,
+.auth-back-action:hover {
+  color: #ffffff;
+}
+
 /* ==========================================
    9. 登录后用户状态栏美化
    ========================================= */

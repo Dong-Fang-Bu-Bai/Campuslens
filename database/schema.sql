@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS app_user (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   username VARCHAR(100) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
-  email VARCHAR(255),
+  email VARCHAR(255) UNIQUE,
   avatar_url VARCHAR(500),
   role VARCHAR(50) NOT NULL DEFAULT 'user',
   enabled BOOLEAN NOT NULL DEFAULT TRUE,
@@ -68,6 +68,21 @@ CREATE TABLE IF NOT EXISTS admin_user (
   enabled BOOLEAN NOT NULL DEFAULT TRUE,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS password_reset_code (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  code_hash VARCHAR(255) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  attempt_count INT NOT NULL DEFAULT 0,
+  used_at DATETIME,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_password_reset_code_user
+    FOREIGN KEY (user_id) REFERENCES app_user(id)
+);
+
+CREATE INDEX idx_password_reset_user_created
+  ON password_reset_code (user_id, created_at);
 
 CREATE TABLE IF NOT EXISTS guest_identity (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,

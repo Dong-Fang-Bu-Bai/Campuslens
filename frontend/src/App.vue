@@ -765,7 +765,10 @@ const authMode = ref('login')
 const authForm = reactive({
   username: '',
   password: '',
-  email: ''
+  email: '',
+  code: '',
+  newPassword: '',
+  confirmPassword: ''
 })
 const currentUser = ref(loadStoredUser())
 const guestClientToken = loadGuestClientToken()
@@ -1137,9 +1140,22 @@ const authLabels = computed(() => ({
   username: t('用户名', 'Username'),
   password: t('密码', 'Password'),
   email: t('邮箱', 'Email'),
-  emailPlaceholder: t('选填，用于完善账户信息', 'Optional, for your account profile'),
+  emailPlaceholder: t('用于找回密码，请填写常用邮箱', 'Used for password recovery'),
   submitLogin: t('登录', 'Sign In'),
-  submitRegister: t('注册并登录', 'Register & Sign In')
+  submitRegister: t('注册并登录', 'Register & Sign In'),
+  forgotPassword: t('忘记密码？', 'Forgot password?'),
+  forgotSubtitle: t('输入账号绑定邮箱，验证码将发送到该邮箱', 'Enter your bound email to receive a verification code'),
+  resetSubtitle: t('填写邮件中的验证码并设置新密码', 'Enter the email code and choose a new password'),
+  boundEmail: t('绑定邮箱', 'Bound email'),
+  boundEmailPlaceholder: t('请输入注册时绑定的邮箱', 'Enter the email bound to your account'),
+  verificationCode: t('验证码', 'Verification code'),
+  codePlaceholder: t('6 位数字验证码', '6-digit code'),
+  newPassword: t('新密码', 'New password'),
+  confirmPassword: t('确认新密码', 'Confirm new password'),
+  passwordMismatch: t('两次输入的新密码不一致', 'The passwords do not match'),
+  sendCode: t('发送验证码', 'Send code'),
+  resetPassword: t('重置密码', 'Reset password'),
+  backToLogin: t('返回登录', 'Back to login')
 }))
 
 const accountLabels = computed(() => ({
@@ -1628,6 +1644,9 @@ function clearAuth() {
   authForm.username = ''
   authForm.password = ''
   authForm.email = ''
+  authForm.code = ''
+  authForm.newPassword = ''
+  authForm.confirmPassword = ''
   authMessage.value = ''
   authError.value = false
 }
@@ -1639,8 +1658,10 @@ function openAuth() {
 }
 
 function switchAuthMode(mode) {
+  const email = authForm.email
   authMode.value = mode
   clearAuth()
+  if (mode === 'forgot' || mode === 'reset') authForm.email = email
 }
 
 watch(activeView, (newView) => {
@@ -1651,21 +1672,51 @@ watch(activeView, (newView) => {
 })
 
 function updateAuthForm(nextForm) {
-  authForm.username = nextForm.username
-  authForm.password = nextForm.password
-  authForm.email = nextForm.email
+  Object.assign(authForm, nextForm)
 }
 
 async function submitAuth() {
   authMessage.value = ''
   authError.value = false
   try {
+    if (authMode.value === 'forgot') {
+      const response = await fetch('/api/auth/password-reset/code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: authForm.email })
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.message || t('验证码发送失败', 'Failed to send verification code'))
+      authMode.value = 'reset'
+      authMessage.value = body.message
+      return
+    }
+    if (authMode.value === 'reset') {
+      if (authForm.newPassword !== authForm.confirmPassword) {
+        throw new Error(authLabels.value.passwordMismatch)
+      }
+      const response = await fetch('/api/auth/password-reset/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: authForm.email,
+          code: authForm.code,
+          newPassword: authForm.newPassword
+        })
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.message || t('密码重置失败', 'Failed to reset password'))
+      clearAuth()
+      authMode.value = 'login'
+      authMessage.value = body.message
+      return
+    }
     const endpoint = authMode.value === 'login' ? '/api/auth/login' : '/api/auth/register'
     const payload = {
       username: authForm.username,
       password: authForm.password
     }
-    if (authMode.value === 'register' && authForm.email) {
+    if (authMode.value === 'register') {
       payload.email = authForm.email
     }
     const response = await fetch(endpoint, {

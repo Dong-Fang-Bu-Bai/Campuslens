@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.campuslens.service.AlgorithmSearchClient;
@@ -18,6 +20,7 @@ import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResponse;
 import com.campuslens.service.AlgorithmSearchClient.AlgorithmSearchResult;
 import com.campuslens.service.AlgorithmSearchException;
 import com.campuslens.service.GuestIdentityService;
+import com.campuslens.service.PasswordResetMailer;
 import java.nio.file.Path;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
@@ -33,6 +36,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -58,6 +62,9 @@ class ApiControllerTest {
 
   @MockBean
   private AlgorithmSearchClient algorithmSearchClient;
+
+  @MockBean
+  private PasswordResetMailer passwordResetMailer;
 
   @Test
   void healthReturnsOk() throws Exception {
@@ -397,7 +404,8 @@ class ApiControllerTest {
             .content("""
                 {
                   "username": "student03",
-                  "password": "password123"
+                  "password": "password123",
+                  "email": "student03@example.com"
                 }
                 """))
         .andExpect(status().isOk())
@@ -754,7 +762,8 @@ class ApiControllerTest {
             .content("""
                 {
                   "username": "shortpass",
-                  "password": "1234567"
+                  "password": "1234567",
+                  "email": "shortpass@example.com"
                 }
                 """))
         .andExpect(status().isBadRequest())
@@ -765,7 +774,8 @@ class ApiControllerTest {
             .content("""
                 {
                   "username": "student02",
-                  "password": "password123"
+                  "password": "password123",
+                  "email": "student02@example.com"
                 }
                 """))
         .andExpect(status().isOk());
@@ -775,7 +785,8 @@ class ApiControllerTest {
             .content("""
                 {
                   "username": "student02",
-                  "password": "password456"
+                  "password": "password456",
+                  "email": "student02@example.com"
                 }
                 """))
         .andExpect(status().isBadRequest())
@@ -864,6 +875,68 @@ class ApiControllerTest {
   }
 
   @Test
+  void passwordResetSendsCodeChangesPasswordAndRevokesExistingSession() throws Exception {
+    String oldToken = register("resetuser01", "oldpassword123");
+
+    mockMvc.perform(post("/api/auth/password-reset/code")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "email": "resetuser01@example.com"
+                }
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.message").value(
+            "如果该邮箱已绑定账号，验证码邮件将发送到该邮箱"));
+
+    ArgumentCaptor<String> codeCaptor = ArgumentCaptor.forClass(String.class);
+    verify(passwordResetMailer).sendCode(
+        eq("resetuser01@example.com"), eq("resetuser01"), codeCaptor.capture(), eq(10));
+    String code = codeCaptor.getValue();
+    assertThat(code).matches("\\d{6}");
+
+    mockMvc.perform(post("/api/auth/password-reset/confirm")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "email": "resetuser01@example.com",
+                  "code": "000000",
+                  "newPassword": "newpassword123"
+                }
+                """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("验证码无效或已过期"));
+    Integer attempts = jdbcTemplate.queryForObject(
+        "SELECT attempt_count FROM password_reset_code WHERE used_at IS NULL ORDER BY id DESC LIMIT 1",
+        Integer.class);
+    assertThat(attempts).isEqualTo(1);
+
+    mockMvc.perform(post("/api/auth/password-reset/confirm")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "email": "resetuser01@example.com",
+                  "code": "%s",
+                  "newPassword": "newpassword123"
+                }
+                """.formatted(code)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.message").value("密码重置成功，请使用新密码登录"));
+
+    mockMvc.perform(get("/api/me/account").header("Authorization", "Bearer " + oldToken))
+        .andExpect(status().isUnauthorized());
+    mockMvc.perform(post("/api/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "username": "resetuser01",
+                  "password": "newpassword123"
+                }
+                """))
+        .andExpect(status().isOk());
+  }
+
+  @Test
   void loggedInUserCanUploadAndReplaceCroppedAvatar() throws Exception {
     String token = register("avataruser01", "password123");
     MockMultipartFile firstAvatar = avatarFile("first-avatar.png", 64, 0xFF2563EB);
@@ -928,9 +1001,10 @@ class ApiControllerTest {
             .content("""
                 {
                   "username": "%s",
-                  "password": "%s"
+                  "password": "%s",
+                  "email": "%s@example.com"
                 }
-                """.formatted(username, password)))
+                """.formatted(username, password, username)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.token").isString())
         .andReturn()

@@ -8,6 +8,21 @@ server:
     connection-timeout: ${CAMPUSLENS_TOMCAT_CONNECTION_TIMEOUT:20s}
 
 spring:
+  mail:
+    host: ${CAMPUSLENS_MAIL_HOST:smtp.gmail.com}
+    port: ${CAMPUSLENS_MAIL_PORT:587}
+    username: ${CAMPUSLENS_MAIL_USERNAME:}
+    password: ${CAMPUSLENS_MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: ${CAMPUSLENS_MAIL_CONNECTION_TIMEOUT_MS:5000}
+          timeout: ${CAMPUSLENS_MAIL_TIMEOUT_MS:10000}
+          writetimeout: ${CAMPUSLENS_MAIL_WRITE_TIMEOUT_MS:10000}
   data:
     redis:
       host: ${CAMPUSLENS_REDIS_HOST:127.0.0.1}
@@ -37,6 +52,11 @@ spring:
       max-request-size: 10MB
 
 campuslens:
+  mail:
+    from: ${CAMPUSLENS_MAIL_FROM:${CAMPUSLENS_MAIL_USERNAME:}}
+  password-reset:
+    valid-minutes: ${CAMPUSLENS_PASSWORD_RESET_VALID_MINUTES:10}
+    cooldown-seconds: ${CAMPUSLENS_PASSWORD_RESET_COOLDOWN_SECONDS:60}
   upload-dir: ${CAMPUSLENS_UPLOAD_DIR:uploads}
   dataset-dir: ${CAMPUSLENS_DATASET_DIR:../datasets/landmarks}
   algorithm:

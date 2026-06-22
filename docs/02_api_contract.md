@@ -24,10 +24,12 @@ Vue 前端 -> Spring Boot 提交接口 -> MySQL + Redis ready/processing/delayed
 | `GET /api/landmarks` | 获取地标列表 | M2 叶炳良 |
 | `GET /api/landmarks/{id}` | 获取地标详情 | M2 叶炳良，M4 洪传凯 |
 | `POST /api/feedback` | 提交识别纠错反馈 | M5 庄子杰 |
-| `POST /api/auth/register` | 普通用户注册，用户名唯一，密码至少 8 位，邮箱选填 | M1 / M4 |
+| `POST /api/auth/register` | 普通用户注册，用户名和邮箱唯一，密码至少 8 位，邮箱必填并用于密码找回 | M1 / M4 |
 | `POST /api/auth/login` | 用户登录；输入 `admin/admin` 时返回管理员身份并由前端自动进入后台 | M1 / M4 |
+| `POST /api/auth/password-reset/code` | 输入绑定邮箱后发送 6 位验证码；统一响应避免泄露邮箱绑定状态，60 秒内不重复发送 | M1 / M4 |
+| `POST /api/auth/password-reset/confirm` | 使用绑定邮箱和 10 分钟内有效的验证码设置新密码；最多校验 5 次，成功后撤销旧会话 | M1 / M4 |
 | `GET /api/me/account` | 登录用户或管理员查看自己的账号资料 | M1 / M4 |
-| `PUT /api/me/account/email` | 登录用户或管理员更新或清除自己的邮箱 | M1 / M4 |
+| `PUT /api/me/account/email` | 登录用户或管理员更新自己的唯一绑定邮箱，邮箱不能为空 | M1 / M4 |
 | `PUT /api/me/account/password` | 校验当前密码后更新密码，新密码至少 8 位且不能与当前密码相同 | M1 / M4 |
 | `POST /api/me/account/avatar` | 上传裁剪后的 JPG/PNG 头像，最大 5 MB；服务端校验真实图片并替换旧头像 | M1 / M4 |
 | `GET /api/me/search-records` | 登录用户查看自己的检索历史，返回上传图、最高候选、Top-5 快照和反馈状态 | M1 / M4 |

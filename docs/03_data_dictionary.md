@@ -227,19 +227,33 @@
 
 ## AppUser 用户
 
-第三周 V2 使用 `app_user` 保存普通用户和管理员演示账号。普通用户通过右上角“登录/注册”入口注册，用户名为普通字符串且唯一，密码至少 8 位，邮箱选填。`admin/admin` 作为演示管理员账号写入同一张表，密码以 PBKDF2 哈希存储；登录后后端返回服务端会话 token，前端携带 token 访问需要登录或管理员权限的接口。
+第三周 V2 使用 `app_user` 保存普通用户和管理员演示账号。普通用户通过右上角“登录/注册”入口注册，用户名和邮箱唯一，密码至少 8 位，邮箱必填并用于密码找回。历史上未绑定邮箱的账号仍可登录并在个人中心补充邮箱，但补充前无法使用找回功能。`admin/admin` 作为演示管理员账号写入同一张表，密码以 PBKDF2 哈希存储；登录后后端返回服务端会话 token，前端携带 token 访问需要登录或管理员权限的接口。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` | Long | 主键 |
 | `username` | String | 用户名，唯一 |
 | `passwordHash` | String | PBKDF2 哈希摘要，格式为 `pbkdf2$迭代次数$salt$hash` |
-| `email` | String | 选填邮箱 |
+| `email` | String | 唯一绑定邮箱；新注册账号必填，历史账号可暂为空 |
 | `avatarUrl` | String | 选填头像地址；为空时前端按用户编号和用户名生成固定像素头像 |
 | `role` | String | `user` 或 `admin` |
 | `enabled` | Boolean | 是否启用 |
 | `createdAt` | DateTime | 创建时间 |
 | `updatedAt` | DateTime | 更新时间 |
+
+## PasswordResetCode 密码重置验证码
+
+`password_reset_code` 保存密码找回请求。用户通过唯一绑定邮箱发起找回，服务端按规范化邮箱定位账号。数据库只保存 PBKDF2 加盐哈希，不保存验证码明文；每次发送新验证码会使旧验证码失效。验证码默认 10 分钟有效、60 秒发送冷却、最多校验 5 次且只能成功使用一次。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | Long | 主键 |
+| `userId` | Long | 关联 `app_user.id` |
+| `codeHash` | String | 验证码 PBKDF2 加盐哈希 |
+| `expiresAt` | DateTime | 过期时间 |
+| `attemptCount` | Integer | 验证失败次数 |
+| `usedAt` | DateTime | 作废或成功使用时间 |
+| `createdAt` | DateTime | 创建时间，用于发送冷却判断 |
 
 ## AdminUser 管理员兼容表
 
@@ -263,5 +277,6 @@
 | `V16__link_check_in_to_search_record.sql` | 为打卡增加检索记录唯一关联和照片公开开关，保留旧记录兼容性 |
 | `V17__nested_check_in_replies.sql` | 为回复增加父子关系、点赞和直接回复计数，创建回复点赞表 |
 | `V18__user_avatar.sql` | 为用户增加可持久化的自定义头像地址 |
+| `V19__password_reset.sql` | 约束邮箱唯一，创建密码重置验证码表和查询索引 |
 | `V14__algorithm_instance_tracking.sql` | 保存实际处理任务的算法实例编号与主备角色 |
 | `V15__persistent_guest_identity.sql` | 创建持久化游客身份表，使用令牌哈希幂等分配游客编号 |

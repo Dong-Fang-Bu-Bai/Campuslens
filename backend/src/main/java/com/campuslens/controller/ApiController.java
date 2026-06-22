@@ -28,6 +28,9 @@ import com.campuslens.model.LandmarkImage;
 import com.campuslens.model.LandmarkSummary;
 import com.campuslens.model.LandmarkUpsertRequest;
 import com.campuslens.model.LikeResponse;
+import com.campuslens.model.PasswordResetCodeRequest;
+import com.campuslens.model.PasswordResetConfirmRequest;
+import com.campuslens.model.PasswordResetResponse;
 import com.campuslens.model.SearchResponse;
 import com.campuslens.model.SearchJobStatus;
 import com.campuslens.model.SearchJobSubmission;
@@ -39,6 +42,7 @@ import com.campuslens.service.AuthService;
 import com.campuslens.service.CheckInService;
 import com.campuslens.service.FeedbackService;
 import com.campuslens.service.LandmarkService;
+import com.campuslens.service.PasswordResetService;
 import com.campuslens.service.IndexRebuildService;
 import com.campuslens.service.GuestIdentityService;
 import com.campuslens.service.SearchRecordService;
@@ -71,6 +75,7 @@ public class ApiController {
   private final SearchRecordService searchRecordService;
   private final AdminService adminService;
   private final AuthService authService;
+  private final PasswordResetService passwordResetService;
   private final AccountAvatarService accountAvatarService;
   private final SessionService sessionService;
   private final CheckInService checkInService;
@@ -85,6 +90,7 @@ public class ApiController {
       SearchRecordService searchRecordService,
       AdminService adminService,
       AuthService authService,
+      PasswordResetService passwordResetService,
       AccountAvatarService accountAvatarService,
       SessionService sessionService,
       CheckInService checkInService,
@@ -97,6 +103,7 @@ public class ApiController {
     this.searchRecordService = searchRecordService;
     this.adminService = adminService;
     this.authService = authService;
+    this.passwordResetService = passwordResetService;
     this.accountAvatarService = accountAvatarService;
     this.sessionService = sessionService;
     this.checkInService = checkInService;
@@ -163,6 +170,18 @@ public class ApiController {
   @PostMapping("/auth/login")
   public AuthResponse login(@Valid @RequestBody AuthLoginRequest request) {
     return authService.login(request);
+  }
+
+  @PostMapping("/auth/password-reset/code")
+  public PasswordResetResponse requestPasswordResetCode(
+      @Valid @RequestBody PasswordResetCodeRequest request) {
+    return passwordResetService.requestCode(request);
+  }
+
+  @PostMapping("/auth/password-reset/confirm")
+  public PasswordResetResponse confirmPasswordReset(
+      @Valid @RequestBody PasswordResetConfirmRequest request) {
+    return passwordResetService.confirm(request);
   }
 
   @GetMapping("/me/account")
