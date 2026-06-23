@@ -162,17 +162,32 @@ class ApiControllerTest {
     mockSearch(new AlgorithmSearchResponse(
         List.of(new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12)),
         false,
-        "Search successful"));
+        "Search successful",
+        true,
+        "trusted",
+        "test-model",
+        "test-base-model",
+        "test-index",
+        "test-sar-state",
+        "test-instance",
+        "primary"));
     MockMultipartFile file = new MockMultipartFile(
         "file", "sar.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {1, 2, 3});
 
-    mockMvc.perform(multipart("/api/search/upload")
+    String submission = mockMvc.perform(multipart("/api/search/upload")
             .file(file)
             .param("guestId", guestId)
             .param("sarMode", "true")
             .header("Idempotency-Key", UUID.randomUUID().toString()))
         .andExpect(status().isAccepted())
-        .andExpect(jsonPath("$.status").value("queued"));
+        .andExpect(jsonPath("$.status").value("queued"))
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+
+    String result = waitForJob(submission, null);
+    assertThat(result).contains("\"status\":\"success\"");
+    assertThat(result).contains("\"sarApplied\":true");
   }
 
   @Test
@@ -1096,6 +1111,12 @@ class ApiControllerTest {
 
   private void mockSearch(AlgorithmSearchResponse response) {
     when(algorithmSearchClient.searchBatch(any())).thenAnswer(invocation -> {
+      List<Path> paths = invocation.getArgument(0);
+      return paths.stream()
+          .map(path -> new AlgorithmBatchItem(true, response, null, null, false))
+          .toList();
+    });
+    when(algorithmSearchClient.searchBatch(any(), eq(true))).thenAnswer(invocation -> {
       List<Path> paths = invocation.getArgument(0);
       return paths.stream()
           .map(path -> new AlgorithmBatchItem(true, response, null, null, false))

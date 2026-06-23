@@ -257,7 +257,7 @@
 
 ## AdminUser 管理员兼容表
 
-`admin_user` 保留为旧后台登录接口的兼容表，密码同样以 PBKDF2 哈希存储。前端当前不直接调用 `POST /api/admin/auth/login`，统一调用 `POST /api/auth/login`。
+`admin_user` 保留为最终版兼容表，服务于 `POST /api/admin/auth/login` 旧联调入口。前端默认不直接调用该接口，统一调用 `POST /api/auth/login`，由 `app_user.role=admin` 进入后台主流程。
 
 ## Flyway 迁移
 

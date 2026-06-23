@@ -527,7 +527,7 @@ paths:
                 $ref: "#/components/schemas/ReplyLikeResponse"
   /api/admin/auth/login:
     post:
-      summary: 管理员轻量登录（兼容旧接口，前端不直接展示）
+      summary: 管理员轻量登录（最终版兼容入口，前端默认不使用）
       tags: [Admin]
       requestBody:
         required: true
@@ -537,7 +537,7 @@ paths:
               $ref: "#/components/schemas/AdminLoginRequest"
       responses:
         "200":
-          description: 登录成功；V2 前端使用 /api/auth/login 隐式进入后台
+          description: 登录成功；最终版前端默认使用 /api/auth/login 隐式进入后台，本接口仅保留给旧联调脚本或兼容调用
           content:
             application/json:
               schema:

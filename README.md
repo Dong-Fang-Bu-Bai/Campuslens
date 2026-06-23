@@ -84,6 +84,8 @@ scripts\verify.cmd
 - 后端任务消费者：正式检索调用算法服务 `POST /api/v1/search/batch`；`POST /api/v1/search` 保留给单图诊断。
 - 管理员运维：通过后端 `/api/admin/algorithm/runtime`、`/api/admin/index/rebuild` 和 `/api/admin/index/rebuild/{jobId}` 操作，不由前端直连算法服务。
 
+前端地标列表来自 `GET /api/landmarks`，代表图优先使用后端返回的 `coverImageUrl` 或 `imageUrl`。页面不再使用外网演示地标数据，也不会在未上传图片时伪造默认 Top-5；未检索状态只显示等待上传的空态。
+
 后端路径参数使用 Java 风格 `{jobId}`；算法服务的重建状态路径在 FastAPI 文档中显示为 `{job_id}`。两者都是路径占位符，不代表 JSON 字段改名。
 
 ### 终端编码

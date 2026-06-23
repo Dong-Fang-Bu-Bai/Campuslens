@@ -42,11 +42,11 @@ Vue 前端 -> Spring Boot 提交接口 -> MySQL + Redis ready/processing/delayed
 
 ## 后台辅助接口
 
-第三周 V2 提供后台入口。前端不再显示管理员专用登录框，统一通过右上角“登录/注册”进入认证页面。普通用户按注册/登录流程进入主页面；输入 `admin/admin` 时后端返回 `role=admin`、`token` 和管理员身份，前端自动进入后台。后台接口统一要求 `Authorization: Bearer <token>`，并在服务端校验管理员角色。密码字段以 PBKDF2 哈希形式落库，不再保存明文口令。
+第三周 V2 提供后台入口。最终版前端不再显示管理员专用登录框，统一通过右上角“登录/注册”进入认证页面。普通用户按注册/登录流程进入主页面；输入 `admin/admin` 时后端返回 `role=admin`、`token` 和管理员身份，前端自动进入后台。后台接口统一要求 `Authorization: Bearer <token>`，并在服务端校验管理员角色。密码字段以 PBKDF2 哈希形式落库，不再保存明文口令。
 
 | 接口 | 说明 | 负责人 |
 | --- | --- | --- |
-| `POST /api/admin/auth/login` | 管理员轻量登录兼容旧接口，前端不直接展示 | M1 / M4 |
+| `POST /api/admin/auth/login` | 管理员轻量登录最终版兼容入口，前端默认不使用 | M1 / M4 |
 | `GET /api/admin/search-records` | 查看最近检索记录，需管理员 token | M1 / M4 |
 | `POST /api/admin/landmarks` | 新增地标，需管理员 token | M2 |
 | `PUT /api/admin/landmarks/{id}` | 修改地标，需管理员 token | M2 |
@@ -85,6 +85,7 @@ Vue 前端 -> Spring Boot 提交接口 -> MySQL + Redis ready/processing/delayed
 ## Top-5 返回规则
 
 - 返回的是 Top-5 地标，不是 Top-5 图片。
+- 前端初始页不再预置外网演示地标或伪 Top-5；只有完成真实检索任务后才展示候选结果，未检索时显示等待上传的空态。
 - 每个地标根据样本特征估计均值向量和协方差矩阵，查询时计算马氏距离并换算为经验归一化匹配分。
 - Top-5 按 `score` 从高到低排序；`score` 越高，表示查询图越接近该地标特征分布。该分数用于排序和展示区分度，不具备概率或统计置信度含义。
 - 后端对外返回字段至少包含：`rank`、`landmarkId`、`landmarkCode`、`name`、`score`、`confidenceLevel`、`mahalanobisDistance`、`coverImageUrl`、`summary`、`locationText`、`mapX`、`mapY`。

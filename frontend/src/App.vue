@@ -371,7 +371,7 @@
           :records="localizedUserSearchRecords"
           :loading="historyLoading"
           :labels="historyLabels"
-          :fallback-image="demoLandmarks[0].imageUrl"
+          :fallback-image="FALLBACK_LANDMARK_IMAGE"
           :language="preferences.language"
           @refresh="loadUserHistory"
           @open-feedback="openHistoryFeedback"
@@ -545,180 +545,9 @@ const poems = [
   "心之所向，素履以往。"
 ]
 
-const demoLandmarks = [
-  { 
-    id: 1, 
-    code: 'L01', 
-    name: '图书馆', 
-    englishName: 'Library', 
-    type: '建筑', 
-    englishType: 'Building',
-    summary: '校园核心文化与学术中心，拥有独特的书页外立面结构。', 
-    englishSummary: 'The campus cultural and academic center, featuring a unique facade shaped like open book pages.',
-    description: '图书馆位于文雍广场北侧，是学生自习、借阅和课程资料检索的主要场所。建筑气势宏伟，外立面呈半开卷书页状，是校园最具标志性的文化地标。', 
-    englishDescription: 'Located north of Wenyong Square, the library is the main venue for self-study, borrowing, and information retrieval. The magnificent building features a unique facade shaped like open book pages, making it the most iconic cultural landmark on campus.',
-    locationText: '文雍广场北侧', 
-    englishLocation: 'North side of Wenyong Square',
-    mapX: 50.31, 
-    mapY: 59.33, 
-    imageUrl: 'https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=1200&q=80' 
-  },
-  { 
-    id: 2, 
-    code: 'L02', 
-    name: '学术大讲堂', 
-    englishName: 'Academic Auditorium', 
-    type: '建筑', 
-    englishType: 'Building',
-    summary: '举办大型学术报告与校园文娱盛典的多功能现代化场馆。', 
-    englishSummary: 'A multifunctional modern venue for large academic reports and campus cultural celebrations.',
-    description: '学术大讲堂邻近东门，是学校举办大型学术报告、文化盛典及师生集中教学活动的主阵地。其弧形入口极具现代感与辨识度。', 
-    englishDescription: 'Situated near the East Gate, the Academic Auditorium is the primary venue for hosting academic lectures, grand cultural celebrations, and joint teaching sessions. Its curved entrance design is modern and highly recognizable.',
-    locationText: '东门附近', 
-    englishLocation: 'Near the East Gate',
-    mapX: 62.16, 
-    mapY: 61.22, 
-    imageUrl: 'https://images.unsplash.com/photo-1492538368577-870624790c4a?auto=format&fit=crop&w=1200&q=80' 
-  },
-  { 
-    id: 3, 
-    code: 'L03', 
-    name: '文雍广场', 
-    englishName: 'Wenyong Square', 
-    type: '广场', 
-    englishType: 'Square',
-    summary: '开阔宽广的标志性休闲广场，是校园人文景观的核心纽带。', 
-    englishSummary: 'A spacious and iconic recreational square, serving as the core hub of the campus cultural landscape.',
-    description: '文雍广场坐落于图书馆南侧，是一座融绿化、喷泉与休闲步道于一体的开阔广场，为校园师生举行集会和课余小憩的重要集散地。', 
-    englishDescription: 'Located south of the library, Wenyong Square is a spacious open area integrating green spaces, fountains, and leisure paths, serving as a primary gathering and resting place for faculty and students.',
-    locationText: '图书馆南侧', 
-    englishLocation: 'South side of the Library',
-    mapX: 57.37, 
-    mapY: 63.56, 
-    imageUrl: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1200&q=80' 
-  },
-  { 
-    id: 4, 
-    code: 'L04', 
-    name: '博学桥', 
-    englishName: 'Boxue Bridge', 
-    type: '桥梁', 
-    englishType: 'Bridge',
-    summary: '横跨韵湖的典雅观景石桥，连接南北主要功能园区。', 
-    englishSummary: 'An elegant stone viewing bridge across Yun Lake, connecting the main northern and southern campus sectors.',
-    description: '博学桥横跨在美丽的韵湖之上，将教学区与生活区优雅连通。桥身造型典雅，与湖面交相辉映，是备受师生喜爱的校园写意景观。', 
-    englishDescription: 'Spanning the beautiful Yun Lake, Boxue Bridge elegantly links the teaching and residential areas. With its graceful design reflecting on the water, it is a highly popular picturesque landscape on campus.',
-    locationText: '韵湖沿线', 
-    englishLocation: 'Along Yun Lake',
-    mapX: 57.75, 
-    mapY: 46.17, 
-    imageUrl: 'https://images.unsplash.com/photo-1549880338-65ddcdfd017b?auto=format&fit=crop&w=1200&q=80' 
-  },
-  { 
-    id: 5, 
-    code: 'L05', 
-    name: '琴湖及湖心岛', 
-    englishName: 'Qin Lake / Huxin Island', 
-    type: '湖区', 
-    englishType: 'Lake Area',
-    summary: '环境幽雅的水域景观，湖水碧绿，岛上植被常青。', 
-    englishSummary: 'A serene lake area featuring emerald waters and evergreen island vegetation.',
-    description: '琴湖及湖心岛位于文雍路东侧，水体清澈，绿化茂密。清晨和傍晚，这里烟波浩渺，是校园内最富有自然诗意和静谧之美的一隅。', 
-    englishDescription: 'Located east of Wenyong Road, Qin Lake and Huxin Island feature crystal-clear water and dense greenery. With misty views at dawn and dusk, it is the most poetic and tranquil spot on campus.',
-    locationText: '文雍路东侧', 
-    englishLocation: 'East side of Wenyong Road',
-    mapX: 67.32, 
-    mapY: 26.88, 
-    imageUrl: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80' 
-  },
-  { 
-    id: 6, 
-    code: 'L06', 
-    name: '体育馆', 
-    englishName: 'Stadium', 
-    type: '场馆', 
-    englishType: 'Gymnasium',
-    summary: '配备多功能运动场地的现代化综合室内健身体育馆。', 
-    englishSummary: 'A modern comprehensive indoor sports hall equipped with multifunctional fields.',
-    description: '体育馆位于文雍路西侧，是一座设施完善的现代化多功能场馆，服务全校体育教学、文体赛事和日常锻炼，富有动感的网架结构具有很高辨识度。',
-    englishDescription: 'Located west of Wenyong Road, the Gymnasium is a well-equipped modern facility for physical education, sports events, and daily exercises. Its dynamic space frame geometry makes it highly striking.',
-    locationText: '文雍路西侧', 
-    englishLocation: 'West side of Wenyong Road',
-    mapX: 43.88, 
-    mapY: 49.07, 
-    imageUrl: 'https://images.unsplash.com/photo-1577416412292-747c6607f055?auto=format&fit=crop&w=1200&q=80' 
-  },
-  { 
-    id: 7, 
-    code: 'L07', 
-    name: '游泳馆', 
-    englishName: 'Natatorium', 
-    type: '场馆', 
-    englishType: 'Natatorium',
-    summary: '配备先进循环系统的室内温水游泳馆。', 
-    englishSummary: 'An indoor heated natatorium equipped with advanced water circulation systems.',
-    description: '游泳馆位于体育馆北侧，配有标准泳道与先进水循环系统，是开展游泳教学、水上运动训练和日常锻炼的重要场馆。',
-    englishDescription: 'Located north of the Gymnasium, the Natatorium features standard lanes and water circulation systems, making it the preferred place for swimming classes, water training, and cooling off.',
-    locationText: '体育馆北侧', 
-    englishLocation: 'North side of the Gymnasium',
-    mapX: 45.39, 
-    mapY: 41.25, 
-    imageUrl: 'https://images.unsplash.com/photo-1519766304817-4f37bda74a27?auto=format&fit=crop&w=1200&q=80' 
-  },
-  { 
-    id: 8, 
-    code: 'L08', 
-    name: '第一饭堂', 
-    englishName: 'The First Dining Hall', 
-    type: '生活服务', 
-    englishType: 'Dining Services',
-    summary: '面向师生的综合餐饮空间，提供多种风味与实惠餐食。',
-    englishSummary: 'A public dining service center offering various regional and local cuisines.',
-    description: '第一饭堂位于尚学路西侧，汇集了全国各地的特色美食与实惠膳食，是学生日常用餐和生活交流的主要生活服务场所。', 
-    englishDescription: 'Situated west of Shangxue Road, the First Dining Hall offers diverse local delicacies and affordable meals, serving as a primary hub for students\' daily dining and social activities.',
-    locationText: '尚学路西侧', 
-    englishLocation: 'West side of Shangxue Road',
-    mapX: 33.8, 
-    mapY: 47.17, 
-    imageUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80' 
-  },
-  { 
-    id: 9, 
-    code: 'L09', 
-    name: '第二饭堂', 
-    englishName: 'The Second Dining Hall', 
-    type: '生活服务', 
-    englishType: 'Dining Services',
-    summary: '服务东区师生的现代餐饮空间，兼具用餐与休闲功能。',
-    englishSummary: 'A modern dining hall for the East Campus community, combining meals with comfortable social spaces.',
-    description: '第二饭堂邻近东二门附近，与第一饭堂同属生活服务类建筑，内部设有现代化的自选餐厅与休闲卡座，主打精品小吃和社交就餐，为东区师生提供高品质膳食体验。', 
-    englishDescription: 'Located near the Second East Gate, the Second Dining Hall features self-serve counters and cozy seating. It focuses on premium snacks and social dining, providing high-quality meals for students and staff.',
-    locationText: '东二门附近', 
-    englishLocation: 'Near the Second East Gate',
-    mapX: 37.96, 
-    mapY: 21.84, 
-    imageUrl: 'https://images.unsplash.com/photo-1578474846511-04ba529f0b88?auto=format&fit=crop&w=1200&q=80' 
-  },
-  { 
-    id: 10, 
-    code: 'L10', 
-    name: '中心酒店', 
-    englishName: 'Hotel', 
-    type: '建筑', 
-    englishType: 'Hotel',
-    summary: '校内接待与住宿场所，环境舒适，配套设施完善。',
-    englishSummary: 'A well-equipped guest house and hotel inside the campus.',
-    description: '中心酒店位于北门内侧，主要用于校内接待和住宿服务，大厅宽敞，周边绿化环抱，为来访专家和宾客提供舒适静谧的居住环境。', 
-    englishDescription: 'Located just inside the North Gate, the Center Hotel is used for university receptions and accommodation. It features a spacious lobby and green surroundings, offering visiting experts a quiet and comfortable stay.',
-    locationText: '北门内侧', 
-    englishLocation: 'Inside the North Gate',
-    mapX: 62.28, 
-    mapY: 10.12, 
-    imageUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80' 
-  }
-]
+const FALLBACK_LANDMARK_IMAGE = '/logo.png'
 
-const landmarks = ref(demoLandmarks)
+const landmarks = ref([])
 const results = ref([])
 const selectedId = ref(1)
 const selectedFile = ref(null)
@@ -1346,16 +1175,12 @@ onMounted(async () => {
         ...item,
         imageUrl: imageForLandmark(item, index)
       }))
-      results.value = landmarks.value.slice(0, 5).map((item, index) => ({
-        ...item,
-        rank: index + 1,
-        landmarkId: item.id,
-        landmarkCode: item.code,
-        score: [0.92, 0.87, 0.81, 0.76, 0.71][index]
-      }))
+      if (!selectedLandmark.value && landmarks.value.length) {
+        selectedId.value = landmarks.value[0].id
+      }
     }
   } catch {
-    landmarks.value = demoLandmarks
+    error.value = t('地标列表加载失败，请确认后端服务已启动', 'Could not load landmarks. Make sure the backend is running.')
   }
 
   restoreSearchJob()
@@ -1462,7 +1287,7 @@ function applySearchResult(data) {
       const matched = landmarks.value.find(l => l.id === item.landmarkId)
       let imgUrl = item.coverImageUrl || item.cover_image_url || item.imageUrl
       if (!imgUrl || (!imgUrl.startsWith('http') && !imgUrl.startsWith('data:'))) {
-        imgUrl = matched?.imageUrl || demoLandmarks[0].imageUrl
+        imgUrl = matched?.imageUrl || FALLBACK_LANDMARK_IMAGE
       }
       return {
         ...item,
@@ -2190,11 +2015,10 @@ function toggleLanguage() {
 
 function imageForLandmark(item, index = 0) {
   const candidate = item?.coverImageUrl || item?.cover_image_url || item?.imageUrl || item?.images?.[0]?.imageUrl
-  if (candidate && (candidate.startsWith('http') || candidate.startsWith('data:'))) {
+  if (candidate && (candidate.startsWith('http') || candidate.startsWith('data:') || candidate.startsWith('/'))) {
     return candidate
   }
-  const idx = index >= 0 ? index : 0
-  return demoLandmarks[idx]?.imageUrl || demoLandmarks[0].imageUrl
+  return FALLBACK_LANDMARK_IMAGE
 }
 
 function authHeaders() {
