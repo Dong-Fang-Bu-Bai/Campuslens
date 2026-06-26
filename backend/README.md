@@ -39,9 +39,27 @@ GET http://localhost:8080/api/health
 | `POST /api/search/upload` | 提交异步检索，返回 `202` 和任务标识 |
 | `GET /api/search/jobs/{jobId}` | 查询任务状态、错误信息和 Top-5 终态结果 |
 | `POST /api/feedback` | 提交正确、错误或不确定反馈 |
+| `POST /api/auth/register` | 使用唯一用户名、唯一邮箱和至少 8 位密码注册 |
+| `POST /api/auth/login` | 用户或管理员登录 |
+| `POST /api/auth/password-reset/code` | 输入绑定邮箱并向该邮箱发送密码重置验证码 |
+| `POST /api/auth/password-reset/confirm` | 使用绑定邮箱校验验证码并设置新密码 |
 | `GET /api/admin/algorithm/runtime` | 管理员查看主算法实例运行、SAR 和索引状态 |
 | `POST /api/admin/index/rebuild` | 管理员提交索引重建任务，返回 `202` |
 | `GET /api/admin/index/rebuild/{jobId}` | 管理员查询索引重建任务状态 |
+
+## 密码找回邮件配置
+
+默认使用标准 SMTP + STARTTLS，可向 QQ 邮箱、163、Outlook、学校邮箱等任意合法收件地址投递。当前 Windows 开发环境已使用 QQ 邮箱 SMTP 完成真实投递验证，配置示例：
+
+```powershell
+$env:CAMPUSLENS_MAIL_HOST = "smtp.qq.com"
+$env:CAMPUSLENS_MAIL_PORT = "587"
+$env:CAMPUSLENS_MAIL_USERNAME = "your-account@qq.com"
+$env:CAMPUSLENS_MAIL_PASSWORD = "your-qq-mail-authorization-code"
+$env:CAMPUSLENS_MAIL_FROM = $env:CAMPUSLENS_MAIL_USERNAME
+```
+
+密码必须使用邮件服务商提供的 SMTP 授权码，不要使用邮箱登录密码，也不要将真实密码或密钥提交到仓库。可通过 `CAMPUSLENS_PASSWORD_RESET_VALID_MINUTES` 和 `CAMPUSLENS_PASSWORD_RESET_COOLDOWN_SECONDS` 调整验证码有效期和发送冷却时间。
 
 ## 当前实现边界
 

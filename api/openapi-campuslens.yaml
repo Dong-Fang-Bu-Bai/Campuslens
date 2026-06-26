@@ -183,7 +183,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/AuthResponse"
         "400":
-          description: 用户名重复、密码过短或参数错误
+          description: 用户名或邮箱重复、密码过短或参数错误
   /api/auth/login:
     post:
       summary: 用户登录；admin/admin 会返回管理员身份
@@ -203,6 +203,134 @@ paths:
                 $ref: "#/components/schemas/AuthResponse"
         "400":
           description: 用户名或密码错误
+  /api/auth/password-reset/code:
+    post:
+      summary: 向账号绑定邮箱发送密码重置验证码
+      description: 输入绑定邮箱；无论邮箱是否已绑定均返回相同提示，同一账号 60 秒内不会重复发送。
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetCodeRequest"
+      responses:
+        "200":
+          description: 请求已受理
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasswordResetResponse"
+  /api/auth/password-reset/confirm:
+    post:
+      summary: 使用邮箱验证码设置新密码
+      description: 验证码 10 分钟有效、最多校验 5 次且只能使用一次；成功后撤销已有会话。
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetConfirmRequest"
+      responses:
+        "200":
+          description: 密码重置成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasswordResetResponse"
+        "400":
+          description: 验证码无效、过期或参数错误
+  /api/me/account:
+    get:
+      summary: 查询当前登录账号资料
+      tags: [User]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 当前账号资料
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountProfile"
+        "401":
+          description: 未登录、账号不存在或已停用
+  /api/me/account/email:
+    put:
+      summary: 更新当前登录账号邮箱
+      tags: [User]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountEmailUpdateRequest"
+      responses:
+        "200":
+          description: 邮箱更新成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountUpdateResponse"
+        "400":
+          description: 邮箱格式或长度不符合要求
+        "401":
+          description: 未登录
+  /api/me/account/password:
+    put:
+      summary: 验证当前密码后修改登录密码
+      tags: [User]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountPasswordUpdateRequest"
+      responses:
+        "200":
+          description: 密码修改成功，当前会话继续有效
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountUpdateResponse"
+        "400":
+          description: 当前密码错误、新密码过短或与当前密码相同
+        "401":
+          description: 未登录
+  /api/me/account/avatar:
+    post:
+      summary: 上传当前登录账号的裁剪头像
+      tags: [User]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: JPG 或 PNG，最大 5 MB，尺寸 32×32 至 4096×4096
+      responses:
+        "200":
+          description: 头像保存成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountUpdateResponse"
+        "400":
+          description: 文件为空、格式伪造、尺寸或大小不符合要求
+        "401":
+          description: 未登录
   /api/me/search-records:
     get:
       summary: 查询当前登录用户个人检索历史
@@ -282,6 +410,40 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CheckInRecord"
+        "400":
+          description: 检索记录状态不可用或地标不属于该记录 Top-5
+        "401":
+          description: 检索记录不属于当前登录用户或游客
+        "409":
+          description: 该检索记录已经发布过打卡
+  /api/check-ins/{id}:
+    get:
+      summary: 查询单条校园动态及完整回复树
+      tags: [CheckIn]
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: guestId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 帖子详情；replies 为完整嵌套回复树
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckInRecord"
+        "400":
+          description: 帖子不存在或已隐藏
   /api/check-ins/{id}/like:
     post:
       summary: 点赞或取消点赞打卡留言
@@ -335,9 +497,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CheckInReply"
+        "400":
+          description: 帖子不存在，或 parentReplyId 不属于当前帖子
+  /api/check-in-replies/{id}/like:
+    post:
+      summary: 点赞或取消点赞回复
+      tags: [CheckIn]
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: guestId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 回复点赞状态
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplyLikeResponse"
   /api/admin/auth/login:
     post:
-      summary: 管理员轻量登录（兼容旧接口，前端不直接展示）
+      summary: 管理员轻量登录（最终版兼容入口，前端默认不使用）
       tags: [Admin]
       requestBody:
         required: true
@@ -347,7 +537,7 @@ paths:
               $ref: "#/components/schemas/AdminLoginRequest"
       responses:
         "200":
-          description: 登录成功；V2 前端使用 /api/auth/login 隐式进入后台
+          description: 登录成功；最终版前端默认使用 /api/auth/login 隐式进入后台，本接口仅保留给旧联调脚本或兼容调用
           content:
             application/json:
               schema:
@@ -851,14 +1041,22 @@ components:
           format: date-time
     CheckInRequest:
       type: object
-      required: [landmarkId, message]
+      required: [searchRecordId, landmarkId, message]
       properties:
+        searchRecordId:
+          type: integer
+          format: int64
+          description: 当前用户或游客拥有的成功/低置信度检索记录
         landmarkId:
           type: integer
           format: int64
         message:
           type: string
           maxLength: 500
+        publishImage:
+          type: boolean
+          default: false
+          description: 是否在公共留言板展示该检索记录的上传图片
         guestId:
           type: string
           nullable: true
@@ -872,6 +1070,11 @@ components:
         guestId:
           type: string
           nullable: true
+        parentReplyId:
+          type: integer
+          format: int64
+          nullable: true
+          description: 为空表示回复帖子；非空表示回复当前帖子下的另一条回复
     CheckInReply:
       type: object
       properties:
@@ -881,10 +1084,26 @@ components:
         checkInId:
           type: integer
           format: int64
+        parentReplyId:
+          type: integer
+          format: int64
+          nullable: true
         displayName:
           type: string
         message:
           type: string
+        likeCount:
+          type: integer
+        replyCount:
+          type: integer
+          description: 直接子回复数量
+        likedByMe:
+          type: boolean
+        replies:
+          type: array
+          description: 帖子详情接口返回的嵌套子回复
+          items:
+            $ref: "#/components/schemas/CheckInReply"
         createdAt:
           type: string
           format: date-time
@@ -894,6 +1113,15 @@ components:
         id:
           type: integer
           format: int64
+        searchRecordId:
+          type: integer
+          format: int64
+          nullable: true
+          description: 历史兼容记录可能为空
+        sourceImageUrl:
+          type: string
+          nullable: true
+          description: 仅发布者选择公开照片时返回
         landmarkId:
           type: integer
           format: int64
@@ -913,6 +1141,7 @@ components:
           type: boolean
         replies:
           type: array
+          description: 列表接口为空；详情接口返回完整嵌套回复树
           items:
             $ref: "#/components/schemas/CheckInReply"
         createdAt:
@@ -928,9 +1157,19 @@ components:
           type: boolean
         likeCount:
           type: integer
+    ReplyLikeResponse:
+      type: object
+      properties:
+        replyId:
+          type: integer
+          format: int64
+        liked:
+          type: boolean
+        likeCount:
+          type: integer
     AuthRegisterRequest:
       type: object
-      required: [username, password]
+      required: [username, password, email]
       properties:
         username:
           type: string
@@ -943,8 +1182,8 @@ components:
         email:
           type: string
           format: email
-          nullable: true
-          description: 选填，用于绑定
+          maxLength: 160
+          description: 必填且唯一，用于账号密码找回
     AuthLoginRequest:
       type: object
       required: [username, password]
@@ -955,6 +1194,37 @@ components:
         password:
           type: string
           example: password123
+    PasswordResetCodeRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 160
+          example: student01@example.com
+    PasswordResetConfirmRequest:
+      type: object
+      required: [email, code, newPassword]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 160
+          example: student01@example.com
+        code:
+          type: string
+          pattern: "^[0-9]{6}$"
+          example: "123456"
+        newPassword:
+          type: string
+          minLength: 8
+          example: newpassword123
+    PasswordResetResponse:
+      type: object
+      properties:
+        message:
+          type: string
     AuthResponse:
       type: object
       properties:
@@ -966,6 +1236,10 @@ components:
         email:
           type: string
           nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+          description: 用户自定义头像地址；为空时前端生成固定像素头像
         role:
           type: string
           enum: [user, admin]
@@ -974,6 +1248,52 @@ components:
         token:
           type: string
           description: "服务端会话 token，调用需登录接口时放入 Authorization: Bearer"
+        message:
+          type: string
+    AccountProfile:
+      type: object
+      properties:
+        userId:
+          type: integer
+          format: int64
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+          description: 用户自定义头像地址；为空时前端生成固定像素头像
+        role:
+          type: string
+          enum: [user, admin]
+        admin:
+          type: boolean
+    AccountEmailUpdateRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 160
+          nullable: true
+          description: 传入空字符串或 null 时清除邮箱
+    AccountPasswordUpdateRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+          minLength: 8
+    AccountUpdateResponse:
+      type: object
+      properties:
+        account:
+          $ref: "#/components/schemas/AccountProfile"
         message:
           type: string
     AdminLoginRequest:
@@ -1104,7 +1424,8 @@ components:
           format: int64
         syncStatus:
           type: string
-          enum: [sync_pending, synced, sync_failed]
+          description: 当前主流程使用 pending_index 和 published；其余值仅兼容旧版记录
+          enum: [pending_index, published, sync_pending, synced, sync_failed]
         suggestAccept:
           type: boolean
           nullable: true

@@ -2,7 +2,7 @@
   <section class="history-page v3-panel">
     <div class="v3-page-head">
       <div>
-        <p class="eyebrow">My Records</p>
+        <p class="eyebrow">{{ labels.kicker }}</p>
         <h3>{{ labels.title }}</h3>
       </div>
       <button type="button" class="ghost-btn" @click="$emit('refresh')">{{ labels.refresh }}</button>
@@ -37,16 +37,18 @@
             </div>
           </div>
         </div>
-        <div class="mini-rank-strip">
-          <button
+        <div class="mini-rank-strip history-candidate-strip">
+          <div
             v-for="item in record.topResults"
             :key="`${record.id}-${item.landmarkId}`"
-            type="button"
-            @click="$emit('open-feedback', record, item)"
+            class="history-candidate"
           >
-            <span>#{{ item.rank }}</span>
-            {{ item.name }}
-          </button>
+            <strong><span>#{{ item.rank }}</span>{{ item.name }}</strong>
+            <div>
+              <button type="button" @click="$emit('open-feedback', record, item)">{{ labels.feedback }}</button>
+              <button type="button" @click="$emit('open-check-in', record, item)">{{ labels.checkIn }}</button>
+            </div>
+          </div>
         </div>
       </article>
     </div>
@@ -63,15 +65,15 @@ const props = defineProps({
   language: { type: String, default: 'zh' }
 })
 
-defineEmits(['refresh', 'open-feedback'])
+defineEmits(['refresh', 'open-feedback', 'open-check-in'])
 
 function recordStatusLabel(status) {
   const isEn = props.language !== 'zh'
   return {
     success: isEn ? 'Success' : '成功',
-    low_confidence: isEn ? 'Low Match' : '低匹配',
-    empty_result: isEn ? 'Empty' : '空结果',
-    algorithm_unavailable: isEn ? 'Offline' : '算法不可用'
+    low_confidence: isEn ? 'Review Suggested' : '建议确认',
+    empty_result: isEn ? 'No Result' : '未找到结果',
+    algorithm_unavailable: isEn ? 'Service Unavailable' : '识别服务暂不可用'
   }[status] || status || '-'
 }
 
@@ -81,11 +83,13 @@ function feedbackStatusLabel(status) {
     pending: isEn ? 'Pending' : '反馈待处理',
     accepted: isEn ? 'Accepted' : '反馈已采纳',
     ignored: isEn ? 'Ignored' : '反馈已忽略'
-  }[status] || (isEn ? 'No Feedback' : '未反馈')
+  }[status] || (isEn ? 'No Feedback Submitted' : '未提交反馈')
 }
 
 function formatTime(value) {
   if (!value) return '-'
-  return new Date(value).toLocaleString(props.language === 'zh' ? 'zh-CN' : 'en-US', { hour12: false })
+  return new Date(value).toLocaleString(props.language === 'zh' ? 'zh-CN' : 'en-US', {
+    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false
+  })
 }
 </script>

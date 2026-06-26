@@ -267,7 +267,6 @@ class FAISSManager:
 
     # 统计计算
     def _compute_mahalanobis_distance(self, query_vector, stats)
-    def _calculate_mahalanobis_score(self, query_vector, stats)
     def _get_confidence_level(self, score, stats)
 ```
 
@@ -505,8 +504,7 @@ def mahalanobis_match_score(distance: float) -> float:
 def search_landmarks_by_category(
     self,
     query_vector: np.ndarray,
-    top_k: int = 5,
-    confidence_threshold: float = 0.7
+    top_k: int = 5
 ) -> List[dict]:
     """
     基于地标类别的搜索
@@ -514,7 +512,6 @@ def search_landmarks_by_category(
     Args:
         query_vector: 查询图片的特征向量
         top_k: 返回的地标数量
-        confidence_threshold: 兼容旧调用，当前不参与匹配分计算
 
     Returns:
         地标列表，包含马氏距离和经验匹配分
@@ -751,7 +748,9 @@ class TestMahalanobisDistance(unittest.TestCase):
         }
 
         query = mean + np.random.randn(768) * 0.1
-        score = self.manager._calculate_mahalanobis_score(query, stats)
+        score = mahalanobis_match_score(
+            self.manager._compute_mahalanobis_distance(query, stats)
+        )
 
         self.assertGreaterEqual(score, 0.0)
         self.assertLessEqual(score, 1.0)
@@ -868,7 +867,9 @@ class TestMahalanobisDistance(unittest.TestCase):
         }
 
         query = mean + np.random.randn(768) * 0.1
-        score = self.manager._calculate_mahalanobis_score(query, stats)
+        score = mahalanobis_match_score(
+            self.manager._compute_mahalanobis_distance(query, stats)
+        )
 
         self.assertGreaterEqual(score, 0.0)
         self.assertLessEqual(score, 1.0)

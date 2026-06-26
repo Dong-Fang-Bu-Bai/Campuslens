@@ -7,6 +7,7 @@
 @jobId = 请复制上传接口返回的 jobId
 @jobToken = 请复制上传接口返回的 jobToken
 @rebuildJobId = 请复制索引重建接口返回的 rebuildJobId
+@checkInSearchRecordId = 请复制本人成功或低置信度检索返回的 searchRecordId
 
 ### 后端健康检查
 GET {{backend}}/api/health
@@ -130,13 +131,19 @@ Authorization: Bearer {{userToken}}
 Content-Type: application/json
 
 {
+  "searchRecordId": {{checkInSearchRecordId}},
   "landmarkId": 1,
   "message": "图书馆门口完成打卡，入口角度适合拍摄识别样本。",
+  "publishImage": false,
   "guestId": "{{guestId}}"
 }
 
 ### 点赞或取消点赞
 POST {{backend}}/api/check-ins/1/like?guestId={{guestId}}
+Authorization: Bearer {{userToken}}
+
+### 查看单条校园动态及回复树
+GET {{backend}}/api/check-ins/1?guestId={{guestId}}
 Authorization: Bearer {{userToken}}
 
 ### 回复打卡留言
@@ -146,8 +153,24 @@ Content-Type: application/json
 
 {
   "message": "同一位置傍晚光线也比较稳定。",
-  "guestId": "{{guestId}}"
+  "guestId": "{{guestId}}",
+  "parentReplyId": null
 }
+
+### 回复另一条评论
+POST {{backend}}/api/check-ins/1/replies
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+{
+  "message": "赞同你的拍摄建议。",
+  "guestId": "{{guestId}}",
+  "parentReplyId": 1
+}
+
+### 点赞或取消点赞回复
+POST {{backend}}/api/check-in-replies/1/like?guestId={{guestId}}
+Authorization: Bearer {{userToken}}
 
 ### 查看最近检索记录
 GET {{backend}}/api/admin/search-records

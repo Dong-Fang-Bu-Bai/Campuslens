@@ -84,6 +84,8 @@ scripts\verify.cmd
 - 后端任务消费者：正式检索调用算法服务 `POST /api/v1/search/batch`；`POST /api/v1/search` 保留给单图诊断。
 - 管理员运维：通过后端 `/api/admin/algorithm/runtime`、`/api/admin/index/rebuild` 和 `/api/admin/index/rebuild/{jobId}` 操作，不由前端直连算法服务。
 
+前端地标列表来自 `GET /api/landmarks`，代表图优先使用后端返回的 `coverImageUrl` 或 `imageUrl`。页面不再使用外网演示地标数据，也不会在未上传图片时伪造默认 Top-5；未检索状态只显示等待上传的空态。
+
 后端路径参数使用 Java 风格 `{jobId}`；算法服务的重建状态路径在 FastAPI 文档中显示为 `{job_id}`。两者都是路径占位符，不代表 JSON 字段改名。
 
 ### 终端编码
@@ -102,6 +104,8 @@ algorithm/data/faiss_index/landmark_stats.pkl
 模型权重和 `algorithm/data/faiss_index/` 下的索引产物不提交到 GitHub。模型文件按 `algorithm/README.md` 下载到本地；索引和统计参数在算法服务启动后通过 `POST /api/v1/index/rebuild` 触发生成。
 
 MySQL 和 Redis 是默认启动路径，不需要额外设置 `CAMPUSLENS_BACKEND_PROFILE`。`start.cmd` 会检查当前环境、启动 Windows Docker Desktop、复用 Compose 镜像和命名数据卷，再启动后端、双算法实例及单个 HTTPS 前端。数据库结构和基础种子数据统一由 Flyway 管理。
+
+忘记密码邮件通过标准 SMTP + STARTTLS 发送，收件邮箱不限于发件邮箱服务商。当前开发环境使用 QQ 邮箱 SMTP，并已完成真实验证码投递验证。启动前设置 `CAMPUSLENS_MAIL_USERNAME`、`CAMPUSLENS_MAIL_PASSWORD`，并按发件服务商设置 `CAMPUSLENS_MAIL_HOST`、`CAMPUSLENS_MAIL_PORT` 和 `CAMPUSLENS_MAIL_FROM`；具体示例见 `backend/README.md`。发件密码应使用 SMTP 授权码，禁止提交到仓库。
 
 ```powershell
 scripts\start.cmd

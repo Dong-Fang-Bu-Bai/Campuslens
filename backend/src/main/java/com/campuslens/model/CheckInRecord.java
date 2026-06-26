@@ -5,6 +5,8 @@ import java.util.List;
 
 public record CheckInRecord(
     Long id,
+    Long searchRecordId,
+    String sourceImageUrl,
     Long landmarkId,
     String landmarkCode,
     String landmarkName,

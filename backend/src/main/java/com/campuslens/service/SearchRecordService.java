@@ -119,6 +119,20 @@ public class SearchRecordService {
         .orElseThrow(() -> new IllegalArgumentException("searchRecordId 对应的检索记录不存在"));
   }
 
+  public CheckInSource checkInSource(Long searchRecordId) {
+    return jdbcTemplate.query("""
+        SELECT status, user_id, guest_id, upload_image_url
+        FROM search_record
+        WHERE id = ?
+        """, (rs, rowNum) -> new CheckInSource(
+        rs.getString("status"),
+        rs.getObject("user_id") == null ? null : rs.getLong("user_id"),
+        rs.getString("guest_id"),
+        rs.getString("upload_image_url")), searchRecordId).stream()
+        .findFirst()
+        .orElseThrow(() -> new IllegalArgumentException("searchRecordId 对应的检索记录不存在"));
+  }
+
   public List<AdminSearchRecord> listRecent() {
     return jdbcTemplate.query("""
         SELECT sr.id, sr.upload_image_url, l.name AS best_landmark_name, sr.best_score,
@@ -208,6 +222,8 @@ public class SearchRecordService {
   }
 
   public record FeedbackTarget(String status, Long userId, String guestId) {}
+
+  public record CheckInSource(String status, Long userId, String guestId, String uploadImageUrl) {}
 
   private record SearchResultSnapshot(
       int rank,

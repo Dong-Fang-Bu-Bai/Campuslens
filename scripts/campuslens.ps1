@@ -27,6 +27,21 @@ $algorithmPython = if ($env:CAMPUSLENS_ALGORITHM_PYTHON) {
 $env:Path = "$mavenBin;$dockerBin;$env:Path"
 New-Item -ItemType Directory -Force -Path $runDir | Out-Null
 
+function Import-UserMailEnvironment {
+    foreach ($name in @(
+        "CAMPUSLENS_MAIL_HOST",
+        "CAMPUSLENS_MAIL_PORT",
+        "CAMPUSLENS_MAIL_USERNAME",
+        "CAMPUSLENS_MAIL_PASSWORD",
+        "CAMPUSLENS_MAIL_FROM"
+    )) {
+        if (-not (Get-Item "Env:$name" -ErrorAction SilentlyContinue)) {
+            $value = [Environment]::GetEnvironmentVariable($name, "User")
+            if ($value) { Set-Item "Env:$name" $value }
+        }
+    }
+}
+
 function Write-Step([string]$message) {
     Write-Host "[CampusLens] $message"
 }
@@ -207,6 +222,7 @@ function Stop-ManagedPorts([hashtable[]]$services) {
 }
 
 function Start-Stack {
+    Import-UserMailEnvironment
     Assert-Environment
     Ensure-Docker
     Ensure-Certificate

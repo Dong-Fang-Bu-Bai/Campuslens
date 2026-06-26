@@ -24,21 +24,29 @@ Vue 前端 -> Spring Boot 提交接口 -> MySQL + Redis ready/processing/delayed
 | `GET /api/landmarks` | 获取地标列表 | M2 叶炳良 |
 | `GET /api/landmarks/{id}` | 获取地标详情 | M2 叶炳良，M4 洪传凯 |
 | `POST /api/feedback` | 提交识别纠错反馈 | M5 庄子杰 |
-| `POST /api/auth/register` | 普通用户注册，用户名唯一，密码至少 8 位，邮箱选填 | M1 / M4 |
+| `POST /api/auth/register` | 普通用户注册，用户名和邮箱唯一，密码至少 8 位，邮箱必填并用于密码找回 | M1 / M4 |
 | `POST /api/auth/login` | 用户登录；输入 `admin/admin` 时返回管理员身份并由前端自动进入后台 | M1 / M4 |
+| `POST /api/auth/password-reset/code` | 输入绑定邮箱后发送 6 位验证码；统一响应避免泄露邮箱绑定状态，60 秒内不重复发送 | M1 / M4 |
+| `POST /api/auth/password-reset/confirm` | 使用绑定邮箱和 10 分钟内有效的验证码设置新密码；最多校验 5 次，成功后撤销旧会话 | M1 / M4 |
+| `GET /api/me/account` | 登录用户或管理员查看自己的账号资料 | M1 / M4 |
+| `PUT /api/me/account/email` | 登录用户或管理员更新自己的唯一绑定邮箱，邮箱不能为空 | M1 / M4 |
+| `PUT /api/me/account/password` | 校验当前密码后更新密码，新密码至少 8 位且不能与当前密码相同 | M1 / M4 |
+| `POST /api/me/account/avatar` | 上传裁剪后的 JPG/PNG 头像，最大 5 MB；服务端校验真实图片并替换旧头像 | M1 / M4 |
 | `GET /api/me/search-records` | 登录用户查看自己的检索历史，返回上传图、最高候选、Top-5 快照和反馈状态 | M1 / M4 |
 | `GET /api/check-ins` | 查询校园打卡留言，可按 `landmarkId` 过滤 | M2 / M4 / M5 |
-| `POST /api/check-ins` | 发布打卡留言，登录用户显示用户名，游客显示 `guest#number` | M2 / M4 / M5 |
+| `POST /api/check-ins` | 从本人识图记录的 Top-5 候选发布打卡留言；每条检索记录限一次 | M2 / M4 / M5 |
+| `GET /api/check-ins/{id}` | 查询单条校园动态及完整嵌套回复树 | M2 / M4 / M5 |
 | `POST /api/check-ins/{id}/like` | 点赞或取消点赞打卡留言 | M4 / M5 |
-| `POST /api/check-ins/{id}/replies` | 发表一级回复 | M4 / M5 |
+| `POST /api/check-ins/{id}/replies` | 回复帖子或通过 `parentReplyId` 回复另一条评论 | M4 / M5 |
+| `POST /api/check-in-replies/{id}/like` | 点赞或取消点赞回复 | M4 / M5 |
 
 ## 后台辅助接口
 
-第三周 V2 提供后台入口。前端不再显示管理员专用登录框，统一通过右上角“登录/注册”进入认证页面。普通用户按注册/登录流程进入主页面；输入 `admin/admin` 时后端返回 `role=admin`、`token` 和管理员身份，前端自动进入后台。后台接口统一要求 `Authorization: Bearer <token>`，并在服务端校验管理员角色。密码字段以 PBKDF2 哈希形式落库，不再保存明文口令。
+第三周 V2 提供后台入口。最终版前端不再显示管理员专用登录框，统一通过右上角“登录/注册”进入认证页面。普通用户按注册/登录流程进入主页面；输入 `admin/admin` 时后端返回 `role=admin`、`token` 和管理员身份，前端自动进入后台。后台接口统一要求 `Authorization: Bearer <token>`，并在服务端校验管理员角色。密码字段以 PBKDF2 哈希形式落库，不再保存明文口令。
 
 | 接口 | 说明 | 负责人 |
 | --- | --- | --- |
-| `POST /api/admin/auth/login` | 管理员轻量登录兼容旧接口，前端不直接展示 | M1 / M4 |
+| `POST /api/admin/auth/login` | 管理员轻量登录最终版兼容入口，前端默认不使用 | M1 / M4 |
 | `GET /api/admin/search-records` | 查看最近检索记录，需管理员 token | M1 / M4 |
 | `POST /api/admin/landmarks` | 新增地标，需管理员 token | M2 |
 | `PUT /api/admin/landmarks/{id}` | 修改地标，需管理员 token | M2 |
@@ -77,6 +85,7 @@ Vue 前端 -> Spring Boot 提交接口 -> MySQL + Redis ready/processing/delayed
 ## Top-5 返回规则
 
 - 返回的是 Top-5 地标，不是 Top-5 图片。
+- 前端初始页不再预置外网演示地标或伪 Top-5；只有完成真实检索任务后才展示候选结果，未检索时显示等待上传的空态。
 - 每个地标根据样本特征估计均值向量和协方差矩阵，查询时计算马氏距离并换算为经验归一化匹配分。
 - Top-5 按 `score` 从高到低排序；`score` 越高，表示查询图越接近该地标特征分布。该分数用于排序和展示区分度，不具备概率或统计置信度含义。
 - 后端对外返回字段至少包含：`rank`、`landmarkId`、`landmarkCode`、`name`、`score`、`confidenceLevel`、`mahalanobisDistance`、`coverImageUrl`、`summary`、`locationText`、`mapX`、`mapY`。
@@ -110,14 +119,17 @@ Vue 前端 -> Spring Boot 提交接口 -> MySQL + Redis ready/processing/delayed
 
 反馈提交前会校验任务已进入 `success` 或 `low_confidence` 终态，并校验 `predictedLandmarkId` 来自本次 Top-5。登录任务必须由同一 Bearer 用户提交反馈；游客任务必须携带与检索记录一致的 `guestId`。反馈写入后默认为 `pending`，后台可更新为 `accepted` 或 `ignored`。
 
-第四周 V3 已扩展反馈采纳闭环：管理员将反馈更新为 `accepted` 后，后端会创建 `correction_sample` 记录，并通过异步任务通知算法服务 `/api/v1/adaptation/correction-samples`。算法服务返回 `suggestAccept`、`reviewScore`、`reason`、`sarEligible` 和 `nextAction` 后，后端将校正样本标记为 `synced`；若算法服务不可用或超时，校正样本保留为 `sync_failed`，管理员采纳动作不回滚。
+第四周 V3 已扩展反馈采纳闭环：管理员将反馈更新为 `accepted` 后，后端校验上传原图位于受控 `uploads/` 目录，将图片复制到确认地标的 `pending_index/` 目录，并创建 `correction_sample` 记录，状态为 `pending_index`。管理员触发索引重建后，算法服务使用正式样本和待发布样本构建候选模型与完整索引；验证和原子发布成功后，后端将相关校正样本更新为 `published` 并记录 `publishedIndexVersion`。旧版 `sync_pending`、`synced`、`sync_failed` 仅作为历史数据兼容状态，不再表示当前主流程。
 
 ## 打卡留言规则
 
-- 打卡留言复用 L01-L10 地标 ID 和地图坐标，不新增独立地点字典。
-- 登录用户发布留言、点赞和回复时显示用户名；未登录游客使用 `guestId`，无效游客编号由后端规范化为 `guest#number`。
-- 留言和回复当前只支持一级文本互动，单条内容最长 500 字符。
-- 后台内容删除能力作为后续扩展预留，本周先实现用户端查询、发布、点赞和一级回复。
+- 新打卡必须提交 `searchRecordId`、Top-5 内的 `landmarkId` 和留言；检索记录须归当前用户或游客所有，状态为 `success` 或 `low_confidence`，且每条记录只能发布一次。V16 前的无来源历史记录继续可读。
+- `publishImage` 默认为 `false`；只有发布者主动开启时，列表响应才通过 `sourceImageUrl` 返回上传图片。
+- 登录用户发布留言、点赞和回复时显示用户名；未登录游客使用由 `POST /api/guests` 分配且数据库中真实存在的 `guestId`。格式非法或不存在的游客编号会被拒绝。
+- 留言和回复单条内容最长 500 字符。`parentReplyId` 为空时回复帖子，非空时必须指向当前帖子下可见的回复；服务端按父子关系返回任意层级回复树。
+- `GET /api/check-ins` 只返回帖子摘要和计数，`replies` 为空；进入详情页后由 `GET /api/check-ins/{id}` 返回完整回复树，避免主列表加载全部讨论。
+- 每条回复返回创建时间、点赞数、当前访问者点赞状态和直接子回复数；登录用户与持久化游客都可切换回复点赞。
+- 后台内容删除能力作为后续扩展预留，当前实现用户端查询、发布、帖子/回复点赞和多级回复。
 
 ## 个人历史规则
 
