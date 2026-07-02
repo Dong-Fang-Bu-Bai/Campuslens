@@ -17,7 +17,7 @@
         </label>
         <label v-if="mode === 'login' || mode === 'register'">
           {{ labels.password }}
-          <input :value="form.password" required minlength="8" type="password" :autocomplete="mode === 'login' ? 'current-password' : 'new-password'" @input="update('password', $event.target.value)" />
+          <input :value="form.password" required :minlength="mode === 'register' ? 8 : undefined" type="password" :autocomplete="mode === 'login' ? 'current-password' : 'new-password'" @input="update('password', $event.target.value)" />
         </label>
         <button v-if="mode === 'login'" class="auth-text-action" type="button" @click="$emit('switch-mode', 'forgot')">
           {{ labels.forgotPassword }}
