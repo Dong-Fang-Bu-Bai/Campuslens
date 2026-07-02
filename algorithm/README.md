@@ -376,7 +376,7 @@ GET /api/v1/index/stats
 POST /api/v1/adaptation/correction-samples
 ```
 
-接收后端提交的校正样本和原检索结果，计算 `suggestAccept`、`reviewScore` 与后续动作，并写入本地 manifest。该接口不会直接把用户反馈作为真值更新 SAR 参数；样本是否进入正式索引，由后端审核及后续索引重建流程决定。
+用户提交反馈后，后端调用该接口评估图片和原检索结果，计算 `suggestAccept`、`reviewScore` 与评估原因，并写入本地评估 manifest。该接口不会自动采纳反馈、复制待发布样本或更新 SAR 参数；样本只有在管理员采纳后才进入后续索引重建流程。
 
 ### 接口汇总
 
@@ -389,7 +389,7 @@ POST /api/v1/adaptation/correction-samples
 | `/api/v1/index/stats` | GET | 活动索引统计 |
 | `/api/v1/index/rebuild` | POST | 创建索引重建任务 |
 | `/api/v1/index/rebuild/{job_id}` | GET | 查询重建状态 |
-| `/api/v1/adaptation/correction-samples` | POST | 写入校正样本 |
+| `/api/v1/adaptation/correction-samples` | POST | 评估反馈校正样本并生成审核建议 |
 
 ---
 

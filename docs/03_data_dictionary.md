@@ -171,7 +171,7 @@
 
 ## CorrectionSample 校正样本
 
-第四周 V3 新增。管理员采纳反馈后先写入该表，不直接污染正式地标样本库。算法服务接收元数据后写入 JSONL manifest，用于后续自适应或人工复核。
+第四周 V3 新增。用户提交反馈后先写入评估记录；只有管理员采纳后，图片才进入待发布样本目录，不直接污染正式地标样本库。算法评估只提供建议，不自动改变反馈状态或当前 SAR 状态。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -180,16 +180,17 @@
 | `searchRecordId` | Long | 来源检索记录 |
 | `uploadImageUrl` | String | 用户上传图路径 |
 | `predictedLandmarkId` | Long | 原预测地标 |
-| `confirmedLandmarkId` | Long | 管理员采纳后的确认地标 |
+| `confirmedLandmarkId` | Long | 用户反馈确认的地标 |
 | `confirmedLandmarkCode` | String | 确认地标编号，如 `L02` |
 | `sourceFeedbackType` | String | 来源反馈类型 |
 | `topResultsJson` | Text | 来源检索 Top-5 快照 |
-| `syncStatus` | String | 当前主流程为 `pending_index` 或 `published`；`sync_pending`、`synced`、`sync_failed` 仅兼容旧记录 |
+| `syncStatus` | String | 样本发布状态：`not_staged`、`pending_index` 或 `published`；其他值仅兼容旧记录 |
+| `evaluationStatus` | String | 算法评估状态：`pending`、`completed`、`failed` 或 `legacy_unavailable` |
 | `suggestAccept` | Boolean | 算法是否建议采纳 |
 | `reviewScore` | Decimal | 基于 Top-5 分数构造的伪概率评估分 |
 | `reason` | String | 算法建议或失败原因 |
 | `sarEligible` | Boolean | 是否满足 SAR 思路下的可靠样本门槛 |
-| `nextAction` | String | 建议动作，如 `append_to_manifest` 或 `manual_review` |
+| `nextAction` | String | 后端流程动作，如 `await_admin_decision`、`rebuild_index` 或 `none` |
 | `algorithmResponseJson` | Text | 算法接口原始响应 |
 | `datasetPath` | String | 待发布样本在受控地标目录中的实际路径 |
 | `publishedIndexVersion` | String | 样本正式发布时对应的索引版本 |

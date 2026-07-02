@@ -247,6 +247,7 @@ CREATE TABLE IF NOT EXISTS correction_sample (
   source_feedback_type VARCHAR(50) NOT NULL,
   top_results_json TEXT,
   sync_status VARCHAR(50) NOT NULL DEFAULT 'sync_pending',
+  evaluation_status VARCHAR(50) NOT NULL DEFAULT 'legacy_unavailable',
   suggest_accept BOOLEAN,
   review_score DECIMAL(8, 6),
   reason VARCHAR(500),

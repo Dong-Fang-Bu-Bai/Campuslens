@@ -170,6 +170,7 @@ function scoreLabel(value) {
 
 function syncStatusLabel(value) {
   return {
+    not_staged: props.labels.syncNotStaged,
     sync_pending: props.labels.syncPending,
     synced: props.labels.synced,
     sync_failed: props.labels.syncFailed,
@@ -179,8 +180,10 @@ function syncStatusLabel(value) {
 }
 
 function adviceLabel(sample) {
-  if (!sample) return props.labels.advicePending
-  if (sample.reviewScore == null) return props.labels.adviceWait
+  if (!sample || sample.evaluationStatus === 'legacy_unavailable') return props.labels.adviceLegacy
+  if (sample.evaluationStatus === 'failed') return props.labels.adviceFailed
+  if (sample.evaluationStatus === 'pending') return props.labels.adviceWait
+  if (sample.reviewScore == null) return props.labels.adviceLegacy
   return `${sample.suggestAccept ? props.labels.adviceAccept : props.labels.adviceReview} · ${Math.round(Number(sample.reviewScore) * 100)}%`
 }
 </script>

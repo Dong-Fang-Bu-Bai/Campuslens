@@ -317,7 +317,7 @@ async def receive_correction_sample(
         and entropy < Config.SAR_ENTROPY_THRESHOLD
     )
     suggest_accept = sar_eligible and payload.feedbackType in {"correct", "wrong"}
-    next_action = "rebuild_model_and_index" if suggest_accept else "manual_review"
+    next_action = "await_admin_decision" if suggest_accept else "manual_review"
     reason = (
         "confirmed landmark appears in Top results; store as weak-label correction sample"
         if matched is not None
@@ -327,8 +327,7 @@ async def receive_correction_sample(
     activation = {"activated": False}
     adaptation_error = None
     if suggest_accept:
-        next_action = "pending_index"
-        reason = "accepted samples are staged by the backend and published only by an index rebuild"
+        reason = "confirmed landmark meets the recommendation threshold; administrator approval is required before staging"
 
     response_data = CorrectionSampleResponse(
         suggestAccept=suggest_accept,

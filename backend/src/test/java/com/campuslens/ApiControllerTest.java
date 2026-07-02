@@ -690,10 +690,22 @@ class ApiControllerTest {
             new AlgorithmSearchResult(2, "L02", "学术大讲堂", 0.72, "medium", 6.45)),
         false,
         "Search successful"));
+    when(algorithmSearchClient.submitCorrectionSample(any(AdaptationRequest.class), any(Path.class)))
+        .thenReturn(new AdaptationResponse(
+            true, 0.88, "建议采纳该反馈", true,
+            "manual_review", null, false, null));
     String userToken = register("feedback01", "password123");
     long searchRecordId = uploadWithToken(userToken);
     long feedbackId = createWrongFeedback(searchRecordId, 1, 2, userToken);
     String adminToken = login("admin", "admin");
+
+    String evaluated = waitForFeedbackEvaluation(adminToken, feedbackId, "completed");
+    assertThat(evaluated).contains("\"syncStatus\":\"not_staged\"");
+    assertThat(evaluated).contains("\"suggestAccept\":true");
+    assertThat(evaluated).contains("\"reviewScore\":0.88");
+    assertThat(jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM correction_sample WHERE feedback_id = ? AND dataset_path IS NOT NULL",
+        Integer.class, feedbackId)).isZero();
 
     mockMvc.perform(post("/api/admin/feedback/" + feedbackId + "/status")
             .header("Authorization", "Bearer " + adminToken)
@@ -708,20 +720,29 @@ class ApiControllerTest {
 
     String detail = waitForFeedbackDetail(adminToken, feedbackId, "pending_index");
     assertThat(detail).contains("\"syncStatus\":\"pending_index\"");
+    assertThat(detail).contains("\"evaluationStatus\":\"completed\"");
     assertThat(detail).contains("\"suggestAccept\":true");
     assertThat(detail).contains("\"confirmedLandmarkId\":2");
   }
 
   @Test
-  void acceptingFeedbackDoesNotDependOnAlgorithmAdaptationEndpoint() throws Exception {
+  void administratorCanAcceptWhenEvaluationFails() throws Exception {
     mockSearch(new AlgorithmSearchResponse(
         List.of(new AlgorithmSearchResult(1, "L01", "图书馆", 0.91, "high", 3.12)),
         false,
         "Search successful"));
+    when(algorithmSearchClient.submitCorrectionSample(any(AdaptationRequest.class), any(Path.class)))
+        .thenThrow(new AlgorithmSearchException("算法服务暂不可用"));
     String userToken = register("feedback02", "password123");
     long searchRecordId = uploadWithToken(userToken);
     long feedbackId = createWrongFeedback(searchRecordId, 1, 1, userToken);
     String adminToken = login("admin", "admin");
+
+    String failed = waitForFeedbackEvaluation(adminToken, feedbackId, "failed");
+    assertThat(failed).contains("\"status\":\"pending\"");
+    assertThat(jdbcTemplate.queryForObject(
+        "SELECT reason FROM correction_sample WHERE feedback_id = ?",
+        String.class, feedbackId)).isEqualTo("算法服务暂不可用");
 
     mockMvc.perform(post("/api/admin/feedback/" + feedbackId + "/status")
             .header("Authorization", "Bearer " + adminToken)
@@ -735,7 +756,30 @@ class ApiControllerTest {
 
     String detail = waitForFeedbackDetail(adminToken, feedbackId, "pending_index");
     assertThat(detail).contains("\"syncStatus\":\"pending_index\"");
+    assertThat(detail).contains("\"evaluationStatus\":\"failed\"");
     assertThat(detail).contains("\"status\":\"accepted\"");
+  }
+
+  @Test
+  void feedbackEvaluationCanRecommendManualReviewWithoutChangingStatus() throws Exception {
+    mockSearch(new AlgorithmSearchResponse(
+        List.of(new AlgorithmSearchResult(1, "L01", "图书馆", 0.55, "low", 8.12)),
+        true,
+        "Low match score, manual verification recommended"));
+    when(algorithmSearchClient.submitCorrectionSample(any(AdaptationRequest.class), any(Path.class)))
+        .thenReturn(new AdaptationResponse(
+            false, 0.42, "确认地标不满足自动采纳门槛", false,
+            "manual_review", null, false, null));
+    String userToken = register("feedback03", "password123");
+    long searchRecordId = uploadWithToken(userToken);
+    long feedbackId = createWrongFeedback(searchRecordId, 1, 2, userToken);
+    String adminToken = login("admin", "admin");
+
+    String detail = waitForFeedbackEvaluation(adminToken, feedbackId, "completed");
+    assertThat(detail).contains("\"status\":\"pending\"");
+    assertThat(detail).contains("\"syncStatus\":\"not_staged\"");
+    assertThat(detail).contains("\"suggestAccept\":false");
+    assertThat(detail).contains("\"reviewScore\":0.42");
   }
 
   @Test
@@ -1199,6 +1243,22 @@ class ApiControllerTest {
       Thread.sleep(100);
     }
     return detail;
+  }
+
+  private String waitForFeedbackEvaluation(
+      String adminToken, long feedbackId, String expectedEvaluationStatus) throws Exception {
+    String detail = "";
+    for (int i = 0; i < 30; i++) {
+      detail = mockMvc.perform(get("/api/admin/feedback/" + feedbackId)
+              .header("Authorization", "Bearer " + adminToken))
+          .andExpect(status().isOk())
+          .andReturn().getResponse().getContentAsString();
+      if (detail.contains("\"evaluationStatus\":\"" + expectedEvaluationStatus + "\"")) {
+        return detail;
+      }
+      Thread.sleep(100);
+    }
+    throw new AssertionError("反馈评估未在测试时限内完成: " + detail);
   }
 
   private long extractLong(String json, String field) {

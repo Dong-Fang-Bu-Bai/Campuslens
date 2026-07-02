@@ -1424,8 +1424,12 @@ components:
           format: int64
         syncStatus:
           type: string
-          description: 当前主流程使用 pending_index 和 published；其余值仅兼容旧版记录
-          enum: [pending_index, published, sync_pending, synced, sync_failed]
+          description: 样本发布状态；评估阶段为 not_staged，管理员采纳后进入 pending_index
+          enum: [not_staged, pending_index, published, sync_pending, synced, sync_failed]
+        evaluationStatus:
+          type: string
+          description: 独立于管理员决策的算法评估状态
+          enum: [pending, completed, failed, legacy_unavailable]
         suggestAccept:
           type: boolean
           nullable: true
