@@ -311,12 +311,14 @@ public class SearchJobRepository {
       String summary,
       String locationText,
       double mapX,
-      double mapY) {
+      double mapY,
+      Double longitude,
+      Double latitude) {
     private static SearchResultSnapshot from(SearchResult result) {
       return new SearchResultSnapshot(
           result.rank(), result.landmarkId(), result.landmarkCode(), result.name(), result.englishName(),
           result.score(), result.confidenceLevel(), result.mahalanobisDistance(), result.summary(),
-          result.locationText(), result.mapX(), result.mapY());
+          result.locationText(), result.mapX(), result.mapY(), result.longitude(), result.latitude());
     }
   }
 

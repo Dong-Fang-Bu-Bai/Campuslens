@@ -30,7 +30,7 @@ public class LandmarkService {
   private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
   private static final String BASE_SELECT = """
       SELECT id, code, name, english_name, type, summary, description,
-             location_text, map_x, map_y, cover_image_url
+             location_text, map_x, map_y, longitude, latitude, cover_image_url
       FROM landmark
       """;
 
@@ -46,6 +46,8 @@ public class LandmarkService {
       rs.getString("location_text"),
       toDouble(rs.getBigDecimal("map_x")),
       toDouble(rs.getBigDecimal("map_y")),
+      toNullableDouble(rs.getBigDecimal("longitude")),
+      toNullableDouble(rs.getBigDecimal("latitude")),
       rs.getString("cover_image_url"));
 
   public LandmarkService(JdbcTemplate jdbcTemplate) {
@@ -77,9 +79,9 @@ public class LandmarkService {
       PreparedStatement ps = connection.prepareStatement("""
           INSERT INTO landmark (
             code, name, english_name, type, summary, description,
-            location_text, map_x, map_y, cover_image_url
+            location_text, map_x, map_y, longitude, latitude, cover_image_url
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """, new String[] {"id"});
       fillLandmarkStatement(ps, request);
       return ps;
@@ -93,7 +95,7 @@ public class LandmarkService {
     int updated = jdbcTemplate.update("""
         UPDATE landmark
         SET code = ?, name = ?, english_name = ?, type = ?, summary = ?, description = ?,
-            location_text = ?, map_x = ?, map_y = ?, cover_image_url = ?
+            location_text = ?, map_x = ?, map_y = ?, longitude = ?, latitude = ?, cover_image_url = ?
         WHERE id = ?
         """,
         normalize(request.code()),
@@ -105,6 +107,8 @@ public class LandmarkService {
         normalizeNullable(request.locationText()),
         request.mapX(),
         request.mapY(),
+        request.longitude(),
+        request.latitude(),
         normalizeNullable(request.coverImageUrl()),
         id);
     if (updated == 0) {
@@ -152,7 +156,9 @@ public class LandmarkService {
         row.coverImageUrl(),
         row.locationText(),
         row.mapX(),
-        row.mapY());
+        row.mapY(),
+        row.longitude(),
+        row.latitude());
   }
 
   private LandmarkDetail detail(LandmarkRow row) {
@@ -168,6 +174,8 @@ public class LandmarkService {
         row.locationText(),
         row.mapX(),
         row.mapY(),
+        row.longitude(),
+        row.latitude(),
         images(row));
   }
 
@@ -200,12 +208,22 @@ public class LandmarkService {
     ps.setString(7, normalizeNullable(request.locationText()));
     ps.setDouble(8, request.mapX());
     ps.setDouble(9, request.mapY());
-    ps.setString(10, normalizeNullable(request.coverImageUrl()));
+    ps.setObject(10, request.longitude());
+    ps.setObject(11, request.latitude());
+    ps.setString(12, normalizeNullable(request.coverImageUrl()));
   }
 
   private void validate(LandmarkUpsertRequest request) {
     if (request.mapX() < 0 || request.mapX() > 100 || request.mapY() < 0 || request.mapY() > 100) {
       throw new IllegalArgumentException("地图坐标必须在 0 到 100 之间");
+    }
+    if ((request.longitude() == null) != (request.latitude() == null)) {
+      throw new IllegalArgumentException("经度和纬度必须同时提供");
+    }
+    if (request.longitude() != null
+        && (request.longitude() < -180 || request.longitude() > 180
+            || request.latitude() < -90 || request.latitude() > 90)) {
+      throw new IllegalArgumentException("经纬度超出合法范围");
     }
   }
 
@@ -273,6 +291,10 @@ public class LandmarkService {
     return value == null ? 0 : value.doubleValue();
   }
 
+  private static Double toNullableDouble(BigDecimal value) {
+    return value == null ? null : value.doubleValue();
+  }
+
   private record LandmarkRow(
       Long id,
       String code,
@@ -284,6 +306,8 @@ public class LandmarkService {
       String locationText,
       double mapX,
       double mapY,
+      Double longitude,
+      Double latitude,
       String coverImageUrl) {
   }
 }

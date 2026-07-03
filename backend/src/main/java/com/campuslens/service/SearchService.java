@@ -155,7 +155,9 @@ public class SearchService {
             item.summary(),
             item.locationText(),
             item.mapX(),
-            item.mapY()));
+            item.mapY(),
+            item.longitude(),
+            item.latitude()));
   }
 
   private SearchResponse recordedResponse(

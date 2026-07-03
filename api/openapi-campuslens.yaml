@@ -912,6 +912,16 @@ components:
           type: number
         mapY:
           type: number
+        longitude:
+          type: number
+          format: double
+          nullable: true
+          description: 高德 GCJ-02 导航经度；与 latitude 成对提供
+        latitude:
+          type: number
+          format: double
+          nullable: true
+          description: 高德 GCJ-02 导航纬度；与 longitude 成对提供
     LandmarkSummary:
       type: object
       properties:
@@ -936,6 +946,16 @@ components:
           type: number
         mapY:
           type: number
+        longitude:
+          type: number
+          format: double
+          nullable: true
+          description: 高德 GCJ-02 导航经度
+        latitude:
+          type: number
+          format: double
+          nullable: true
+          description: 高德 GCJ-02 导航纬度
     LandmarkDetail:
       allOf:
         - $ref: "#/components/schemas/LandmarkSummary"
@@ -949,6 +969,14 @@ components:
               type: number
             mapY:
               type: number
+            longitude:
+              type: number
+              format: double
+              nullable: true
+            latitude:
+              type: number
+              format: double
+              nullable: true
             images:
               type: array
               items:
@@ -1468,6 +1496,16 @@ components:
           type: number
         mapY:
           type: number
+        longitude:
+          type: number
+          format: double
+          nullable: true
+          description: 可选；必须与 latitude 同时提供
+        latitude:
+          type: number
+          format: double
+          nullable: true
+          description: 可选；必须与 longitude 同时提供
         coverImageUrl:
           type: string
     HealthResponse:

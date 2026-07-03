@@ -88,7 +88,7 @@ Vue 前端 -> Spring Boot 提交接口 -> MySQL + Redis ready/processing/delayed
 - 前端初始页不再预置外网演示地标或伪 Top-5；只有完成真实检索任务后才展示候选结果，未检索时显示等待上传的空态。
 - 每个地标根据样本特征估计均值向量和协方差矩阵，查询时计算马氏距离并换算为经验归一化匹配分。
 - Top-5 按 `score` 从高到低排序；`score` 越高，表示查询图越接近该地标特征分布。该分数用于排序和展示区分度，不具备概率或统计置信度含义。
-- 后端对外返回字段至少包含：`rank`、`landmarkId`、`landmarkCode`、`name`、`score`、`confidenceLevel`、`mahalanobisDistance`、`coverImageUrl`、`summary`、`locationText`、`mapX`、`mapY`。
+- 后端对外返回字段至少包含：`rank`、`landmarkId`、`landmarkCode`、`name`、`score`、`confidenceLevel`、`mahalanobisDistance`、`coverImageUrl`、`summary`、`locationText`、`mapX`、`mapY`、`longitude`、`latitude`。其中经纬度采用高德 GCJ-02 坐标系，缺失时同时返回 `null`。
 - 算法服务内部返回字段至少包含：`rank`、`landmarkCode`、`landmarkName`、`score`、`confidenceLevel`、`mahalanobisDistance`。用户任务响应仅新增 `sarApplied`、`trustLevel`、`modelVersion`；后端另行保存 `sarMode`、基准模型版本、索引版本和 SAR 状态版本用于追溯。
 - 服务级 `SAR_ENABLED` 默认开启，但请求字段 `sarMode` 默认关闭。仅 `sarMode=true` 的请求进入 SAR 流程；批量中的不同用户图片不会共享本次适配梯度。
 - 管理员采纳样本由后端从受控 `uploads/` 目录读取并通过 multipart 转发。只有校正样本通过熵、候选匹配分和标签存在性检查后，算法服务才会生成候选模型，并使用同一候选模型重建完整 FAISS 索引。模型和索引验证成功后才切换活动版本。

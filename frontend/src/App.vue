@@ -166,7 +166,17 @@
                 <span>{{ t('类型', 'Type') }}</span><strong>{{ localizedSelectedLandmark.type }}</strong>
                 <span>{{ t('地图坐标', 'Map Coordinates') }}</span><strong>{{ localizedSelectedLandmark.mapX }}%, {{ localizedSelectedLandmark.mapY }}%</strong>
               </div>
-              <button type="button" class="secondary-btn inline-action" @click="changeView('map')">{{ t('查看地图位置', 'Show on Map') }}</button>
+              <div class="detail-actions">
+                <button type="button" class="secondary-btn inline-action" @click="changeView('map')">{{ t('查看地图位置', 'Show on Map') }}</button>
+                <a
+                  v-if="selectedNavigationUrl"
+                  class="secondary-btn inline-action navigation-btn"
+                  :href="selectedNavigationUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >{{ t('去这里（高德步行导航）', 'Go here with AMap') }}</a>
+              </div>
+              <p v-if="!selectedNavigationUrl" class="navigation-unavailable">{{ t('该地点暂未配置导航坐标', 'Navigation is not configured for this landmark.') }}</p>
             </article>
 
             <div 
@@ -280,6 +290,18 @@
               >
                 <span>{{ item.code }}</span>{{ item.name }}
               </button>
+            </div>
+            <div v-if="localizedSelectedLandmark" class="map-navigation-card">
+              <strong>{{ localizedSelectedLandmark.code }} {{ localizedSelectedLandmark.name }}</strong>
+              <span>{{ localizedSelectedLandmark.locationText }}</span>
+              <a
+                v-if="selectedNavigationUrl"
+                class="secondary-btn navigation-btn"
+                :href="selectedNavigationUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+              >{{ t('去这里（高德步行导航）', 'Go here with AMap') }}</a>
+              <small v-else>{{ t('该地点暂未配置导航坐标', 'Navigation is not configured for this landmark.') }}</small>
             </div>
           </aside>
         </section>
@@ -448,6 +470,7 @@
     <LandmarkModal
       :show="showModal"
       :landmark="localizedModalLandmark"
+      :navigation-url="modalNavigationUrl"
       :labels="modalLabels"
       @close="closeModal"
       @jump-map="jumpModalToMap"
@@ -513,6 +536,7 @@ import LandmarkModal from './components/LandmarkModal.vue'
 import InteractiveBackground from './components/InteractiveBackground.vue'
 import PreferencesDock from './components/PreferencesDock.vue'
 import UserAvatar from './components/UserAvatar.vue'
+import { buildAmapWalkingNavigationUrl } from './utils/amapNavigation.js'
 import { getLunarDateString } from './utils/lunar.js'
 
 const isSidebarCollapsed = ref(false)
@@ -689,6 +713,9 @@ const localizedModalLandmark = computed(() => {
   return modalLandmark.value ? localizedLandmark(modalLandmark.value) : null
 })
 
+const selectedNavigationUrl = computed(() => buildAmapWalkingNavigationUrl(localizedSelectedLandmark.value))
+const modalNavigationUrl = computed(() => buildAmapWalkingNavigationUrl(localizedModalLandmark.value))
+
 const localizedResults = computed(() => {
   if (!results.value.length) return []
   return results.value.map(item => {
@@ -700,7 +727,9 @@ const localizedResults = computed(() => {
       locationText: matched?.locationText || item.locationText,
       summary: matched?.summary || item.summary,
       description: matched?.description || item.description,
-      type: matched?.type || item.type
+      type: matched?.type || item.type,
+      longitude: matched?.longitude ?? item.longitude,
+      latitude: matched?.latitude ?? item.latitude
     }
   })
 })
@@ -1052,7 +1081,9 @@ const modalLabels = computed(() => ({
   mapCoords: t('校园地图位置', 'Campus map position'),
   verifyStatus: t('资料状态', 'Information status'),
   verifiedText: t('已收录', 'Available'),
-  showMap: t('在地图中查看', 'View on Map')
+  showMap: t('在地图中查看', 'View on Map'),
+  navigate: t('去这里（高德步行导航）', 'Go here with AMap'),
+  navigationUnavailable: t('该地点暂未配置导航坐标', 'Navigation is not configured for this landmark.')
 }))
 
 const adminLabels = computed(() => ({

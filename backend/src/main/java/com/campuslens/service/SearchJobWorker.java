@@ -166,7 +166,8 @@ public class SearchJobWorker {
         result.rank(), item.id(), item.code(), item.name(), item.englishName(),
         Math.max(0, Math.min(1, result.score())),
         result.confidenceLevel(), result.mahalanobisDistance(), item.coverImageUrl(),
-        item.summary(), item.locationText(), item.mapX(), item.mapY()));
+        item.summary(), item.locationText(), item.mapX(), item.mapY(),
+        item.longitude(), item.latitude()));
   }
 
   private Path pathFromUrl(String value) {

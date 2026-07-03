@@ -1,0 +1,32 @@
+ALTER TABLE landmark ADD COLUMN longitude DECIMAL(10, 6) NULL;
+ALTER TABLE landmark ADD COLUMN latitude DECIMAL(10, 6) NULL;
+
+-- 高德地图 GCJ-02 导航坐标。建筑采用公开地图实体中心，开放空间采用校园图局部配准点。
+UPDATE landmark
+SET longitude = CASE code
+      WHEN 'L01' THEN 113.405412
+      WHEN 'L02' THEN 113.406945
+      WHEN 'L03' THEN 113.406226
+      WHEN 'L04' THEN 113.406081
+      WHEN 'L05' THEN 113.408031
+      WHEN 'L06' THEN 113.404296
+      WHEN 'L07' THEN 113.404863
+      WHEN 'L08' THEN 113.402809
+      WHEN 'L09' THEN 113.403518
+      WHEN 'L10' THEN 113.406150
+      ELSE longitude
+    END,
+    latitude = CASE code
+      WHEN 'L01' THEN 23.046547
+      WHEN 'L02' THEN 23.046873
+      WHEN 'L03' THEN 23.046029
+      WHEN 'L04' THEN 23.048411
+      WHEN 'L05' THEN 23.050928
+      WHEN 'L06' THEN 23.048426
+      WHEN 'L07' THEN 23.049562
+      WHEN 'L08' THEN 23.048608
+      WHEN 'L09' THEN 23.051689
+      WHEN 'L10' THEN 23.053413
+      ELSE latitude
+    END
+WHERE code IN ('L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09', 'L10');

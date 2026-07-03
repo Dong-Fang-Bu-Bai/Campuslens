@@ -1,5 +1,5 @@
--- CampusLens V3 current-schema reference.
--- Runtime schema evolution is managed by database/migration/V1-V15.
+-- CampusLens V4 final-schema reference.
+-- Runtime schema evolution is managed by database/migration/V1-V21.
 -- This file is for review and fresh-schema comparison; do not run it together
 -- with Flyway migrations against the same database.
 
@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS landmark (
   location_text VARCHAR(255),
   map_x DECIMAL(10, 4),
   map_y DECIMAL(10, 4),
+  longitude DECIMAL(10, 6),
+  latitude DECIMAL(10, 6),
   cover_image_url LONGTEXT,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP

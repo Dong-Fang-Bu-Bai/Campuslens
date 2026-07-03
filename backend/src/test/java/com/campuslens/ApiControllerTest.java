@@ -77,7 +77,9 @@ class ApiControllerTest {
   void landmarksReturnsSeedData() throws Exception {
     mockMvc.perform(get("/api/landmarks"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$[0].code").value("L01"));
+        .andExpect(jsonPath("$[0].code").value("L01"))
+        .andExpect(jsonPath("$[0].longitude").value(113.405412))
+        .andExpect(jsonPath("$[0].latitude").value(23.046547));
   }
 
   @Test
@@ -154,6 +156,8 @@ class ApiControllerTest {
     assertThat(result).contains("\"landmarkCode\":\"L03\"");
     assertThat(result).contains("\"confidenceLevel\":\"high\"");
     assertThat(result).contains("\"mahalanobisDistance\":3.12");
+    assertThat(result).contains("\"longitude\":113.406226");
+    assertThat(result).contains("\"latitude\":23.046029");
   }
 
   @Test
@@ -450,11 +454,15 @@ class ApiControllerTest {
                   "locationText": "测试位置",
                   "mapX": 10.5,
                   "mapY": 20.5,
+                  "longitude": 113.405,
+                  "latitude": 23.047,
                   "coverImageUrl": "/images/landmarks/l99.jpg"
                 }
                 """))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("L99"))
+        .andExpect(jsonPath("$.longitude").value(113.405))
+        .andExpect(jsonPath("$.latitude").value(23.047))
         .andReturn()
         .getResponse()
         .getContentAsString();
@@ -474,11 +482,50 @@ class ApiControllerTest {
                   "locationText": "测试位置",
                   "mapX": 11.5,
                   "mapY": 21.5,
+                  "longitude": 113.406,
+                  "latitude": 23.048,
                   "coverImageUrl": "/images/landmarks/l99.jpg"
                 }
                 """))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.name").value("测试地标更新"));
+        .andExpect(jsonPath("$.name").value("测试地标更新"))
+        .andExpect(jsonPath("$.longitude").value(113.406));
+  }
+
+  @Test
+  void landmarkNavigationCoordinatesMustBePairedAndInRange() throws Exception {
+    String token = login("admin", "admin");
+
+    mockMvc.perform(post("/api/admin/landmarks")
+            .header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "code": "L98",
+                  "name": "缺失纬度",
+                  "mapX": 10,
+                  "mapY": 20,
+                  "longitude": 113.405
+                }
+                """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("经度和纬度必须同时提供"));
+
+    mockMvc.perform(post("/api/admin/landmarks")
+            .header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "code": "L97",
+                  "name": "非法纬度",
+                  "mapX": 10,
+                  "mapY": 20,
+                  "longitude": 113.405,
+                  "latitude": 100
+                }
+                """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("经纬度超出合法范围"));
   }
 
   @Test

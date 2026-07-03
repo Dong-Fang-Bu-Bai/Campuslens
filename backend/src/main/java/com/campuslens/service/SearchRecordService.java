@@ -237,7 +237,9 @@ public class SearchRecordService {
       String summary,
       String locationText,
       double mapX,
-      double mapY) {
+      double mapY,
+      Double longitude,
+      Double latitude) {
     private static SearchResultSnapshot from(SearchResult result) {
       return new SearchResultSnapshot(
           result.rank(),
@@ -251,7 +253,9 @@ public class SearchRecordService {
           result.summary(),
           result.locationText(),
           result.mapX(),
-          result.mapY());
+          result.mapY(),
+          result.longitude(),
+          result.latitude());
     }
   }
 }

@@ -16,6 +16,8 @@
 | `locationText` | String | 位置描述 |
 | `mapX` | Number | 平面图标注 X 坐标，可后续确定 |
 | `mapY` | Number | 平面图标注 Y 坐标，可后续确定 |
+| `longitude` | Number | 高德 GCJ-02 导航经度，可为空；必须与纬度成对维护 |
+| `latitude` | Number | 高德 GCJ-02 导航纬度，可为空；必须与经度成对维护 |
 | `coverImageUrl` | String | 代表图片路径 |
 | `createdAt` | DateTime | 创建时间 |
 | `updatedAt` | DateTime | 更新时间 |
@@ -224,7 +226,9 @@
 
 ## 地图坐标口径
 
-`mapX` 和 `mapY` 当前采用校园平面图百分比坐标，取值范围为 0-100。前端展示时以图片左上角为原点，`mapX` 表示横向百分比，`mapY` 表示纵向百分比。该口径适合初始阶段静态标注，后续若更换底图或接入 GIS 数据，需要同步修订地标元数据。
+`mapX` 和 `mapY` 采用校园平面图百分比坐标，取值范围为 0-100。前端展示时以图片左上角为原点，`mapX` 表示横向百分比，`mapY` 表示纵向百分比。
+
+`longitude` 和 `latitude` 是独立的高德 GCJ-02 导航坐标，必须成对提供。前端使用它们构造高德 URI 步行路线，不得把 `mapX`、`mapY` 当作经纬度。L01-L10 的首批坐标以公开地图实体和校园图校准结果为基础；建筑入口或高德路网变化后可通过地标维护接口微调。
 
 ## AppUser 用户
 
@@ -262,7 +266,7 @@
 
 ## Flyway 迁移
 
-第三周 V2 使用 `database/migration/` 管理表结构和基础种子数据。
+最终版 V4 使用 `database/migration/` 管理表结构和基础种子数据，当前迁移范围为 V1-V21。
 
 | 脚本 | 说明 |
 | --- | --- |
@@ -275,9 +279,11 @@
 | `V11__async_search_jobs.sql` | 为检索记录增加异步任务、幂等、lease 和错误字段 |
 | `V12__harden_async_search_queue.sql` | 增加持久化重试时间和队列到期索引 |
 | `V13__persistent_sar_and_index_rebuild.sql` | 增加 SAR、模型/索引版本、待发布样本路径，并创建索引重建任务表 |
+| `V14__algorithm_instance_tracking.sql` | 保存实际处理任务的算法实例编号与主备角色 |
+| `V15__persistent_guest_identity.sql` | 创建持久化游客身份表，使用令牌哈希幂等分配游客编号 |
 | `V16__link_check_in_to_search_record.sql` | 为打卡增加检索记录唯一关联和照片公开开关，保留旧记录兼容性 |
 | `V17__nested_check_in_replies.sql` | 为回复增加父子关系、点赞和直接回复计数，创建回复点赞表 |
 | `V18__user_avatar.sql` | 为用户增加可持久化的自定义头像地址 |
 | `V19__password_reset.sql` | 约束邮箱唯一，创建密码重置验证码表和查询索引 |
-| `V14__algorithm_instance_tracking.sql` | 保存实际处理任务的算法实例编号与主备角色 |
-| `V15__persistent_guest_identity.sql` | 创建持久化游客身份表，使用令牌哈希幂等分配游客编号 |
+| `V20__separate_feedback_evaluation_status.sql` | 为 `correction_sample` 增加 `evaluation_status`，区分算法评估状态与管理员审核、样本暂存状态 |
+| `V21__landmark_navigation_coordinates.sql` | 为地标增加高德 GCJ-02 经纬度并回填 L01-L10 导航点 |

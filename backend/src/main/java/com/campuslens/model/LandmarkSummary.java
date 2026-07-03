@@ -10,5 +10,7 @@ public record LandmarkSummary(
     String coverImageUrl,
     String locationText,
     double mapX,
-    double mapY) {
+    double mapY,
+    Double longitude,
+    Double latitude) {
 }

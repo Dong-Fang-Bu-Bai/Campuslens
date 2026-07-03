@@ -38,7 +38,17 @@
               </div>
             </div>
           </div>
-          <button type="button" class="secondary-btn inline-action" @click="$emit('jump-map')">{{ labels.showMap }}</button>
+          <div class="detail-actions">
+            <button type="button" class="secondary-btn inline-action" @click="$emit('jump-map')">{{ labels.showMap }}</button>
+            <a
+              v-if="navigationUrl"
+              class="secondary-btn inline-action navigation-btn"
+              :href="navigationUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+            >{{ labels.navigate }}</a>
+          </div>
+          <p v-if="!navigationUrl" class="navigation-unavailable">{{ labels.navigationUnavailable }}</p>
         </div>
       </div>
     </div>
@@ -49,6 +59,7 @@
 defineProps({
   show: { type: Boolean, required: true },
   landmark: { type: Object, default: null },
+  navigationUrl: { type: String, default: null },
   labels: { type: Object, required: true }
 })
 

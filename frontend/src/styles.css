@@ -321,6 +321,26 @@ h3 {
   padding: 0 14px;
 }
 
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.navigation-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  text-decoration: none;
+}
+
+.navigation-unavailable {
+  margin-top: 10px;
+  color: var(--text-muted) !important;
+  font-size: 12px !important;
+}
+
 .login-panel {
   display: grid;
   gap: 10px;
@@ -1148,6 +1168,22 @@ h3 {
 
 .legend-list button.active span {
   color: #ffffff;
+}
+
+.map-navigation-card {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.map-navigation-card > span,
+.map-navigation-card > small {
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
 /* ==========================================
