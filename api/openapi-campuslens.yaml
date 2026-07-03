@@ -63,6 +63,7 @@ paths:
                 file:
                   type: string
                   format: binary
+                  description: JPG、PNG 或 WebP 图片，单文件不超过 8 MB
                 guestId:
                   type: string
                   description: 未登录游客标识；登录用户身份由 Bearer token 解析

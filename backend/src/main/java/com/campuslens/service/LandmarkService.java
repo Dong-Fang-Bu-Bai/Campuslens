@@ -139,12 +139,6 @@ public class LandmarkService {
     return new LandmarkImage(id, imageUrl, normalizeNullable(angle), normalizeNullable(lightCondition), false);
   }
 
-  public List<LandmarkDetail> topCandidates() {
-    return jdbcTemplate.query(BASE_SELECT + " ORDER BY code LIMIT 5", landmarkRowMapper).stream()
-        .map(this::detail)
-        .toList();
-  }
-
   private LandmarkSummary summary(LandmarkRow row) {
     return new LandmarkSummary(
         row.id(),

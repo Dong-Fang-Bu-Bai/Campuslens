@@ -83,7 +83,7 @@
 
 ## 9. 自动化回归
 
-- Spring Boot 后端测试：21 项通过，Flyway V1-V15 全部应用；
+- Spring Boot 后端测试：验收期间 21 项通过，Flyway V1-V15 全部应用；
 - Python 算法测试：`21 passed`；
 - Vue 前端：`npm run build` 成功；
 - multipart `sarMode=false/true` 回归测试通过；

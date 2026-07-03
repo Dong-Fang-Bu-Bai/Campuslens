@@ -292,14 +292,13 @@ class SearchService:
 
 **主要功能**:
 - 离线加载 DINOv2 模型（支持 CPU/GPU 自动适配）
-- 单图/批量特征提取
-- 图像预处理（resize、normalize）
+- 批量特征提取（单图也按长度为 1 的批次处理）
+- 按 `IMAGE_SIZE` 执行 resize、center crop 和 normalize
 
 **关键方法**:
 
 ```python
 class DINOv2Extractor:
-    def extract_single(self, image: Image.Image) -> np.ndarray
     def extract_batch(self, images: List[Image.Image]) -> np.ndarray
 ```
 
@@ -822,7 +821,7 @@ cov_inv = np.linalg.pinv(cov_matrix)
 
 **A**:
 - 使用 GPU 加速特征提取
-- 减小 BATCH_SIZE 避免内存溢出
+- 通过 `REBUILD_BATCH_SIZE` 调整索引重建批量大小
 - 考虑并行处理不同地标
 
 ### Q4: 如何验证算法正确性？

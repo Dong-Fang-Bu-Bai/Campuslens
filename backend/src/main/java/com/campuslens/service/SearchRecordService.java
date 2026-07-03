@@ -73,14 +73,6 @@ public class SearchRecordService {
     return new SearchRecordCreation(key.longValue(), storedGuestId);
   }
 
-  public boolean exists(Long searchRecordId) {
-    Integer count = jdbcTemplate.queryForObject(
-        "SELECT COUNT(*) FROM search_record WHERE id = ?",
-        Integer.class,
-        searchRecordId);
-    return count != null && count > 0;
-  }
-
   public boolean containsResult(Long searchRecordId, Long landmarkId) {
     if (landmarkId == null) {
       return true;
@@ -187,14 +179,6 @@ public class SearchRecordService {
         rs.getString("feedback_status"),
         parseTopResults(rs.getString("top_results_json")),
         rs.getTimestamp("created_at").toLocalDateTime()), userId, safeLimit);
-  }
-
-  public List<SearchResult> topResults(Long searchRecordId) {
-    String json = jdbcTemplate.queryForObject(
-        "SELECT top_results_json FROM search_record WHERE id = ?",
-        String.class,
-        searchRecordId);
-    return parseTopResults(json);
   }
 
   public List<SearchResult> parseTopResults(String json) {

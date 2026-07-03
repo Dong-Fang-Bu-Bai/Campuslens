@@ -734,11 +734,6 @@ const localizedResults = computed(() => {
   })
 })
 
-const displayedResults = computed(() => {
-  if (!localizedResults.value.length) return []
-  return localizedResults.value.map((_, index) => localizedResults.value[(activeResultIndex.value + index) % localizedResults.value.length])
-})
-
 const localizedAdminSearchRecords = computed(() => {
   return adminSearchRecords.value.map(record => {
     const matched = localizedLandmarks.value.find(l => l.name === record.bestLandmarkName || l.englishName === record.bestLandmarkName)
@@ -1420,15 +1415,6 @@ function restoreSearchJob() {
   } catch {
     localStorage.removeItem('campuslens.pendingSearchJob')
   }
-}
-
-function selectLandmark(id) {
-  selectedId.value = id
-  const index = results.value.findIndex((item) => item.landmarkId === id || item.id === id)
-  if (index !== -1) {
-    activeResultIndex.value = index
-  }
-  navigateToView('results')
 }
 
 function selectMapLandmark(id) {
@@ -2155,19 +2141,9 @@ function getCardStyle(index) {
   let diff = index - activeResultIndex.value
   if (diff < 0) diff += len
 
-  // diff 为 0 是最顶端焦点卡片
-  // diff 为 1, 2, 3, 4 依次往下层叠
-  
-  // 垂直位移：焦点为 0，第二张偏移 145px，第三张偏移 275px，后续卡片设为 400px
+  // 根据相对索引计算叠瓦卡片的位置、缩放、透明度和层级。
   const translateY = diff === 0 ? 0 : diff === 1 ? 130 : diff === 2 ? 250 : 380
-  
-  // 绕 X 轴倾角：层层向前倾斜，表现下沉式阶梯斜面
-  const rotateX = diff * -7 
-
-  // 缩放率：第一张稍微放大，后面逐层变小
   const scale = diff === 0 ? 1.02 : 1 - diff * 0.08 
-  
-  // 透明度：焦点为 1，第 2 张 0.65，第 3 张 0.3，后面完全隐藏
   const opacity = diff === 0 ? 1.0 : diff === 1 ? 0.65 : diff === 2 ? 0.3 : 0.0
 
   const zIndex = 10 - diff

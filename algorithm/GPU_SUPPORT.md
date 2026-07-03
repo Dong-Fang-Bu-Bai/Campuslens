@@ -83,7 +83,8 @@ curl.exe http://localhost:8001/api/v1/health
 ```dotenv
 DEVICE=auto
 MIXED_PRECISION=true
-BATCH_SIZE=32
+SEARCH_BATCH_SIZE=2
+REBUILD_BATCH_SIZE=4
 SAR_ENABLED=true
 ```
 
@@ -100,7 +101,7 @@ SAR_ENABLED=true
 显存不足时按以下顺序处理：
 
 1. 关闭其他占用 GPU 的进程。
-2. 减小 `.env` 中的 `BATCH_SIZE`。
+2. 在线批量 OOM 时减小 `.env` 中的 `SEARCH_BATCH_SIZE`；索引重建 OOM 时减小 `REBUILD_BATCH_SIZE`。
 3. 临时设置 `DEVICE=cpu` 验证功能。
 4. 仅在开发诊断时手工启动单实例；日常完整验收仍使用双实例。
 

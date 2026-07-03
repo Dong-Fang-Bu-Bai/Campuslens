@@ -33,14 +33,10 @@ class Config:
     DINO_MODEL_PATH = os.getenv("DINO_MODEL_PATH", str(BASE_DIR / "models" / "dinov2_model.pth"))
     DEVICE = os.getenv("DEVICE", "auto")  # auto, cpu, or cuda
     IMAGE_SIZE = int(os.getenv("IMAGE_SIZE", "518"))  # DINOv2 默认 518x518
-    BATCH_SIZE = int(os.getenv("BATCH_SIZE", "32"))
     SEARCH_BATCH_SIZE = int(os.getenv("SEARCH_BATCH_SIZE", "2"))
     MIXED_PRECISION = os.getenv("MIXED_PRECISION", "false").lower() == "true"
     
     TOP_K_RESULTS = int(os.getenv("TOP_K_RESULTS", "5"))
-    # Legacy compatibility setting. Current FAISS scoring uses app.utils.scoring thresholds.
-    CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.5"))
-
     # Global kill switch. Per-request sarMode remains false by default.
     SAR_ENABLED = os.getenv("SAR_ENABLED", "true").lower() == "true"
     SAR_STEPS = int(os.getenv("SAR_STEPS", "1"))
@@ -61,7 +57,7 @@ class Config:
     CORRECTION_ACCEPT_CONFIDENCE = float(os.getenv("CORRECTION_ACCEPT_CONFIDENCE", "0.70"))
     
     ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
-    MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", "10485760"))  # 10MB
+    MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", str(8 * 1024 * 1024)))
     
     @classmethod
     def ensure_directories(cls):

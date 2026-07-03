@@ -41,6 +41,7 @@ GET http://localhost:8080/api/health
 | `POST /api/feedback` | 提交正确、错误或不确定反馈 |
 | `POST /api/auth/register` | 使用唯一用户名、唯一邮箱和至少 8 位密码注册 |
 | `POST /api/auth/login` | 用户或管理员登录 |
+| `POST /api/admin/auth/login` | 旧联调脚本使用的管理员兼容登录入口；正式前端不调用 |
 | `POST /api/auth/password-reset/code` | 输入绑定邮箱并向该邮箱发送密码重置验证码 |
 | `POST /api/auth/password-reset/confirm` | 使用绑定邮箱校验验证码并设置新密码 |
 | `GET /api/admin/algorithm/runtime` | 管理员查看主算法实例运行、SAR 和索引状态 |
@@ -74,6 +75,8 @@ $env:CAMPUSLENS_MAIL_FROM = $env:CAMPUSLENS_MAIL_USERNAME
 上传图片会保存到 `uploads/yyyyMMdd/`，该目录已由 `.gitignore` 排除。
 
 ## 验证
+
+截至 2026-07-03，后端回归为 `28/28`，并从空库完整应用 Flyway `V1-V21`。
 
 ```powershell
 mvn test

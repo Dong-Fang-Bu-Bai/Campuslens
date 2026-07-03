@@ -15,7 +15,13 @@ def main(job_dir, job_id, base_model_version):
     temporary = job_dir / "candidate.tmp"
     candidate = job_dir / "candidate"
     temporary.mkdir(parents=True, exist_ok=False)
-    extractor = DINOv2Extractor(Config.DINO_MODEL_PATH, "cpu", False, dual_track=False)
+    extractor = DINOv2Extractor(
+        Config.DINO_MODEL_PATH,
+        "cpu",
+        False,
+        dual_track=False,
+        image_size=Config.IMAGE_SIZE,
+    )
     image_paths = []
     metadata = []
     for folder in sorted(path for path in Config.DATASETS_DIR.iterdir() if path.is_dir()):

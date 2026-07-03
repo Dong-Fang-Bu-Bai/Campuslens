@@ -30,7 +30,7 @@ MySQL 保存权威状态及 `next_attempt_at`。worker 的完成、失败和重�
 
 | 项目 | 命令 | 结果 |
 | --- | --- | --- |
-| 后端 | `mvn test` | 当前回归 21 项通过，Flyway V1-V15 完整应用 |
+| 后端 | `mvn test` | 2026-06-11 当次回归 21 项通过，Flyway V1-V15 完整应用 |
 | 算法 | `python -m pytest` | 15 项通过 |
 | 前端 | `npm run build` | 通过 |
 

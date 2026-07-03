@@ -31,7 +31,6 @@ import com.campuslens.model.LikeResponse;
 import com.campuslens.model.PasswordResetCodeRequest;
 import com.campuslens.model.PasswordResetConfirmRequest;
 import com.campuslens.model.PasswordResetResponse;
-import com.campuslens.model.SearchResponse;
 import com.campuslens.model.SearchJobStatus;
 import com.campuslens.model.SearchJobSubmission;
 import com.campuslens.model.SessionUser;
@@ -46,7 +45,6 @@ import com.campuslens.service.PasswordResetService;
 import com.campuslens.service.IndexRebuildService;
 import com.campuslens.service.GuestIdentityService;
 import com.campuslens.service.SearchRecordService;
-import com.campuslens.service.SearchService;
 import com.campuslens.service.SearchJobService;
 import com.campuslens.service.SessionService;
 import jakarta.validation.Valid;
@@ -69,7 +67,6 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api")
 public class ApiController {
   private final LandmarkService landmarkService;
-  private final SearchService searchService;
   private final SearchJobService searchJobService;
   private final FeedbackService feedbackService;
   private final SearchRecordService searchRecordService;
@@ -84,7 +81,6 @@ public class ApiController {
 
   public ApiController(
       LandmarkService landmarkService,
-      SearchService searchService,
       SearchJobService searchJobService,
       FeedbackService feedbackService,
       SearchRecordService searchRecordService,
@@ -97,7 +93,6 @@ public class ApiController {
       IndexRebuildService indexRebuildService,
       GuestIdentityService guestIdentityService) {
     this.landmarkService = landmarkService;
-    this.searchService = searchService;
     this.searchJobService = searchJobService;
     this.feedbackService = feedbackService;
     this.searchRecordService = searchRecordService;

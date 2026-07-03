@@ -147,9 +147,10 @@ DINOv2 离线模型验证工具
 
 编辑 `.env` 文件可配置：
 - `DEVICE`: 计算设备 (`auto`/`cpu`/`cuda`)，默认 `auto`
-- `IMAGE_SIZE`: 输入图片尺寸，默认 `518`
-- `BATCH_SIZE`: 批处理大小，默认 `32`
+- `IMAGE_SIZE`: DINOv2 resize/crop 输入尺寸，默认 `518`
 - `SEARCH_BATCH_SIZE`: 在线批量接口上限，默认 `2`
+- `REBUILD_BATCH_SIZE`: CPU 索引重建批量大小，默认 `4`
+- `MAX_FILE_SIZE`: 单张上传图片字节上限，默认 `8388608`（8 MB）
 - `MIXED_PRECISION`: 混合精度开关，默认 `false`
 - `SAR_ENABLED`: SAR 功能开关，默认 `true`
 
@@ -607,18 +608,21 @@ DINOv2 离线模型验证工具
 
 ### 2. 单元测试
 
-项目提供核心模块的单元测试（位于 `tests/` 目录，如未创建可手动添加）：
+项目提供核心模块的单元测试（位于 `tests/` 目录）：
 
 ```powershell
 cd algorithm
 D:\AnaConda\envs\campuslens-gpu\python.exe -m pytest tests/ -v
 ```
 
+截至 2026-07-03，当前回归为 `24/24`。
+
 测试覆盖：
 - 马氏距离计算正确性
 - 经验匹配分范围验证
 - FAISS 索引构建与搜索
 - SAR 熵计算与门控逻辑
+- 批量坏图、CUDA OOM 隔离、8 MB 文件限制与 `IMAGE_SIZE` 预处理配置
 
 ### 3. 基准测试
 
@@ -772,7 +776,7 @@ RuntimeError: CUDA out of memory
 
 **解决方案**：
 ```powershell
-$env:BATCH_SIZE=16
+$env:SEARCH_BATCH_SIZE=1
 $env:DEVICE=cpu
 ```
 
@@ -815,9 +819,10 @@ netstat -ano | findstr "8000"
 
 ### 问题 9: 显存不足（双实例）
 
-双实例会各自加载模型，可减小 `BATCH_SIZE`，测试时也可临时只启动一个实例：
+双实例会各自加载模型。在线批量 OOM 时可减小 `SEARCH_BATCH_SIZE`，索引重建 OOM 时可减小 `REBUILD_BATCH_SIZE`；开发诊断时也可临时只启动一个实例：
 ```powershell
-$env:BATCH_SIZE=16
+$env:SEARCH_BATCH_SIZE=1
+$env:REBUILD_BATCH_SIZE=2
 ```
 
 ---

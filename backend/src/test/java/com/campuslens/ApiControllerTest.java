@@ -414,6 +414,23 @@ class ApiControllerTest {
   }
 
   @Test
+  void legacyAdminLoginRemainsCompatible() throws Exception {
+    mockMvc.perform(post("/api/admin/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "username": "admin",
+                  "password": "admin"
+                }
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.loggedIn").value(true))
+        .andExpect(jsonPath("$.username").value("admin"))
+        .andExpect(jsonPath("$.role").value("admin"))
+        .andExpect(jsonPath("$.token").isString());
+  }
+
+  @Test
   void adminEndpointsRejectMissingAndUserTokens() throws Exception {
     mockMvc.perform(get("/api/admin/search-records"))
         .andExpect(status().isUnauthorized());

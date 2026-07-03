@@ -54,6 +54,15 @@ Content-Type: application/json
   "password": "admin"
 }
 
+### 管理员兼容登录入口（旧联调脚本保留）
+POST {{backend}}/api/admin/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin"
+}
+
 ### 提交异步图片检索任务
 POST {{backend}}/api/search/upload
 Authorization: Bearer {{userToken}}
