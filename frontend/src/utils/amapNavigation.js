@@ -1,4 +1,5 @@
 const AMAP_NAVIGATION_URL = 'https://uri.amap.com/navigation'
+const AMAP_MARKER_URL = 'https://uri.amap.com/marker'
 
 function validCoordinate(value, min, max) {
   if (value === null || value === undefined || value === '') return false
@@ -22,3 +23,20 @@ export function buildAmapWalkingNavigationUrl(landmark) {
   url.searchParams.set('callnative', '1')
   return url.toString()
 }
+
+export function buildAmapMarkerUrl(landmark) {
+  if (!landmark
+      || !validCoordinate(landmark.longitude, -180, 180)
+      || !validCoordinate(landmark.latitude, -90, 90)) {
+    return null
+  }
+
+  const url = new URL(AMAP_MARKER_URL)
+  url.searchParams.set('position', `${Number(landmark.longitude)},${Number(landmark.latitude)}`)
+  url.searchParams.set('name', landmark.name || landmark.code || 'CampusLens 地标')
+  url.searchParams.set('src', 'CampusLens')
+  url.searchParams.set('coordinate', 'gaode')
+  url.searchParams.set('callnative', '1')
+  return url.toString()
+}
+

@@ -36,13 +36,13 @@
       </form>
 
       <nav class="module-list" aria-label="模块状态">
-        <button :class="{ active: activeView === 'results' }" @click="changeView('results')">
-          <span class="active-line"></span>
-          {{ t('识别结果', 'Results') }}
-        </button>
         <button :class="{ active: activeView === 'map' }" @click="changeView('map')">
           <span class="active-line"></span>
           {{ t('校园地图', 'Campus Map') }}
+        </button>
+        <button :class="{ active: activeView === 'results' }" @click="changeView('results')">
+          <span class="active-line"></span>
+          {{ t('识别结果', 'Results') }}
         </button>
         <button :class="{ active: activeView === 'history' }" @click="openHistory">
           <span class="active-line"></span>
@@ -167,14 +167,30 @@
                 <span>{{ t('地图坐标', 'Map Coordinates') }}</span><strong>{{ localizedSelectedLandmark.mapX }}%, {{ localizedSelectedLandmark.mapY }}%</strong>
               </div>
               <div class="detail-actions">
-                <button type="button" class="secondary-btn inline-action" @click="changeView('map')">{{ t('查看地图位置', 'Show on Map') }}</button>
+                <button type="button" class="secondary-btn inline-action" @click="changeView('map')">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6v14l6-4 6 4 6-4 6 4V6l-6-4-6 4-6-4z"></path><line x1="7" y1="2" x2="7" y2="16"></line><line x1="13" y1="8" x2="13" y2="22"></line></svg>
+                  <span>{{ t('查看地图位置', 'Show on Map') }}</span>
+                </button>
                 <a
                   v-if="selectedNavigationUrl"
                   class="secondary-btn inline-action navigation-btn"
                   :href="selectedNavigationUrl"
                   target="_blank"
                   rel="noopener noreferrer"
-                >{{ t('去这里（高德步行导航）', 'Go here with AMap') }}</a>
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>
+                  <span>{{ t('去这里（步行导航）', 'Go Here (Walk)') }}</span>
+                </a>
+                <a
+                  v-if="selectedMarkerUrl"
+                  class="secondary-btn inline-action navigation-btn marker-btn"
+                  :href="selectedMarkerUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                  <span>{{ t('在地图上查看位置', 'Show Location on Map') }}</span>
+                </a>
               </div>
               <p v-if="!selectedNavigationUrl" class="navigation-unavailable">{{ t('该地点暂未配置导航坐标', 'Navigation is not configured for this landmark.') }}</p>
             </article>
@@ -294,14 +310,37 @@
             <div v-if="localizedSelectedLandmark" class="map-navigation-card">
               <strong>{{ localizedSelectedLandmark.code }} {{ localizedSelectedLandmark.name }}</strong>
               <span>{{ localizedSelectedLandmark.locationText }}</span>
-              <a
-                v-if="selectedNavigationUrl"
-                class="secondary-btn navigation-btn"
-                :href="selectedNavigationUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-              >{{ t('去这里（高德步行导航）', 'Go here with AMap') }}</a>
-              <small v-else>{{ t('该地点暂未配置导航坐标', 'Navigation is not configured for this landmark.') }}</small>
+              <div class="map-actions-list">
+                <button
+                  type="button"
+                  class="secondary-btn map-detail-btn"
+                  @click="openModal(selectedLandmark)"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                  <span>{{ t('查看详情', 'View Details') }}</span>
+                </button>
+                <a
+                  v-if="selectedNavigationUrl"
+                  class="secondary-btn navigation-btn"
+                  :href="selectedNavigationUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>
+                  <span>{{ t('去这里（步行导航）', 'Go Here (Walk)') }}</span>
+                </a>
+                <a
+                  v-if="selectedMarkerUrl"
+                  class="secondary-btn navigation-btn marker-btn"
+                  :href="selectedMarkerUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                  <span>{{ t('在地图上查看位置', 'Show Location on Map') }}</span>
+                </a>
+              </div>
+              <small v-if="!selectedNavigationUrl && !selectedMarkerUrl" class="navigation-unavailable">{{ t('该地点暂未配置导航坐标', 'Navigation is not configured for this landmark.') }}</small>
             </div>
           </aside>
         </section>
@@ -471,6 +510,7 @@
       :show="showModal"
       :landmark="localizedModalLandmark"
       :navigation-url="modalNavigationUrl"
+      :marker-url="modalMarkerUrl"
       :labels="modalLabels"
       @close="closeModal"
       @jump-map="jumpModalToMap"
@@ -536,7 +576,7 @@ import LandmarkModal from './components/LandmarkModal.vue'
 import InteractiveBackground from './components/InteractiveBackground.vue'
 import PreferencesDock from './components/PreferencesDock.vue'
 import UserAvatar from './components/UserAvatar.vue'
-import { buildAmapWalkingNavigationUrl } from './utils/amapNavigation.js'
+import { buildAmapWalkingNavigationUrl, buildAmapMarkerUrl } from './utils/amapNavigation.js'
 import { getLunarDateString } from './utils/lunar.js'
 
 const isSidebarCollapsed = ref(false)
@@ -590,7 +630,7 @@ const jobState = reactive({
 })
 const initialView = new URLSearchParams(window.location.search).get('view')
 const availableViews = ['results', 'map', 'history', 'checkins', 'account', 'auth', 'admin']
-const activeView = ref(availableViews.includes(initialView) ? initialView : 'results')
+const activeView = ref(availableViews.includes(initialView) ? initialView : 'map')
 const mobileNavigationQuery = window.matchMedia('(max-width: 1120px)')
 isSidebarCollapsed.value = ['auth', 'account'].includes(activeView.value) || mobileNavigationQuery.matches
 const feedbackMessage = ref('')
@@ -683,7 +723,7 @@ const showModal = ref(false)
 const modalLandmark = ref(null)
 
 // SPA 全局视图历史栈状态机
-const viewHistory = ref(['results'])
+const viewHistory = ref(['map'])
 const historyIndex = ref(0)
 
 function t(zh, en) {
@@ -714,7 +754,9 @@ const localizedModalLandmark = computed(() => {
 })
 
 const selectedNavigationUrl = computed(() => buildAmapWalkingNavigationUrl(localizedSelectedLandmark.value))
+const selectedMarkerUrl = computed(() => buildAmapMarkerUrl(localizedSelectedLandmark.value))
 const modalNavigationUrl = computed(() => buildAmapWalkingNavigationUrl(localizedModalLandmark.value))
+const modalMarkerUrl = computed(() => buildAmapMarkerUrl(localizedModalLandmark.value))
 
 const localizedResults = computed(() => {
   if (!results.value.length) return []
@@ -1077,7 +1119,8 @@ const modalLabels = computed(() => ({
   verifyStatus: t('资料状态', 'Information status'),
   verifiedText: t('已收录', 'Available'),
   showMap: t('在地图中查看', 'View on Map'),
-  navigate: t('去这里（高德步行导航）', 'Go here with AMap'),
+  navigate: t('去这里（步行导航）', 'Go Here (Walk)'),
+  showLocation: t('在地图上查看位置', 'Show Location on Map'),
   navigationUnavailable: t('该地点暂未配置导航坐标', 'Navigation is not configured for this landmark.')
 }))
 

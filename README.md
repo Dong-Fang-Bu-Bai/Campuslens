@@ -38,7 +38,7 @@ Copy-Item algorithm\.env.example algorithm\.env
 algorithm\create_gpu_env.bat
 ```
 
-`create_gpu_env.bat` 会在 `D:\AnaConda\envs\campuslens-gpu` 创建 Python 3.10 环境，并通过 `requirements.txt`、`requirements-gpu.txt`、`requirements-test.txt` 安装公共依赖、PyTorch CUDA 12.1 和测试依赖。FAISS 在 Windows 下固定使用 CPU 版，DINOv2 推理由 CUDA 执行。
+`create_gpu_env.bat` 会在 `D:\AnaConda\envs\campuslens-gpu` 创建 Python 3.10 环境，并通过 `requirements-gpu.txt`、`requirements-evaluation.txt` 递归安装公共依赖、PyTorch CUDA 12.1、测试依赖和SAR鲁棒性实验绘图依赖。FAISS 在 Windows 下固定使用 CPU 版，DINOv2 推理由 CUDA 执行。
 
 如果已经有其他 Python 环境，可设置 `CAMPUSLENS_ALGORITHM_PYTHON` 后运行 `algorithm\install_gpu.bat` 或 `algorithm\install_cpu.bat`。单独执行 `pip install -r algorithm\requirements.txt` 不包含 PyTorch，不能完成算法运行环境安装。
 
@@ -124,7 +124,7 @@ scripts\stop.cmd
 
 ## 当前自动化基线
 
-截至 2026-07-03，代码清理后的本地回归结果为：后端 `28/28`、算法 `24/24`、前端 `2/2`，前端生产构建成功；后端测试从空库完整应用 Flyway `V1-V21`。
+截至 2026-07-04，代码清理后的本地回归结果为：后端 `28/28`、算法 `29/29`、前端 `2/2`，前端生产构建成功；后端测试从空库完整应用 Flyway `V1-V21`。算法新增5项受控扰动抽样、生成、统计与绘图回归测试。
 
 ## 分支模型
 
@@ -245,6 +245,7 @@ git push origin main --tags
 - [GPU 与 Redis 异步队列测试记录](docs/13_gpu_async_queue_test.md)
 - [SAR 在线适配与模型索引版本测试记录](docs/14_sar_online_adaptation_test.md)
 - [全链路修复与验收记录](docs/15_full_system_acceptance_test.md)
+- [SAR受控扰动对照实验](docs/17_sar_robustness_experiment.md)
 
 ## 接口契约
 

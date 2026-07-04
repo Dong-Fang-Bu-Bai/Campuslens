@@ -13,7 +13,7 @@ echo Step 1: Removing current PyTorch packages...
 
 echo.
 echo Step 2: Installing CPU versions...
-"%PYTHON%" -m pip install -r requirements-cpu.txt -r requirements-test.txt
+"%PYTHON%" -m pip install -r requirements-cpu.txt -r requirements-evaluation.txt
 
 echo.
 echo ========================================

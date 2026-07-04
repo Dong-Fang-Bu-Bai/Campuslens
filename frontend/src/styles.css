@@ -307,6 +307,18 @@ h3 {
   font-size: 12.5px;
   font-weight: 700;
   transition: var(--transition-smooth);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.secondary-btn svg,
+.primary-btn svg {
+  margin-right: 6px;
+  flex-shrink: 0;
 }
 
 .secondary-btn:hover {
@@ -325,6 +337,13 @@ h3 {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  width: 100%;
+}
+
+.detail-actions > * {
+  flex: 1;
+  min-width: 120px;
+  margin-top: 12px !important;
 }
 
 .navigation-btn {
@@ -333,6 +352,23 @@ h3 {
   justify-content: center;
   padding: 0 14px;
   text-decoration: none;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.2s, 
+              background 0.2s, 
+              box-shadow 0.2s;
+}
+
+.navigation-btn:hover {
+  transform: translateY(-1.5px);
+  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.1);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  color: #ffffff;
+}
+
+.navigation-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
 }
 
 .navigation-unavailable {
@@ -1129,9 +1165,22 @@ h3 {
   display: grid;
   gap: 8px;
   margin-top: 20px;
-  max-height: 380px;
+  max-height: 200px;
   overflow-y: auto;
   padding-right: 4px;
+}
+
+.legend-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.legend-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+}
+
+.legend-list::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .legend-list button {
@@ -1184,6 +1233,38 @@ h3 {
 .map-navigation-card > small {
   color: var(--text-secondary);
   font-size: 12px;
+}
+
+.map-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  width: 100%;
+}
+
+.map-actions-list > * {
+  width: 100% !important;
+  margin: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-detail-btn {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+  border: none !important;
+  color: #ffffff !important;
+  font-weight: 700;
+}
+
+.map-detail-btn:hover {
+  background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+  box-shadow: 0 0 14px rgba(37, 99, 235, 0.4) !important;
 }
 
 /* ==========================================

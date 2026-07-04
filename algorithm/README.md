@@ -120,7 +120,7 @@ $env:CAMPUSLENS_ALGORITHM_PYTHON = "D:\path\to\python.exe"
 
 **依赖安装脚本说明**：
 
-- `create_gpu_env.bat`：使用 `D:\AnaConda\Scripts\conda.exe` 创建 `D:\AnaConda\envs\campuslens-gpu`，并安装公共依赖、PyTorch CUDA 12.1 及测试依赖。Conda、pip 和临时文件缓存均写入 D 盘配置目录。
+- `create_gpu_env.bat`：使用 `D:\AnaConda\Scripts\conda.exe` 创建 `D:\AnaConda\envs\campuslens-gpu`，并安装公共依赖、PyTorch CUDA 12.1、测试依赖及SAR鲁棒性实验绘图依赖。Conda、pip 和临时文件缓存均写入 D 盘配置目录。
 - `install_gpu.bat`：在已有 Python 3.10+ 环境中安装 GPU 版本依赖
 - `install_cpu.bat`：在已有 Python 环境中安装 CPU 版本依赖
 
@@ -615,7 +615,7 @@ cd algorithm
 D:\AnaConda\envs\campuslens-gpu\python.exe -m pytest tests/ -v
 ```
 
-截至 2026-07-03，当前回归为 `24/24`。
+截至 2026-07-04，当前回归为 `29/29`，其中新增5项受控扰动抽样、生成、统计与绘图回归测试。
 
 测试覆盖：
 - 马氏距离计算正确性
@@ -630,6 +630,19 @@ D:\AnaConda\envs\campuslens-gpu\python.exe -m pytest tests/ -v
 # SAR 基准测试
 python benchmark_sar.py --limit-per-landmark 1
 ```
+
+`benchmark_sar.py`从建库目录抽样，只适合链路冒烟和性能初测，不能作为最终鲁棒性证据。
+正式补充实验从当前212张建库图片中按地标和视角确定性选择50张基础图片，构造高斯噪声、亮度降低和高斯模糊三类受控扰动：
+
+```powershell
+python -m pip install -r requirements-evaluation.txt
+python evaluate_sar_robustness.py all
+```
+
+普通模式运行800个条件，SAR从相同初始状态按种子`42`、`2026`、`704`各运行800个条件。
+程序按50张基础图片进行配对聚类Bootstrap，输出3200条逐请求证据、汇总JSON、PNG/SVG图表和HTML预览。
+该实验是基于建库图片的受控扰动压力测试，不表述为独立现场测试集泛化准确率。完整协议见
+[SAR受控扰动对照实验](../docs/17_sar_robustness_experiment.md)。
 
 ### 4. API 测试
 
