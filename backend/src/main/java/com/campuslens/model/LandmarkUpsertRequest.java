@@ -13,5 +13,7 @@ public record LandmarkUpsertRequest(
     String locationText,
     @NotNull Double mapX,
     @NotNull Double mapY,
+    Double longitude,
+    Double latitude,
     String coverImageUrl) {
 }

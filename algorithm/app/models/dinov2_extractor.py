@@ -13,7 +13,14 @@ from app.models.sar_adapter import SARAdapter
 
 
 class DINOv2Extractor:
-    def __init__(self, model_path: str, device: str = None, mixed_precision: bool = False, dual_track: bool = True):
+    def __init__(
+        self,
+        model_path: str,
+        device: str = None,
+        mixed_precision: bool = False,
+        dual_track: bool = True,
+        image_size: int = 518,
+    ):
         self.device = "cuda" if device in {None, "auto"} and torch.cuda.is_available() else ("cpu" if device in {None, "auto"} else device)
         if self.device == "cuda" and not torch.cuda.is_available():
             raise RuntimeError("DEVICE=cuda but CUDA is not available")
@@ -24,8 +31,9 @@ class DINOv2Extractor:
         self.sar_adapter = SARAdapter(self.sar_model) if self.sar_model is not None else None
         self.model = self.base_model
         self.model_lock = threading.RLock()
+        self.image_size = max(14, int(image_size))
         self.transform = transforms.Compose([
-            transforms.Resize(518), transforms.CenterCrop(518), transforms.ToTensor(),
+            transforms.Resize(self.image_size), transforms.CenterCrop(self.image_size), transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
         self.feature_dim = self.get_feature_dimension()
@@ -46,7 +54,7 @@ class DINOv2Extractor:
         raise ValueError(f"unsupported model format: {type(model)}")
 
     def get_feature_dimension(self):
-        dummy = torch.randn(1, 3, 518, 518, device=self.device)
+        dummy = torch.randn(1, 3, self.image_size, self.image_size, device=self.device)
         with torch.inference_mode(), self._autocast():
             return self._feature_tensor(self.base_model.forward_features(dummy)).shape[-1]
 
@@ -63,9 +71,6 @@ class DINOv2Extractor:
                 image = Image.open(image).convert("RGB")
             tensors.append(self.transform(image))
         return torch.stack(tensors).to(self.device)
-
-    def extract_single(self, image):
-        return self.extract_batch([image])[0]
 
     def extract_batch(self, images):
         tensor = self._batch_tensor(images)

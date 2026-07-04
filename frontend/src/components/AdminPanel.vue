@@ -7,23 +7,23 @@
     <div v-else class="admin-layout">
       <article class="admin-card">
         <div class="admin-card-head">
-          <div><p class="eyebrow">SAR Runtime</p><h3>{{ labels.algorithmRuntime }}</h3></div>
+          <div><p class="eyebrow">{{ labels.runtimeKicker }}</p><h3>{{ labels.algorithmRuntime }}</h3></div>
           <button type="button" :disabled="['building', 'switching'].includes(rebuildJob?.status)" @click="$emit('rebuild-index')">{{ labels.rebuildIndex }}</button>
         </div>
         <div class="detail-grid admin-detail-grid">
-          <span>{{ labels.runtimeState }}</span><strong>{{ runtimeStatus?.status || '-' }}</strong>
+          <span>{{ labels.runtimeState }}</span><strong>{{ runtimeStatusLabel(runtimeStatus?.status) }}</strong>
           <span>{{ labels.baseModelVersion }}</span><strong>{{ runtimeStatus?.baseModelVersion || '-' }}</strong>
           <span>{{ labels.indexVersion }}</span><strong>{{ runtimeStatus?.indexVersion || '-' }}</strong>
           <span>{{ labels.sarStateVersion }}</span><strong>{{ runtimeStatus?.sarStateVersion || '-' }}</strong>
           <span>{{ labels.updateCount }}</span><strong>{{ runtimeStatus?.updateCount ?? 0 }}</strong>
           <span>{{ labels.lastResetReason }}</span><strong>{{ runtimeStatus?.lastResetReason || '-' }}</strong>
         </div>
-        <p v-if="rebuildJob" class="admin-detail-note">Rebuild {{ rebuildJob.rebuildJobId }} · {{ rebuildJob.status }}<template v-if="rebuildJob.error"> · {{ rebuildJob.error }}</template></p>
+        <p v-if="rebuildJob" class="admin-detail-note">{{ labels.rebuildTask }} #{{ rebuildJob.rebuildJobId }} · {{ rebuildStatusLabel(rebuildJob.status) }}<template v-if="rebuildJob.error"> · {{ rebuildJob.error }}</template></p>
       </article>
       <article class="admin-card">
         <div class="admin-card-head">
           <div>
-            <p class="eyebrow">Search Records</p>
+            <p class="eyebrow">{{ labels.recordsKicker }}</p>
             <h3>{{ labels.searchRecords }}</h3>
           </div>
           <button type="button" @click="$emit('refresh')">{{ labels.refresh }}</button>
@@ -39,7 +39,7 @@
             <span>#{{ record.id }}</span>
             <span>{{ record.bestLandmarkName || labels.noCandidate }}<small>{{ scoreLabel(record.bestScore) }}</small></span>
             <span :class="['status-badge', record.status]">{{ recordStatusLabel(record.status) }}</span>
-            <span>{{ record.username || record.guestId }}</span>
+            <span>{{ record.username || record.guestId || labels.anonymousVisitor }}</span>
           </div>
         </div>
       </article>
@@ -47,7 +47,7 @@
       <article class="admin-card">
         <div class="admin-card-head">
           <div>
-            <p class="eyebrow">Feedback</p>
+            <p class="eyebrow">{{ labels.feedbackKicker }}</p>
             <h3>{{ labels.feedbackProcess }}</h3>
           </div>
         </div>
@@ -55,7 +55,7 @@
           <div v-for="item in feedbackRecords" :key="item.id" class="feedback-admin-item" :class="{ selected: selectedFeedbackDetail?.id === item.id }">
             <div>
               <strong>#{{ item.id }} {{ feedbackTypeLabel(item.feedbackType) }}</strong>
-              <p>{{ labels.searchRecord }} #{{ item.searchRecordId }} · {{ labels.visitor }}：{{ item.username || 'guest' }} · {{ labels.predicted }}：{{ item.predictedLandmarkName || '-' }} · {{ labels.confirmed }}：{{ item.confirmedLandmarkName || '-' }}</p>
+              <p>{{ labels.searchRecord }} #{{ item.searchRecordId }} · {{ labels.visitor }}：{{ item.username || labels.anonymousVisitor }} · {{ labels.predicted }}：{{ item.predictedLandmarkName || '-' }} · {{ labels.confirmed }}：{{ item.confirmedLandmarkName || '-' }}</p>
               <small>{{ item.comment || labels.noComment }}</small>
             </div>
             <div class="admin-actions">
@@ -71,7 +71,7 @@
       <article class="admin-card feedback-detail-card">
         <div class="admin-card-head">
           <div>
-            <p class="eyebrow">Feedback Detail</p>
+            <p class="eyebrow">{{ labels.detailKicker }}</p>
             <h3>{{ labels.feedbackDetail }}</h3>
           </div>
         </div>
@@ -123,6 +123,31 @@ function recordStatusLabel(status) {
   }[status] || status
 }
 
+function runtimeStatusLabel(status) {
+  return {
+    ok: props.labels.runtimeHealthy,
+    healthy: props.labels.runtimeHealthy,
+    ready: props.labels.runtimeHealthy,
+    running: props.labels.runtimeHealthy,
+    degraded: props.labels.runtimeDegraded,
+    unavailable: props.labels.runtimeUnavailable,
+    offline: props.labels.runtimeUnavailable
+  }[status] || status || '-'
+}
+
+function rebuildStatusLabel(status) {
+  return {
+    queued: props.labels.rebuildQueued,
+    building: props.labels.rebuildBuilding,
+    validating: props.labels.rebuildValidating,
+    switching: props.labels.rebuildPublishing,
+    published: props.labels.rebuildComplete,
+    completed: props.labels.rebuildComplete,
+    success: props.labels.rebuildComplete,
+    failed: props.labels.rebuildFailed
+  }[status] || status || '-'
+}
+
 function feedbackTypeLabel(value) {
   return {
     correct: props.labels.typeCorrect,
@@ -145,6 +170,7 @@ function scoreLabel(value) {
 
 function syncStatusLabel(value) {
   return {
+    not_staged: props.labels.syncNotStaged,
     sync_pending: props.labels.syncPending,
     synced: props.labels.synced,
     sync_failed: props.labels.syncFailed,
@@ -154,8 +180,10 @@ function syncStatusLabel(value) {
 }
 
 function adviceLabel(sample) {
-  if (!sample) return props.labels.advicePending
-  if (sample.reviewScore == null) return props.labels.adviceWait
+  if (!sample || sample.evaluationStatus === 'legacy_unavailable') return props.labels.adviceLegacy
+  if (sample.evaluationStatus === 'failed') return props.labels.adviceFailed
+  if (sample.evaluationStatus === 'pending') return props.labels.adviceWait
+  if (sample.reviewScore == null) return props.labels.adviceLegacy
   return `${sample.suggestAccept ? props.labels.adviceAccept : props.labels.adviceReview} · ${Math.round(Number(sample.reviewScore) * 100)}%`
 }
 </script>

@@ -25,7 +25,7 @@ Campuslens/
 - 数据与队列：MySQL 权威任务状态 + Redis 活跃任务集合、ready 列表、processing/delayed 有序集合
 - 图片与向量：本地目录、向量文件、地标统计参数文件
 - 检索策略：DINOv2 提取图像特征，按地标样本特征估计均值和协方差，使用马氏距离与 sigmoid 经验匹配分返回 Top-5
-- 地图能力：基于校园平面图做静态标注，不做实时导航和室内导航
+- 地图能力：校园平面图静态标注 + 高德 URI 外部步行导航；不在站内实现实时导航和室内导航
 
 ## 本地演示启动
 
@@ -38,7 +38,7 @@ Copy-Item algorithm\.env.example algorithm\.env
 algorithm\create_gpu_env.bat
 ```
 
-`create_gpu_env.bat` 会在 `D:\AnaConda\envs\campuslens-gpu` 创建 Python 3.10 环境，并通过 `requirements.txt`、`requirements-gpu.txt`、`requirements-test.txt` 安装公共依赖、PyTorch CUDA 12.1 和测试依赖。FAISS 在 Windows 下固定使用 CPU 版，DINOv2 推理由 CUDA 执行。
+`create_gpu_env.bat` 会在 `D:\AnaConda\envs\campuslens-gpu` 创建 Python 3.10 环境，并通过 `requirements-gpu.txt`、`requirements-evaluation.txt` 递归安装公共依赖、PyTorch CUDA 12.1、测试依赖和SAR鲁棒性实验绘图依赖。FAISS 在 Windows 下固定使用 CPU 版，DINOv2 推理由 CUDA 执行。
 
 如果已经有其他 Python 环境，可设置 `CAMPUSLENS_ALGORITHM_PYTHON` 后运行 `algorithm\install_gpu.bat` 或 `algorithm\install_cpu.bat`。单独执行 `pip install -r algorithm\requirements.txt` 不包含 PyTorch，不能完成算法运行环境安装。
 
@@ -83,6 +83,9 @@ scripts\verify.cmd
 - 浏览器轮询结果：`GET /api/search/jobs/{jobId}`，任务终态为 `success`、`low_confidence` 或 `failed`。
 - 后端任务消费者：正式检索调用算法服务 `POST /api/v1/search/batch`；`POST /api/v1/search` 保留给单图诊断。
 - 管理员运维：通过后端 `/api/admin/algorithm/runtime`、`/api/admin/index/rebuild` 和 `/api/admin/index/rebuild/{jobId}` 操作，不由前端直连算法服务。
+- 认证入口：前端统一调用 `POST /api/auth/login`；`POST /api/admin/auth/login` 仅为旧联调脚本保留兼容性。
+
+前端地标列表来自 `GET /api/landmarks`，代表图优先使用后端返回的 `coverImageUrl` 或 `imageUrl`。页面不再使用外网演示地标数据，也不会在未上传图片时伪造默认 Top-5；未检索状态只显示等待上传的空态。
 
 后端路径参数使用 Java 风格 `{jobId}`；算法服务的重建状态路径在 FastAPI 文档中显示为 `{job_id}`。两者都是路径占位符，不代表 JSON 字段改名。
 
@@ -103,6 +106,8 @@ algorithm/data/faiss_index/landmark_stats.pkl
 
 MySQL 和 Redis 是默认启动路径，不需要额外设置 `CAMPUSLENS_BACKEND_PROFILE`。`start.cmd` 会检查当前环境、启动 Windows Docker Desktop、复用 Compose 镜像和命名数据卷，再启动后端、双算法实例及单个 HTTPS 前端。数据库结构和基础种子数据统一由 Flyway 管理。
 
+忘记密码邮件通过标准 SMTP + STARTTLS 发送，收件邮箱不限于发件邮箱服务商。当前开发环境使用 QQ 邮箱 SMTP，并已完成真实验证码投递验证。启动前设置 `CAMPUSLENS_MAIL_USERNAME`、`CAMPUSLENS_MAIL_PASSWORD`，并按发件服务商设置 `CAMPUSLENS_MAIL_HOST`、`CAMPUSLENS_MAIL_PORT` 和 `CAMPUSLENS_MAIL_FROM`；具体示例见 `backend/README.md`。发件密码应使用 SMTP 授权码，禁止提交到仓库。
+
 ```powershell
 scripts\start.cmd
 ```
@@ -116,6 +121,10 @@ scripts\stop.cmd
 ```
 
 `stop.cmd` 会清理后端、HTTPS 前端、双算法实例以及 MySQL/Redis 容器，但保留 Docker 镜像和命名数据卷。不要使用 `docker compose down -v`，否则会删除本地数据库和 Redis 数据卷。
+
+## 当前自动化基线
+
+截至 2026-07-04，代码清理后的本地回归结果为：后端 `28/28`、算法 `29/29`、前端 `2/2`，前端生产构建成功；后端测试从空库完整应用 Flyway `V1-V21`。算法新增5项受控扰动抽样、生成、统计与绘图回归测试。
 
 ## 分支模型
 
@@ -236,6 +245,7 @@ git push origin main --tags
 - [GPU 与 Redis 异步队列测试记录](docs/13_gpu_async_queue_test.md)
 - [SAR 在线适配与模型索引版本测试记录](docs/14_sar_online_adaptation_test.md)
 - [全链路修复与验收记录](docs/15_full_system_acceptance_test.md)
+- [SAR受控扰动对照实验](docs/17_sar_robustness_experiment.md)
 
 ## 接口契约
 

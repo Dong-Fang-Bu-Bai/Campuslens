@@ -35,6 +35,8 @@ https://localhost:5173
 
 前端只调用 Spring Boot 的 `/api` 接口，不直接访问算法服务的 `8000/8001` 端口。管理员运行状态和索引重建分别使用 `/api/admin/algorithm/runtime`、`/api/admin/index/rebuild` 与 `/api/admin/index/rebuild/{jobId}`。
 
+地标数据由 `GET /api/landmarks` 加载，图片优先使用后端返回的代表图或样本图；加载失败时仅显示本地占位图和空态。识别结果只来自异步任务轮询终态，不再内置外网演示地标或默认 Top-5 分数。
+
 ## 构建
 
 ```powershell

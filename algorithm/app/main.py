@@ -8,12 +8,10 @@ if str(project_root) not in sys.path:
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from app.config import Config
 from app.services.feature_service import FeatureService
 from app.services.search_service import SearchService
 from app.api.routes import router, init_services
-import json
 
 
 Config.ensure_directories()
@@ -23,14 +21,6 @@ app = FastAPI(
     version=Config.APP_VERSION,
     description="CampusLens AI 图像检索服务 - 基于 DINOv2 + FAISS（纯离线模式）"
 )
-
-# 配置 JSON 响应格式化
-def custom_json_response(content: dict, status_code: int = 200):
-    return JSONResponse(
-        content=content,
-        status_code=status_code,
-        media_type="application/json; charset=utf-8"
-    )
 
 app.add_middleware(
     CORSMiddleware,

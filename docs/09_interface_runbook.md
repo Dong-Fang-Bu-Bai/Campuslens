@@ -92,6 +92,7 @@ $env:INSTANCE_ROLE = "secondary"
 | `GET /api/search/jobs/{jobId}` | 携带 Bearer token 或 `X-Search-Job-Token` | 返回 queued/processing 或包含 Top-5 的终态结果 |
 | `POST /api/auth/register` | 提交用户名、密码和选填邮箱 | 返回普通用户身份和 token，用户名唯一，密码至少 8 位，密码哈希入库 |
 | `POST /api/auth/login` | 提交用户名和密码 | 普通用户返回主页面身份和 token；`admin/admin` 返回管理员身份并进入后台 |
+| `POST /api/admin/auth/login` | 旧联调脚本提交管理员用户名和密码 | 返回兼容 token；正式前端不调用 |
 | `POST /api/feedback` | 提交 JSON | 返回 `feedbackId` 和 `pending` 状态 |
 | `GET /api/admin/algorithm/runtime` | 管理员 Bearer token | 返回主实例、SAR、活动索引和最近重建任务 |
 | `POST /api/admin/index/rebuild` | 管理员 Bearer token | 返回 `202` 和 `rebuildJobId` |

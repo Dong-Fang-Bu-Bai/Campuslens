@@ -16,6 +16,8 @@
 | `locationText` | String | 位置描述 |
 | `mapX` | Number | 平面图标注 X 坐标，可后续确定 |
 | `mapY` | Number | 平面图标注 Y 坐标，可后续确定 |
+| `longitude` | Number | 高德 GCJ-02 导航经度，可为空；必须与纬度成对维护 |
+| `latitude` | Number | 高德 GCJ-02 导航纬度，可为空；必须与经度成对维护 |
 | `coverImageUrl` | String | 代表图片路径 |
 | `createdAt` | DateTime | 创建时间 |
 | `updatedAt` | DateTime | 更新时间 |
@@ -114,18 +116,21 @@
 
 ## CheckIn 打卡留言
 
-第四周 V3 新增。用于校园留言板，复用 `landmark` 作为打卡地点来源。
+第四周 V3 新增，V16 起绑定真实识图记录。新打卡必须引用发布者本人状态为 `success` 或 `low_confidence` 的检索记录，地标必须来自该记录 Top-5；一条检索记录只能发布一次。V16 以前的历史记录允许不绑定检索记录。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` | Long | 主键 |
+| `searchRecordId` | Long | 来源检索记录；历史兼容记录可为空，新打卡必填且唯一 |
 | `landmarkId` | Long | 打卡地标 |
 | `userId` | Long | 登录用户 ID，游客为空 |
 | `guestId` | String | 游客编号 |
 | `displayName` | String | 前端展示名，登录用户为用户名，游客为 `guest#number` |
 | `message` | String | 留言内容，最长 500 字符 |
+| `publishImage` | Boolean | 是否在公共留言板展示来源上传图片，默认 `false` |
+| `sourceImageUrl` | String | 接口派生字段；仅 `publishImage=true` 时返回来源图片地址 |
 | `likeCount` | Integer | 点赞数量缓存 |
-| `replyCount` | Integer | 一级回复数量缓存 |
+| `replyCount` | Integer | 当前帖子全部可见回复数量缓存 |
 | `status` | String | 当前为 `visible`，为后续后台删除/隐藏预留 |
 | `createdAt` | DateTime | 发布时间 |
 | `updatedAt` | DateTime | 更新时间 |
@@ -136,6 +141,7 @@
 | --- | --- | --- |
 | `id` | Long | 主键 |
 | `checkInId` | Long | 关联打卡留言 |
+| `parentReplyId` | Long | 父回复 ID；为空表示直接回复帖子 |
 | `userId` | Long | 登录用户 ID，游客为空 |
 | `guestId` | String | 游客编号 |
 | `createdAt` | DateTime | 点赞时间 |
@@ -150,12 +156,24 @@
 | `guestId` | String | 游客编号 |
 | `displayName` | String | 展示名 |
 | `message` | String | 回复内容，最长 500 字符 |
+| `likeCount` | Integer | 回复点赞数量缓存 |
+| `replyCount` | Integer | 直接子回复数量缓存 |
 | `status` | String | 当前为 `visible` |
 | `createdAt` | DateTime | 回复时间 |
 
+## CheckInReplyLike 回复点赞
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | Long | 主键 |
+| `replyId` | Long | 关联回复 |
+| `userId` | Long | 登录用户 ID，游客为空 |
+| `guestId` | String | 持久化游客编号 |
+| `createdAt` | DateTime | 点赞时间 |
+
 ## CorrectionSample 校正样本
 
-第四周 V3 新增。管理员采纳反馈后先写入该表，不直接污染正式地标样本库。算法服务接收元数据后写入 JSONL manifest，用于后续自适应或人工复核。
+第四周 V3 新增。用户提交反馈后先写入评估记录；只有管理员采纳后，图片才进入待发布样本目录，不直接污染正式地标样本库。算法评估只提供建议，不自动改变反馈状态或当前 SAR 状态。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -164,16 +182,17 @@
 | `searchRecordId` | Long | 来源检索记录 |
 | `uploadImageUrl` | String | 用户上传图路径 |
 | `predictedLandmarkId` | Long | 原预测地标 |
-| `confirmedLandmarkId` | Long | 管理员采纳后的确认地标 |
+| `confirmedLandmarkId` | Long | 用户反馈确认的地标 |
 | `confirmedLandmarkCode` | String | 确认地标编号，如 `L02` |
 | `sourceFeedbackType` | String | 来源反馈类型 |
 | `topResultsJson` | Text | 来源检索 Top-5 快照 |
-| `syncStatus` | String | 当前主流程为 `pending_index` 或 `published`；`sync_pending`、`synced`、`sync_failed` 仅兼容旧记录 |
+| `syncStatus` | String | 样本发布状态：`not_staged`、`pending_index` 或 `published`；其他值仅兼容旧记录 |
+| `evaluationStatus` | String | 算法评估状态：`pending`、`completed`、`failed` 或 `legacy_unavailable` |
 | `suggestAccept` | Boolean | 算法是否建议采纳 |
 | `reviewScore` | Decimal | 基于 Top-5 分数构造的伪概率评估分 |
 | `reason` | String | 算法建议或失败原因 |
 | `sarEligible` | Boolean | 是否满足 SAR 思路下的可靠样本门槛 |
-| `nextAction` | String | 建议动作，如 `append_to_manifest` 或 `manual_review` |
+| `nextAction` | String | 后端流程动作，如 `await_admin_decision`、`rebuild_index` 或 `none` |
 | `algorithmResponseJson` | Text | 算法接口原始响应 |
 | `datasetPath` | String | 待发布样本在受控地标目录中的实际路径 |
 | `publishedIndexVersion` | String | 样本正式发布时对应的索引版本 |
@@ -207,30 +226,47 @@
 
 ## 地图坐标口径
 
-`mapX` 和 `mapY` 当前采用校园平面图百分比坐标，取值范围为 0-100。前端展示时以图片左上角为原点，`mapX` 表示横向百分比，`mapY` 表示纵向百分比。该口径适合初始阶段静态标注，后续若更换底图或接入 GIS 数据，需要同步修订地标元数据。
+`mapX` 和 `mapY` 采用校园平面图百分比坐标，取值范围为 0-100。前端展示时以图片左上角为原点，`mapX` 表示横向百分比，`mapY` 表示纵向百分比。
+
+`longitude` 和 `latitude` 是独立的高德 GCJ-02 导航坐标，必须成对提供。前端使用它们构造高德 URI 步行路线，不得把 `mapX`、`mapY` 当作经纬度。L01-L10 的首批坐标以公开地图实体和校园图校准结果为基础；建筑入口或高德路网变化后可通过地标维护接口微调。
 
 ## AppUser 用户
 
-第三周 V2 使用 `app_user` 保存普通用户和管理员演示账号。普通用户通过右上角“登录/注册”入口注册，用户名为普通字符串且唯一，密码至少 8 位，邮箱选填。`admin/admin` 作为演示管理员账号写入同一张表，密码以 PBKDF2 哈希存储；登录后后端返回服务端会话 token，前端携带 token 访问需要登录或管理员权限的接口。
+第三周 V2 使用 `app_user` 保存普通用户和管理员演示账号。普通用户通过右上角“登录/注册”入口注册，用户名和邮箱唯一，密码至少 8 位，邮箱必填并用于密码找回。历史上未绑定邮箱的账号仍可登录并在个人中心补充邮箱，但补充前无法使用找回功能。`admin/admin` 作为演示管理员账号写入同一张表，密码以 PBKDF2 哈希存储；登录后后端返回服务端会话 token，前端携带 token 访问需要登录或管理员权限的接口。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` | Long | 主键 |
 | `username` | String | 用户名，唯一 |
 | `passwordHash` | String | PBKDF2 哈希摘要，格式为 `pbkdf2$迭代次数$salt$hash` |
-| `email` | String | 选填邮箱 |
+| `email` | String | 唯一绑定邮箱；新注册账号必填，历史账号可暂为空 |
+| `avatarUrl` | String | 选填头像地址；为空时前端按用户编号和用户名生成固定像素头像 |
 | `role` | String | `user` 或 `admin` |
 | `enabled` | Boolean | 是否启用 |
 | `createdAt` | DateTime | 创建时间 |
 | `updatedAt` | DateTime | 更新时间 |
 
+## PasswordResetCode 密码重置验证码
+
+`password_reset_code` 保存密码找回请求。用户通过唯一绑定邮箱发起找回，服务端按规范化邮箱定位账号。数据库只保存 PBKDF2 加盐哈希，不保存验证码明文；每次发送新验证码会使旧验证码失效。验证码默认 10 分钟有效、60 秒发送冷却、最多校验 5 次且只能成功使用一次。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | Long | 主键 |
+| `userId` | Long | 关联 `app_user.id` |
+| `codeHash` | String | 验证码 PBKDF2 加盐哈希 |
+| `expiresAt` | DateTime | 过期时间 |
+| `attemptCount` | Integer | 验证失败次数 |
+| `usedAt` | DateTime | 作废或成功使用时间 |
+| `createdAt` | DateTime | 创建时间，用于发送冷却判断 |
+
 ## AdminUser 管理员兼容表
 
-`admin_user` 保留为旧后台登录接口的兼容表，密码同样以 PBKDF2 哈希存储。前端当前不直接调用 `POST /api/admin/auth/login`，统一调用 `POST /api/auth/login`。
+`admin_user` 保留为最终版兼容表，服务于 `POST /api/admin/auth/login` 旧联调入口。前端默认不直接调用该接口，统一调用 `POST /api/auth/login`，由 `app_user.role=admin` 进入后台主流程。
 
 ## Flyway 迁移
 
-第三周 V2 使用 `database/migration/` 管理表结构和基础种子数据。
+最终版 V4 使用 `database/migration/` 管理表结构和基础种子数据，当前迁移范围为 V1-V21。
 
 | 脚本 | 说明 |
 | --- | --- |
@@ -245,3 +281,9 @@
 | `V13__persistent_sar_and_index_rebuild.sql` | 增加 SAR、模型/索引版本、待发布样本路径，并创建索引重建任务表 |
 | `V14__algorithm_instance_tracking.sql` | 保存实际处理任务的算法实例编号与主备角色 |
 | `V15__persistent_guest_identity.sql` | 创建持久化游客身份表，使用令牌哈希幂等分配游客编号 |
+| `V16__link_check_in_to_search_record.sql` | 为打卡增加检索记录唯一关联和照片公开开关，保留旧记录兼容性 |
+| `V17__nested_check_in_replies.sql` | 为回复增加父子关系、点赞和直接回复计数，创建回复点赞表 |
+| `V18__user_avatar.sql` | 为用户增加可持久化的自定义头像地址 |
+| `V19__password_reset.sql` | 约束邮箱唯一，创建密码重置验证码表和查询索引 |
+| `V20__separate_feedback_evaluation_status.sql` | 为 `correction_sample` 增加 `evaluation_status`，区分算法评估状态与管理员审核、样本暂存状态 |
+| `V21__landmark_navigation_coordinates.sql` | 为地标增加高德 GCJ-02 经纬度并回填 L01-L10 导航点 |

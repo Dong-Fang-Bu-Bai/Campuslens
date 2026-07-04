@@ -1,5 +1,9 @@
 package com.campuslens.service;
 
+import com.campuslens.model.AccountEmailUpdateRequest;
+import com.campuslens.model.AccountPasswordUpdateRequest;
+import com.campuslens.model.AccountProfile;
+import com.campuslens.model.AccountUpdateResponse;
 import com.campuslens.model.AuthLoginRequest;
 import com.campuslens.model.AuthRegisterRequest;
 import com.campuslens.model.AuthResponse;
@@ -31,6 +35,9 @@ public class AuthService {
     if (exists(username)) {
       throw new IllegalArgumentException("用户名已存在");
     }
+    if (emailExists(email, null)) {
+      throw new IllegalArgumentException("邮箱已被其他账号绑定");
+    }
 
     KeyHolder keyHolder = new GeneratedKeyHolder();
     jdbcTemplate.update(connection -> {
@@ -45,19 +52,20 @@ public class AuthService {
     }, keyHolder);
     Long userId = Objects.requireNonNull(keyHolder.getKey(), "app_user id not generated").longValue();
     String token = sessionService.create(new SessionUser(userId, username, email, "user"));
-    return new AuthResponse(userId, username, email, "user", false, token, "注册成功");
+    return new AuthResponse(userId, username, email, null, "user", false, token, "注册成功");
   }
 
   public AuthResponse login(AuthLoginRequest request) {
     String username = normalizeUsername(request.username());
     List<UserRow> users = jdbcTemplate.query("""
-        SELECT id, username, email, role, password_hash
+        SELECT id, username, email, avatar_url, role, password_hash
         FROM app_user
         WHERE username = ? AND enabled = TRUE
         """, (rs, rowNum) -> new UserRow(
         rs.getLong("id"),
         rs.getString("username"),
         rs.getString("email"),
+        rs.getString("avatar_url"),
         rs.getString("role"),
         rs.getString("password_hash")), username);
     if (users.isEmpty() || !passwordService.matches(request.password(), users.get(0).passwordHash())) {
@@ -70,6 +78,7 @@ public class AuthService {
         user.id(),
         user.username(),
         user.email(),
+        user.avatarUrl(),
         user.role(),
         admin,
         token,
@@ -87,12 +96,75 @@ public class AuthService {
     return count != null && count > 0;
   }
 
+  public AccountProfile account(Long userId) {
+    return findUser(userId).profile();
+  }
+
+  public AccountUpdateResponse updateEmail(Long userId, AccountEmailUpdateRequest request) {
+    UserRow user = findUser(userId);
+    String email = normalizeEmail(request.email());
+    if (emailExists(email, userId)) {
+      throw new IllegalArgumentException("邮箱已被其他账号绑定");
+    }
+    jdbcTemplate.update("UPDATE app_user SET email = ? WHERE id = ?", email, userId);
+    AccountProfile account = new AccountProfile(
+        user.id(), user.username(), email, user.avatarUrl(), user.role(), "admin".equals(user.role()));
+    return new AccountUpdateResponse(account, "邮箱已更新");
+  }
+
+  public AccountUpdateResponse updatePassword(Long userId, AccountPasswordUpdateRequest request) {
+    UserRow user = findUser(userId);
+    if (!passwordService.matches(request.currentPassword(), user.passwordHash())) {
+      throw new IllegalArgumentException("当前密码不正确");
+    }
+    validatePassword(request.newPassword());
+    if (passwordService.matches(request.newPassword(), user.passwordHash())) {
+      throw new IllegalArgumentException("新密码不能与当前密码相同");
+    }
+    jdbcTemplate.update(
+        "UPDATE app_user SET password_hash = ? WHERE id = ?",
+        passwordService.hash(request.newPassword()),
+        userId);
+    return new AccountUpdateResponse(user.profile(), "密码修改成功");
+  }
+
   private boolean exists(String username) {
     Integer count = jdbcTemplate.queryForObject(
         "SELECT COUNT(*) FROM app_user WHERE username = ?",
         Integer.class,
         username);
     return count != null && count > 0;
+  }
+
+  private boolean emailExists(String email, Long excludedUserId) {
+    if (email == null) {
+      return false;
+    }
+    Integer count = excludedUserId == null
+        ? jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM app_user WHERE LOWER(email) = LOWER(?)", Integer.class, email)
+        : jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM app_user WHERE LOWER(email) = LOWER(?) AND id <> ?",
+            Integer.class, email, excludedUserId);
+    return count != null && count > 0;
+  }
+
+  private UserRow findUser(Long userId) {
+    List<UserRow> users = jdbcTemplate.query("""
+        SELECT id, username, email, avatar_url, role, password_hash
+        FROM app_user
+        WHERE id = ? AND enabled = TRUE
+        """, (rs, rowNum) -> new UserRow(
+        rs.getLong("id"),
+        rs.getString("username"),
+        rs.getString("email"),
+        rs.getString("avatar_url"),
+        rs.getString("role"),
+        rs.getString("password_hash")), userId);
+    if (users.isEmpty()) {
+      throw new AuthRequiredException("账号不存在或已停用");
+    }
+    return users.get(0);
   }
 
   private String normalizeUsername(String username) {
@@ -105,9 +177,9 @@ public class AuthService {
 
   private String normalizeEmail(String email) {
     if (email == null || email.isBlank()) {
-      return null;
+      throw new IllegalArgumentException("邮箱不能为空");
     }
-    return email.trim();
+    return email.trim().toLowerCase(java.util.Locale.ROOT);
   }
 
   private void validatePassword(String password) {
@@ -116,6 +188,15 @@ public class AuthService {
     }
   }
 
-  private record UserRow(Long id, String username, String email, String role, String passwordHash) {
+  private record UserRow(
+      Long id,
+      String username,
+      String email,
+      String avatarUrl,
+      String role,
+      String passwordHash) {
+    private AccountProfile profile() {
+      return new AccountProfile(id, username, email, avatarUrl, role, "admin".equals(role));
+    }
   }
 }

@@ -13,7 +13,7 @@ if not exist "%PYTHON%" (
 
 echo.
 echo Installing GPU requirements. FAISS remains on CPU on Windows.
-"%PYTHON%" -m pip install -r requirements-gpu.txt -r requirements-test.txt
+"%PYTHON%" -m pip install -r requirements-gpu.txt -r requirements-evaluation.txt
 
 echo.
 echo ========================================

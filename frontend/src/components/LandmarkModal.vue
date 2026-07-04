@@ -30,11 +30,7 @@
               </div>
               <div class="grid-item">
                 <span>{{ labels.mapCoords }}</span>
-                <strong>X: {{ landmark.mapX }}%, Y: {{ landmark.mapY }}%</strong>
-              </div>
-              <div class="grid-item">
-                <span>{{ labels.recommendIndex }}</span>
-                <strong style="color: #fbbf24;">★★★★★</strong>
+                <strong>{{ landmark.mapX }}% · {{ landmark.mapY }}%</strong>
               </div>
               <div class="grid-item">
                 <span>{{ labels.verifyStatus }}</span>
@@ -42,7 +38,33 @@
               </div>
             </div>
           </div>
-          <button type="button" class="secondary-btn inline-action" @click="$emit('jump-map')">{{ labels.showMap }}</button>
+          <div class="detail-actions">
+            <button type="button" class="secondary-btn inline-action" @click="$emit('jump-map')">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6v14l6-4 6 4 6-4 6 4V6l-6-4-6 4-6-4z"></path><line x1="7" y1="2" x2="7" y2="16"></line><line x1="13" y1="8" x2="13" y2="22"></line></svg>
+              <span>{{ labels.showMap }}</span>
+            </button>
+            <a
+              v-if="navigationUrl"
+              class="secondary-btn inline-action navigation-btn"
+              :href="navigationUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>
+              <span>{{ labels.navigate }}</span>
+            </a>
+            <a
+              v-if="markerUrl"
+              class="secondary-btn inline-action navigation-btn marker-btn"
+              :href="markerUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+              <span>{{ labels.showLocation }}</span>
+            </a>
+          </div>
+          <p v-if="!navigationUrl" class="navigation-unavailable">{{ labels.navigationUnavailable }}</p>
         </div>
       </div>
     </div>
@@ -53,6 +75,8 @@
 defineProps({
   show: { type: Boolean, required: true },
   landmark: { type: Object, default: null },
+  navigationUrl: { type: String, default: null },
+  markerUrl: { type: String, default: null },
   labels: { type: Object, required: true }
 })
 

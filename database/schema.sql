@@ -1,5 +1,5 @@
--- CampusLens V3 current-schema reference.
--- Runtime schema evolution is managed by database/migration/V1-V15.
+-- CampusLens V4 final-schema reference.
+-- Runtime schema evolution is managed by database/migration/V1-V21.
 -- This file is for review and fresh-schema comparison; do not run it together
 -- with Flyway migrations against the same database.
 
@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS landmark (
   location_text VARCHAR(255),
   map_x DECIMAL(10, 4),
   map_y DECIMAL(10, 4),
+  longitude DECIMAL(10, 6),
+  latitude DECIMAL(10, 6),
   cover_image_url LONGTEXT,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -52,7 +54,8 @@ CREATE TABLE IF NOT EXISTS app_user (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   username VARCHAR(100) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
-  email VARCHAR(255),
+  email VARCHAR(255) UNIQUE,
+  avatar_url VARCHAR(500),
   role VARCHAR(50) NOT NULL DEFAULT 'user',
   enabled BOOLEAN NOT NULL DEFAULT TRUE,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -67,6 +70,21 @@ CREATE TABLE IF NOT EXISTS admin_user (
   enabled BOOLEAN NOT NULL DEFAULT TRUE,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS password_reset_code (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  code_hash VARCHAR(255) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  attempt_count INT NOT NULL DEFAULT 0,
+  used_at DATETIME,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_password_reset_code_user
+    FOREIGN KEY (user_id) REFERENCES app_user(id)
+);
+
+CREATE INDEX idx_password_reset_user_created
+  ON password_reset_code (user_id, created_at);
 
 CREATE TABLE IF NOT EXISTS guest_identity (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -143,10 +161,12 @@ CREATE TABLE IF NOT EXISTS feedback (
 CREATE TABLE IF NOT EXISTS check_in (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   landmark_id BIGINT NOT NULL,
+  search_record_id BIGINT,
   user_id BIGINT,
   guest_id VARCHAR(100),
   display_name VARCHAR(100) NOT NULL,
   message VARCHAR(500) NOT NULL,
+  publish_image BOOLEAN NOT NULL DEFAULT FALSE,
   like_count INT NOT NULL DEFAULT 0,
   reply_count INT NOT NULL DEFAULT 0,
   status VARCHAR(50) NOT NULL DEFAULT 'visible',
@@ -154,6 +174,9 @@ CREATE TABLE IF NOT EXISTS check_in (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_check_in_landmark
     FOREIGN KEY (landmark_id) REFERENCES landmark(id),
+  CONSTRAINT fk_check_in_search_record
+    FOREIGN KEY (search_record_id) REFERENCES search_record(id),
+  CONSTRAINT uk_check_in_search_record UNIQUE (search_record_id),
   CONSTRAINT fk_check_in_user
     FOREIGN KEY (user_id) REFERENCES app_user(id)
 );
@@ -177,20 +200,43 @@ CREATE INDEX idx_check_in_like_target
 CREATE TABLE IF NOT EXISTS check_in_reply (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   check_in_id BIGINT NOT NULL,
+  parent_reply_id BIGINT,
   user_id BIGINT,
   guest_id VARCHAR(100),
   display_name VARCHAR(100) NOT NULL,
   message VARCHAR(500) NOT NULL,
+  like_count INT NOT NULL DEFAULT 0,
+  reply_count INT NOT NULL DEFAULT 0,
   status VARCHAR(50) NOT NULL DEFAULT 'visible',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_check_in_reply_check_in
     FOREIGN KEY (check_in_id) REFERENCES check_in(id),
+  CONSTRAINT fk_check_in_reply_parent
+    FOREIGN KEY (parent_reply_id) REFERENCES check_in_reply(id),
   CONSTRAINT fk_check_in_reply_user
     FOREIGN KEY (user_id) REFERENCES app_user(id)
 );
 
 CREATE INDEX idx_check_in_reply_target
   ON check_in_reply (check_in_id, created_at);
+
+CREATE INDEX idx_check_in_reply_parent
+  ON check_in_reply (parent_reply_id, created_at);
+
+CREATE TABLE IF NOT EXISTS check_in_reply_like (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  reply_id BIGINT NOT NULL,
+  user_id BIGINT,
+  guest_id VARCHAR(100),
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_check_in_reply_like_reply
+    FOREIGN KEY (reply_id) REFERENCES check_in_reply(id),
+  CONSTRAINT fk_check_in_reply_like_user
+    FOREIGN KEY (user_id) REFERENCES app_user(id)
+);
+
+CREATE INDEX idx_check_in_reply_like_target
+  ON check_in_reply_like (reply_id);
 
 CREATE TABLE IF NOT EXISTS correction_sample (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -203,6 +249,7 @@ CREATE TABLE IF NOT EXISTS correction_sample (
   source_feedback_type VARCHAR(50) NOT NULL,
   top_results_json TEXT,
   sync_status VARCHAR(50) NOT NULL DEFAULT 'sync_pending',
+  evaluation_status VARCHAR(50) NOT NULL DEFAULT 'legacy_unavailable',
   suggest_accept BOOLEAN,
   review_score DECIMAL(8, 6),
   reason VARCHAR(500),

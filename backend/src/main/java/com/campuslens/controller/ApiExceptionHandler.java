@@ -2,6 +2,7 @@ package com.campuslens.controller;
 
 import com.campuslens.service.AdminRequiredException;
 import com.campuslens.service.AuthRequiredException;
+import com.campuslens.service.CheckInConflictException;
 import com.campuslens.service.SearchJobConflictException;
 import com.campuslens.service.SearchJobNotFoundException;
 import com.campuslens.service.SearchQueueFullException;
@@ -67,6 +68,11 @@ public class ApiExceptionHandler {
 
   @ExceptionHandler(SearchJobConflictException.class)
   public ResponseEntity<Map<String, String>> jobConflict(SearchJobConflictException ex) {
+    return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", ex.getMessage()));
+  }
+
+  @ExceptionHandler(CheckInConflictException.class)
+  public ResponseEntity<Map<String, String>> checkInConflict(CheckInConflictException ex) {
     return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", ex.getMessage()));
   }
 

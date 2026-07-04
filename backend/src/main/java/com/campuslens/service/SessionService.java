@@ -41,6 +41,12 @@ public class SessionService {
     return user;
   }
 
+  public void revokeUser(Long userId) {
+    if (userId != null) {
+      sessions.entrySet().removeIf(entry -> userId.equals(entry.getValue().userId()));
+    }
+  }
+
   private String bearerToken(String authorization) {
     if (authorization == null || authorization.isBlank()) {
       return null;

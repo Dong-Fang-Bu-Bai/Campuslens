@@ -1,5 +1,9 @@
 package com.campuslens.controller;
 
+import com.campuslens.model.AccountEmailUpdateRequest;
+import com.campuslens.model.AccountPasswordUpdateRequest;
+import com.campuslens.model.AccountProfile;
+import com.campuslens.model.AccountUpdateResponse;
 import com.campuslens.model.AdminFeedbackDetail;
 import com.campuslens.model.AdminFeedbackRecord;
 import com.campuslens.model.AdminLoginRequest;
@@ -11,6 +15,7 @@ import com.campuslens.model.AuthResponse;
 import com.campuslens.model.CheckInRecord;
 import com.campuslens.model.CheckInReply;
 import com.campuslens.model.CheckInReplyRequest;
+import com.campuslens.model.ReplyLikeResponse;
 import com.campuslens.model.CheckInRequest;
 import com.campuslens.model.FeedbackRequest;
 import com.campuslens.model.FeedbackResponse;
@@ -23,20 +28,23 @@ import com.campuslens.model.LandmarkImage;
 import com.campuslens.model.LandmarkSummary;
 import com.campuslens.model.LandmarkUpsertRequest;
 import com.campuslens.model.LikeResponse;
-import com.campuslens.model.SearchResponse;
+import com.campuslens.model.PasswordResetCodeRequest;
+import com.campuslens.model.PasswordResetConfirmRequest;
+import com.campuslens.model.PasswordResetResponse;
 import com.campuslens.model.SearchJobStatus;
 import com.campuslens.model.SearchJobSubmission;
 import com.campuslens.model.SessionUser;
 import com.campuslens.model.UserSearchRecord;
 import com.campuslens.service.AdminService;
+import com.campuslens.service.AccountAvatarService;
 import com.campuslens.service.AuthService;
 import com.campuslens.service.CheckInService;
 import com.campuslens.service.FeedbackService;
 import com.campuslens.service.LandmarkService;
+import com.campuslens.service.PasswordResetService;
 import com.campuslens.service.IndexRebuildService;
 import com.campuslens.service.GuestIdentityService;
 import com.campuslens.service.SearchRecordService;
-import com.campuslens.service.SearchService;
 import com.campuslens.service.SearchJobService;
 import com.campuslens.service.SessionService;
 import jakarta.validation.Valid;
@@ -59,12 +67,13 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api")
 public class ApiController {
   private final LandmarkService landmarkService;
-  private final SearchService searchService;
   private final SearchJobService searchJobService;
   private final FeedbackService feedbackService;
   private final SearchRecordService searchRecordService;
   private final AdminService adminService;
   private final AuthService authService;
+  private final PasswordResetService passwordResetService;
+  private final AccountAvatarService accountAvatarService;
   private final SessionService sessionService;
   private final CheckInService checkInService;
   private final IndexRebuildService indexRebuildService;
@@ -72,23 +81,25 @@ public class ApiController {
 
   public ApiController(
       LandmarkService landmarkService,
-      SearchService searchService,
       SearchJobService searchJobService,
       FeedbackService feedbackService,
       SearchRecordService searchRecordService,
       AdminService adminService,
       AuthService authService,
+      PasswordResetService passwordResetService,
+      AccountAvatarService accountAvatarService,
       SessionService sessionService,
       CheckInService checkInService,
       IndexRebuildService indexRebuildService,
       GuestIdentityService guestIdentityService) {
     this.landmarkService = landmarkService;
-    this.searchService = searchService;
     this.searchJobService = searchJobService;
     this.feedbackService = feedbackService;
     this.searchRecordService = searchRecordService;
     this.adminService = adminService;
     this.authService = authService;
+    this.passwordResetService = passwordResetService;
+    this.accountAvatarService = accountAvatarService;
     this.sessionService = sessionService;
     this.checkInService = checkInService;
     this.indexRebuildService = indexRebuildService;
@@ -156,6 +167,50 @@ public class ApiController {
     return authService.login(request);
   }
 
+  @PostMapping("/auth/password-reset/code")
+  public PasswordResetResponse requestPasswordResetCode(
+      @Valid @RequestBody PasswordResetCodeRequest request) {
+    return passwordResetService.requestCode(request);
+  }
+
+  @PostMapping("/auth/password-reset/confirm")
+  public PasswordResetResponse confirmPasswordReset(
+      @Valid @RequestBody PasswordResetConfirmRequest request) {
+    return passwordResetService.confirm(request);
+  }
+
+  @GetMapping("/me/account")
+  public AccountProfile myAccount(
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.requireUser(authorization);
+    return authService.account(user.userId());
+  }
+
+  @PutMapping("/me/account/email")
+  public AccountUpdateResponse updateMyEmail(
+      @Valid @RequestBody AccountEmailUpdateRequest request,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.requireUser(authorization);
+    return authService.updateEmail(user.userId(), request);
+  }
+
+  @PutMapping("/me/account/password")
+  public AccountUpdateResponse updateMyPassword(
+      @Valid @RequestBody AccountPasswordUpdateRequest request,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.requireUser(authorization);
+    return authService.updatePassword(user.userId(), request);
+  }
+
+  @PostMapping("/me/account/avatar")
+  public AccountUpdateResponse updateMyAvatar(
+      @RequestPart("file") MultipartFile file,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.requireUser(authorization);
+    accountAvatarService.update(user.userId(), file);
+    return new AccountUpdateResponse(authService.account(user.userId()), "头像已更新");
+  }
+
   @GetMapping("/me/search-records")
   public List<UserSearchRecord> mySearchRecords(
       @RequestParam(value = "limit", defaultValue = "20") int limit,
@@ -182,6 +237,15 @@ public class ApiController {
     return checkInService.create(request, user);
   }
 
+  @GetMapping("/check-ins/{id}")
+  public CheckInRecord checkInDetail(
+      @PathVariable Long id,
+      @RequestParam(value = "guestId", required = false) String guestId,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.find(authorization).orElse(null);
+    return checkInService.detail(id, user, guestId);
+  }
+
   @PostMapping("/check-ins/{id}/like")
   public LikeResponse toggleCheckInLike(
       @PathVariable Long id,
@@ -198,6 +262,15 @@ public class ApiController {
       @RequestHeader(value = "Authorization", required = false) String authorization) {
     SessionUser user = sessionService.find(authorization).orElse(null);
     return checkInService.addReply(id, request, user);
+  }
+
+  @PostMapping("/check-in-replies/{id}/like")
+  public ReplyLikeResponse toggleCheckInReplyLike(
+      @PathVariable Long id,
+      @RequestParam(value = "guestId", required = false) String guestId,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SessionUser user = sessionService.find(authorization).orElse(null);
+    return checkInService.toggleReplyLike(id, user, guestId);
   }
 
   @PostMapping("/admin/auth/login")

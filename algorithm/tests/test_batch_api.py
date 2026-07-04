@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from app.api.routes import init_services, router
+from app.config import Config
 from app.models.dinov2_extractor import DINOv2Extractor
 
 
@@ -102,6 +103,27 @@ class BatchEndpointTests(unittest.TestCase):
         self.assertEqual(items[1]["errorCode"], "cuda_oom")
         self.assertTrue(items[1]["retryable"])
 
+    @patch.object(Config, "MAX_FILE_SIZE", 32)
+    def test_batch_rejects_oversized_image(self):
+        response = self.client.post("/api/v1/search/batch", files=[
+            ("files", ("large.jpg", image_bytes("red"), "image/jpeg")),
+        ])
+
+        self.assertEqual(response.status_code, 200)
+        item = response.json()["items"][0]
+        self.assertFalse(item["success"])
+        self.assertEqual(item["errorCode"], "invalid_image")
+        self.assertIn("图片大小不能超过", item["message"])
+
+    @patch.object(Config, "MAX_FILE_SIZE", 32)
+    def test_single_search_rejects_oversized_image(self):
+        response = self.client.post("/api/v1/search", files={
+            "file": ("large.jpg", image_bytes("red"), "image/jpeg"),
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("图片大小不能超过", response.json()["detail"])
+
     def test_health_exposes_device_and_batch_limit(self):
         response = self.client.get("/api/v1/health")
         self.assertEqual(response.status_code, 200)
@@ -122,6 +144,18 @@ class DeviceSelectionTests(unittest.TestCase):
         extractor = DINOv2Extractor("unused.pth", "auto")
         self.assertEqual(extractor.device, "cpu")
         model.to.assert_called_once_with("cpu")
+
+    @patch.object(DINOv2Extractor, "get_feature_dimension", return_value=768)
+    @patch.object(DINOv2Extractor, "_load_local_model")
+    @patch("app.models.dinov2_extractor.torch.cuda.is_available", return_value=False)
+    def test_image_size_configures_preprocessing(self, cuda_available, load_model, feature_dimension):
+        model = Mock()
+        load_model.return_value = model
+        extractor = DINOv2Extractor("unused.pth", "cpu", image_size=224)
+
+        self.assertEqual(extractor.image_size, 224)
+        self.assertEqual(extractor.transform.transforms[0].size, 224)
+        self.assertEqual(extractor.transform.transforms[1].size, (224, 224))
 
     @patch("app.models.dinov2_extractor.torch.cuda.is_available", return_value=False)
     def test_explicit_cuda_fails_when_unavailable(self, cuda_available):

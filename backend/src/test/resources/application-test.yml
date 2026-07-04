@@ -12,6 +12,7 @@ spring:
     locations: filesystem:../database/migration
 
 campuslens:
+  upload-dir: target/test-uploads
   dataset-dir: target/test-datasets
   search:
     worker-delay-ms: 10

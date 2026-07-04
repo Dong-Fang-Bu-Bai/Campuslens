@@ -34,7 +34,11 @@ class FeatureService:
         self.base_model_version = self._file_version(Path(Config.DINO_MODEL_PATH), "base")
         self.index_version = self._load_index_version()
         self.extractor = DINOv2Extractor(
-            Config.DINO_MODEL_PATH, Config.DEVICE, Config.MIXED_PRECISION, dual_track=True
+            Config.DINO_MODEL_PATH,
+            Config.DEVICE,
+            Config.MIXED_PRECISION,
+            dual_track=True,
+            image_size=Config.IMAGE_SIZE,
         )
         self.faiss_manager = FAISSManager(self.extractor.feature_dim, self._active_index_dir())
         if not self.faiss_manager.load_index():
@@ -287,10 +291,6 @@ class FeatureService:
 
     def get_faiss_stats(self):
         return self.faiss_manager.get_index_stats()
-
-    def extract_and_index_all_landmarks(self):
-        job = self.start_rebuild()
-        return job
 
     def start_rebuild(self):
         if Config.INSTANCE_ROLE != "primary":

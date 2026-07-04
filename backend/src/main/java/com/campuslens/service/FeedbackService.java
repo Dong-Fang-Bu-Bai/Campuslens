@@ -57,6 +57,7 @@ public class FeedbackService {
       return ps;
     }, keyHolder);
     Number key = Objects.requireNonNull(keyHolder.getKey(), "feedback id not generated");
+    correctionSampleService.startEvaluation(key.longValue());
     return new FeedbackResponse(key.longValue(), "pending", "反馈已落库，等待管理员审核");
   }
 
@@ -100,7 +101,7 @@ public class FeedbackService {
       throw new IllegalArgumentException("反馈记录不存在");
     }
     if ("accepted".equals(request.status())) {
-      correctionSampleService.createAndNotify(id);
+      correctionSampleService.stageAccepted(id);
       return new FeedbackResponse(id, request.status(), "反馈已采纳，图片已加入待发布样本，等待索引重建");
     }
     return new FeedbackResponse(id, request.status(), "反馈状态已更新");

@@ -8,6 +8,8 @@ INSERT INTO landmark (
   location_text,
   map_x,
   map_y,
+  longitude,
+  latitude,
   cover_image_url
 )
 VALUES
@@ -21,6 +23,8 @@ VALUES
     '文雍广场附近',
     50.3100,
     59.3300,
+    113.405412,
+    23.046547,
     '/images/landmarks/l01.jpg'
   ),
   (
@@ -33,6 +37,8 @@ VALUES
     '东门附近',
     62.1600,
     61.2200,
+    113.406945,
+    23.046873,
     '/images/landmarks/l02.jpg'
   ),
   (
@@ -45,6 +51,8 @@ VALUES
     '图书馆前',
     57.3700,
     63.5600,
+    113.406226,
+    23.046029,
     '/images/landmarks/l03.jpg'
   ),
   (
@@ -57,6 +65,8 @@ VALUES
     '韵湖沿线',
     57.7500,
     46.1700,
+    113.406081,
+    23.048411,
     '/images/landmarks/l04.jpg'
   ),
   (
@@ -69,6 +79,8 @@ VALUES
     '文雍路东侧',
     67.3200,
     26.8800,
+    113.408031,
+    23.050928,
     '/images/landmarks/l05.jpg'
   ),
   (
@@ -81,6 +93,8 @@ VALUES
     '文雍路西侧',
     43.8800,
     49.0700,
+    113.404296,
+    23.048426,
     '/images/landmarks/l06.jpg'
   ),
   (
@@ -93,6 +107,8 @@ VALUES
     '体育馆北侧',
     45.3900,
     41.2500,
+    113.404863,
+    23.049562,
     '/images/landmarks/l07.jpg'
   ),
   (
@@ -105,6 +121,8 @@ VALUES
     '尚学路西侧',
     33.8000,
     47.1700,
+    113.402809,
+    23.048608,
     '/images/landmarks/l08.jpg'
   ),
   (
@@ -117,6 +135,8 @@ VALUES
     '东二门附近',
     37.9600,
     21.8400,
+    113.403518,
+    23.051689,
     '/images/landmarks/l09.jpg'
   ),
   (
@@ -129,6 +149,8 @@ VALUES
     '北门内侧',
     62.2800,
     10.1200,
+    113.406150,
+    23.053413,
     '/images/landmarks/l10.jpg'
   )
 ON DUPLICATE KEY UPDATE
@@ -140,6 +162,8 @@ ON DUPLICATE KEY UPDATE
   location_text = VALUES(location_text),
   map_x = VALUES(map_x),
   map_y = VALUES(map_y),
+  longitude = VALUES(longitude),
+  latitude = VALUES(latitude),
   cover_image_url = VALUES(cover_image_url);
 
 INSERT INTO admin_user (username, password_hash, role, enabled)

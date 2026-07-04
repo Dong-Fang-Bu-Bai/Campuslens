@@ -14,5 +14,7 @@ public record LandmarkDetail(
     String locationText,
     double mapX,
     double mapY,
+    Double longitude,
+    Double latitude,
     List<LandmarkImage> images) {
 }

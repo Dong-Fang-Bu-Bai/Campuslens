@@ -1,5 +1,6 @@
 package com.campuslens.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -22,7 +23,6 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class AlgorithmSearchClient {
@@ -50,41 +50,6 @@ public class AlgorithmSearchClient {
         .setReadTimeout(Duration.ofMillis(readTimeoutMs))
         .build();
     this.unhealthyCooldownMs = unhealthyCooldownMs;
-  }
-
-  public AlgorithmSearchResponse search(MultipartFile file) {
-    return search(file, false);
-  }
-
-  public AlgorithmSearchResponse search(MultipartFile file, boolean sarMode) {
-    HttpEntity<MultiValueMap<String, Object>> request;
-    try {
-      request = multipartRequest(file, sarMode);
-    } catch (IOException ex) {
-      throw new AlgorithmSearchException("读取上传图片失败", ex);
-    }
-
-    AlgorithmSearchException last = null;
-    for (String baseUrl : candidateUrls()) {
-      try {
-        ResponseEntity<String> response = restTemplate.postForEntity(
-            baseUrl + "/api/v1/search", request, String.class);
-        return objectMapper.readValue(response.getBody(), AlgorithmSearchResponse.class);
-      } catch (IOException ex) {
-        throw new AlgorithmSearchException("解析算法服务响应失败", ex);
-      } catch (HttpStatusCodeException ex) {
-        if (!ex.getStatusCode().is5xxServerError()) {
-          throw new AlgorithmSearchException(
-              "算法服务返回 HTTP " + ex.getStatusCode().value() + ": " + ex.getResponseBodyAsString(), ex);
-        }
-        markUnhealthy(baseUrl);
-        last = new AlgorithmSearchException("算法实例 " + baseUrl + " 返回 HTTP " + ex.getStatusCode().value(), ex);
-      } catch (RestClientException ex) {
-        markUnhealthy(baseUrl);
-        last = new AlgorithmSearchException("调用算法实例 " + baseUrl + " 失败：" + ex.getMessage(), ex);
-      }
-    }
-    throw last == null ? new AlgorithmSearchException("没有可用的算法实例") : last;
   }
 
   public List<AlgorithmBatchItem> searchBatch(List<Path> paths) {
@@ -220,7 +185,7 @@ public class AlgorithmSearchClient {
     try {
       ResponseEntity<String> response = restTemplate.postForEntity(
           baseUrl + "/api/v1/index/rebuild", HttpEntity.EMPTY, String.class);
-      return objectMapper.readValue(response.getBody(), Map.class);
+      return objectMapper.readValue(response.getBody(), new TypeReference<Map<String, Object>>() {});
     } catch (IOException | RestClientException ex) {
       throw new AlgorithmSearchException("启动索引重建失败：" + ex.getMessage(), ex);
     }
@@ -234,39 +199,10 @@ public class AlgorithmSearchClient {
     String baseUrl = primaryBaseUrl();
     try {
       String body = restTemplate.getForObject(baseUrl + path, String.class);
-      return objectMapper.readValue(body, Map.class);
+      return objectMapper.readValue(body, new TypeReference<Map<String, Object>>() {});
     } catch (IOException | RestClientException ex) {
       throw new AlgorithmSearchException("读取算法运行状态失败：" + ex.getMessage(), ex);
     }
-  }
-
-  private HttpEntity<MultiValueMap<String, Object>> multipartRequest(MultipartFile file, boolean sarMode) throws IOException {
-    String filename = file.getOriginalFilename() == null ? "upload.jpg" : file.getOriginalFilename();
-    String contentType = file.getContentType() == null ? MediaType.APPLICATION_OCTET_STREAM_VALUE : file.getContentType();
-
-    ByteArrayResource fileResource = new ByteArrayResource(file.getBytes()) {
-      @Override
-      public String getFilename() {
-        return filename;
-      }
-
-      @Override
-      public long contentLength() {
-        return file.getSize();
-      }
-    };
-
-    HttpHeaders fileHeaders = new HttpHeaders();
-    fileHeaders.setContentType(MediaType.parseMediaType(contentType));
-    HttpEntity<ByteArrayResource> filePart = new HttpEntity<>(fileResource, fileHeaders);
-
-    MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-    body.add("file", filePart);
-    body.add("sarMode", String.valueOf(sarMode));
-
-    HttpHeaders headers = new HttpHeaders();
-    headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-    return new HttpEntity<>(body, headers);
   }
 
   public record AlgorithmSearchResponse(

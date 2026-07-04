@@ -73,14 +73,6 @@ public class SearchRecordService {
     return new SearchRecordCreation(key.longValue(), storedGuestId);
   }
 
-  public boolean exists(Long searchRecordId) {
-    Integer count = jdbcTemplate.queryForObject(
-        "SELECT COUNT(*) FROM search_record WHERE id = ?",
-        Integer.class,
-        searchRecordId);
-    return count != null && count > 0;
-  }
-
   public boolean containsResult(Long searchRecordId, Long landmarkId) {
     if (landmarkId == null) {
       return true;
@@ -115,6 +107,20 @@ public class SearchRecordService {
         rs.getString("status"),
         rs.getObject("user_id") == null ? null : rs.getLong("user_id"),
         rs.getString("guest_id")), searchRecordId).stream()
+        .findFirst()
+        .orElseThrow(() -> new IllegalArgumentException("searchRecordId 对应的检索记录不存在"));
+  }
+
+  public CheckInSource checkInSource(Long searchRecordId) {
+    return jdbcTemplate.query("""
+        SELECT status, user_id, guest_id, upload_image_url
+        FROM search_record
+        WHERE id = ?
+        """, (rs, rowNum) -> new CheckInSource(
+        rs.getString("status"),
+        rs.getObject("user_id") == null ? null : rs.getLong("user_id"),
+        rs.getString("guest_id"),
+        rs.getString("upload_image_url")), searchRecordId).stream()
         .findFirst()
         .orElseThrow(() -> new IllegalArgumentException("searchRecordId 对应的检索记录不存在"));
   }
@@ -175,14 +181,6 @@ public class SearchRecordService {
         rs.getTimestamp("created_at").toLocalDateTime()), userId, safeLimit);
   }
 
-  public List<SearchResult> topResults(Long searchRecordId) {
-    String json = jdbcTemplate.queryForObject(
-        "SELECT top_results_json FROM search_record WHERE id = ?",
-        String.class,
-        searchRecordId);
-    return parseTopResults(json);
-  }
-
   public List<SearchResult> parseTopResults(String json) {
     if (json == null || json.isBlank()) {
       return List.of();
@@ -209,6 +207,8 @@ public class SearchRecordService {
 
   public record FeedbackTarget(String status, Long userId, String guestId) {}
 
+  public record CheckInSource(String status, Long userId, String guestId, String uploadImageUrl) {}
+
   private record SearchResultSnapshot(
       int rank,
       Long landmarkId,
@@ -221,7 +221,9 @@ public class SearchRecordService {
       String summary,
       String locationText,
       double mapX,
-      double mapY) {
+      double mapY,
+      Double longitude,
+      Double latitude) {
     private static SearchResultSnapshot from(SearchResult result) {
       return new SearchResultSnapshot(
           result.rank(),
@@ -235,7 +237,9 @@ public class SearchRecordService {
           result.summary(),
           result.locationText(),
           result.mapX(),
-          result.mapY());
+          result.mapY(),
+          result.longitude(),
+          result.latitude());
     }
   }
 }

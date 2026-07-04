@@ -120,7 +120,7 @@ $env:CAMPUSLENS_ALGORITHM_PYTHON = "D:\path\to\python.exe"
 
 **依赖安装脚本说明**：
 
-- `create_gpu_env.bat`：使用 `D:\AnaConda\Scripts\conda.exe` 创建 `D:\AnaConda\envs\campuslens-gpu`，并安装公共依赖、PyTorch CUDA 12.1 及测试依赖。Conda、pip 和临时文件缓存均写入 D 盘配置目录。
+- `create_gpu_env.bat`：使用 `D:\AnaConda\Scripts\conda.exe` 创建 `D:\AnaConda\envs\campuslens-gpu`，并安装公共依赖、PyTorch CUDA 12.1、测试依赖及SAR鲁棒性实验绘图依赖。Conda、pip 和临时文件缓存均写入 D 盘配置目录。
 - `install_gpu.bat`：在已有 Python 3.10+ 环境中安装 GPU 版本依赖
 - `install_cpu.bat`：在已有 Python 环境中安装 CPU 版本依赖
 
@@ -147,9 +147,10 @@ DINOv2 离线模型验证工具
 
 编辑 `.env` 文件可配置：
 - `DEVICE`: 计算设备 (`auto`/`cpu`/`cuda`)，默认 `auto`
-- `IMAGE_SIZE`: 输入图片尺寸，默认 `518`
-- `BATCH_SIZE`: 批处理大小，默认 `32`
+- `IMAGE_SIZE`: DINOv2 resize/crop 输入尺寸，默认 `518`
 - `SEARCH_BATCH_SIZE`: 在线批量接口上限，默认 `2`
+- `REBUILD_BATCH_SIZE`: CPU 索引重建批量大小，默认 `4`
+- `MAX_FILE_SIZE`: 单张上传图片字节上限，默认 `8388608`（8 MB）
 - `MIXED_PRECISION`: 混合精度开关，默认 `false`
 - `SAR_ENABLED`: SAR 功能开关，默认 `true`
 
@@ -376,7 +377,7 @@ GET /api/v1/index/stats
 POST /api/v1/adaptation/correction-samples
 ```
 
-接收后端提交的校正样本和原检索结果，计算 `suggestAccept`、`reviewScore` 与后续动作，并写入本地 manifest。该接口不会直接把用户反馈作为真值更新 SAR 参数；样本是否进入正式索引，由后端审核及后续索引重建流程决定。
+用户提交反馈后，后端调用该接口评估图片和原检索结果，计算 `suggestAccept`、`reviewScore` 与评估原因，并写入本地评估 manifest。该接口不会自动采纳反馈、复制待发布样本或更新 SAR 参数；样本只有在管理员采纳后才进入后续索引重建流程。
 
 ### 接口汇总
 
@@ -389,7 +390,7 @@ POST /api/v1/adaptation/correction-samples
 | `/api/v1/index/stats` | GET | 活动索引统计 |
 | `/api/v1/index/rebuild` | POST | 创建索引重建任务 |
 | `/api/v1/index/rebuild/{job_id}` | GET | 查询重建状态 |
-| `/api/v1/adaptation/correction-samples` | POST | 写入校正样本 |
+| `/api/v1/adaptation/correction-samples` | POST | 评估反馈校正样本并生成审核建议 |
 
 ---
 
@@ -438,6 +439,8 @@ SAR 状态在基准模型和索引版本一致时可跨重启恢复；低熵 EMA
 | **统计信息** | 不使用类别协方差 | 使用各地标均值和正则化协方差 |
 | **展示分数** | 可直接使用相似度排序 | 将距离映射为经验匹配分，并划分 high/medium/low |
 | **适用边界** | 适合快速向量近邻召回 | 依赖已有地标样本统计，参数需结合数据集标定 |
+
+当前实现只保留马氏距离到经验匹配分的单一路径，旧自适应评分函数和 `confidence_threshold` 兼容参数已移除。`score` 仍只用于排序和展示区分度，不代表概率。
 
 详细算法说明见：[algo.md](algo.md)
 
@@ -605,18 +608,21 @@ DINOv2 离线模型验证工具
 
 ### 2. 单元测试
 
-项目提供核心模块的单元测试（位于 `tests/` 目录，如未创建可手动添加）：
+项目提供核心模块的单元测试（位于 `tests/` 目录）：
 
 ```powershell
 cd algorithm
 D:\AnaConda\envs\campuslens-gpu\python.exe -m pytest tests/ -v
 ```
 
+截至 2026-07-04，当前回归为 `29/29`，其中新增5项受控扰动抽样、生成、统计与绘图回归测试。
+
 测试覆盖：
 - 马氏距离计算正确性
 - 经验匹配分范围验证
 - FAISS 索引构建与搜索
 - SAR 熵计算与门控逻辑
+- 批量坏图、CUDA OOM 隔离、8 MB 文件限制与 `IMAGE_SIZE` 预处理配置
 
 ### 3. 基准测试
 
@@ -624,6 +630,19 @@ D:\AnaConda\envs\campuslens-gpu\python.exe -m pytest tests/ -v
 # SAR 基准测试
 python benchmark_sar.py --limit-per-landmark 1
 ```
+
+`benchmark_sar.py`从建库目录抽样，只适合链路冒烟和性能初测，不能作为最终鲁棒性证据。
+正式补充实验从当前212张建库图片中按地标和视角确定性选择50张基础图片，构造高斯噪声、亮度降低和高斯模糊三类受控扰动：
+
+```powershell
+python -m pip install -r requirements-evaluation.txt
+python evaluate_sar_robustness.py all
+```
+
+普通模式运行800个条件，SAR从相同初始状态按种子`42`、`2026`、`704`各运行800个条件。
+程序按50张基础图片进行配对聚类Bootstrap，输出3200条逐请求证据、汇总JSON、PNG/SVG图表和HTML预览。
+该实验是基于建库图片的受控扰动压力测试，不表述为独立现场测试集泛化准确率。完整协议见
+[SAR受控扰动对照实验](../docs/17_sar_robustness_experiment.md)。
 
 ### 4. API 测试
 
@@ -770,7 +789,7 @@ RuntimeError: CUDA out of memory
 
 **解决方案**：
 ```powershell
-$env:BATCH_SIZE=16
+$env:SEARCH_BATCH_SIZE=1
 $env:DEVICE=cpu
 ```
 
@@ -813,9 +832,10 @@ netstat -ano | findstr "8000"
 
 ### 问题 9: 显存不足（双实例）
 
-双实例会各自加载模型，可减小 `BATCH_SIZE`，测试时也可临时只启动一个实例：
+双实例会各自加载模型。在线批量 OOM 时可减小 `SEARCH_BATCH_SIZE`，索引重建 OOM 时可减小 `REBUILD_BATCH_SIZE`；开发诊断时也可临时只启动一个实例：
 ```powershell
-$env:BATCH_SIZE=16
+$env:SEARCH_BATCH_SIZE=1
+$env:REBUILD_BATCH_SIZE=2
 ```
 
 ---
@@ -838,6 +858,7 @@ $env:BATCH_SIZE=16
 
 ### v2.1 (2026-06-13) - 当前版本
 - ✅ 移除未使用的余弦相似度变量
+- ✅ 移除旧自适应评分遗留函数和未生效的兼容参数
 - ✅ 改进 FAISS 召回策略（`top_k * 2` → `max(top_k * 5, 30)`）
 - ✅ 扩大 FAISS 候选召回范围，并保留马氏距离重排序
 - ✅ 精简 API 响应格式

@@ -1,12 +1,10 @@
 from fastapi import APIRouter, File, Form, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 import json
-import math
 import asyncio
 import threading
 import torch
 from datetime import datetime, timezone
-from PIL import Image
 from app.utils.image_processor import ImageProcessor
 from app.schemas.response import (
     CorrectionSampleRequest,
@@ -83,6 +81,8 @@ async def search_landmark(file: UploadFile = File(...), sarMode: bool = Form(Fal
     
     except HTTPException:
         raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
@@ -304,7 +304,10 @@ async def receive_correction_sample(
     is_valid, error_msg = ImageProcessor.validate_file(file)
     if not is_valid:
         raise HTTPException(status_code=400, detail=error_msg)
-    image = ImageProcessor.read_image(file)
+    try:
+        image = ImageProcessor.read_image(file)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     confirmed = payload.confirmedLandmarkCode
     matched = next((item for item in payload.topResults if item.landmarkCode == confirmed), None)
@@ -317,7 +320,7 @@ async def receive_correction_sample(
         and entropy < Config.SAR_ENTROPY_THRESHOLD
     )
     suggest_accept = sar_eligible and payload.feedbackType in {"correct", "wrong"}
-    next_action = "rebuild_model_and_index" if suggest_accept else "manual_review"
+    next_action = "await_admin_decision" if suggest_accept else "manual_review"
     reason = (
         "confirmed landmark appears in Top results; store as weak-label correction sample"
         if matched is not None
@@ -327,8 +330,7 @@ async def receive_correction_sample(
     activation = {"activated": False}
     adaptation_error = None
     if suggest_accept:
-        next_action = "pending_index"
-        reason = "accepted samples are staged by the backend and published only by an index rebuild"
+        reason = "confirmed landmark meets the recommendation threshold; administrator approval is required before staging"
 
     response_data = CorrectionSampleResponse(
         suggestAccept=suggest_accept,
@@ -346,19 +348,6 @@ async def receive_correction_sample(
         status_code=200,
         media_type="application/json; charset=utf-8"
     )
-
-
-def _review_score(top_results, confirmed_code: str) -> float:
-    # Pseudo probability over ranking scores. This uses a SAR-style reliability
-    # gate idea without claiming a full SAR implementation.
-    logits = [max(0.0, item.score) for item in top_results]
-    max_logit = max(logits)
-    exp_values = [math.exp(value - max_logit) for value in logits]
-    total = sum(exp_values)
-    for item, exp_value in zip(top_results, exp_values):
-        if item.landmarkCode == confirmed_code:
-            return exp_value / total if total else 0.0
-    return 0.0
 
 
 def _append_correction_manifest(

@@ -65,7 +65,7 @@ class AdaptationEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertTrue(body["suggestAccept"])
-        self.assertEqual(body["nextAction"], "pending_index")
+        self.assertEqual(body["nextAction"], "await_admin_decision")
         self.assertFalse(body["activated"])
 
         lines = Config.CORRECTION_SAMPLES_MANIFEST.read_text(encoding="utf-8").splitlines()
