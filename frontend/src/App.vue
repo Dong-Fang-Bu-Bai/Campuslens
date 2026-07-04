@@ -1,6 +1,25 @@
 <template>
   <main class="app-shell" :class="shellClasses">
-    <aside id="primary-navigation" class="side-panel" :class="{ 'collapsed': isSidebarCollapsed }">
+    <!-- 侧边栏悬浮感应区 -->
+    <div 
+      v-if="isSidebarCollapsed" 
+      class="sidebar-hover-trigger"
+      @mouseenter="handleMouseEnter"
+      @mouseleave="handleMouseLeave"
+    >
+      <span class="hover-glow-line"></span>
+    </div>
+    
+    <aside 
+      id="primary-navigation" 
+      class="side-panel" 
+      :class="{ 
+        'collapsed': isSidebarCollapsed,
+        'floating-active': isSidebarCollapsed && isSidebarHovered 
+      }"
+      @mouseenter="handleMouseEnter"
+      @mouseleave="handleMouseLeave"
+    >
       <div class="brand-header">
         <div class="brand-logo">
           <img src="/logo.png" alt="CampusLens" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />
@@ -13,7 +32,14 @@
       <p class="intro">{{ t('上传一张校园照片，快速识别地标并查看位置与介绍。', 'Upload a campus photo to identify landmarks and explore their locations and stories.') }}</p>
 
       <form class="upload-panel" @submit.prevent="submitSearch">
-        <label class="file-drop" :class="{ active: selectedFile }">
+        <label 
+          class="file-drop" 
+          :class="{ active: selectedFile, 'drag-active': isDragActive }"
+          @dragenter.prevent="isDragActive = true"
+          @dragover.prevent="isDragActive = true"
+          @dragleave.prevent="isDragActive = false"
+          @drop.prevent="handleFileDrop"
+        >
           <input type="file" accept="image/jpeg,image/png,image/webp" @change="onFileChange" />
           <span class="file-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
@@ -232,7 +258,19 @@
                     </div>
 
                     <div class="result-actions">
-                      <span class="result-meta">{{ confidenceLabel(item.confidenceLevel) }}<template v-if="item.mahalanobisDistance != null"> · D={{ Number(item.mahalanobisDistance).toFixed(2) }}</template></span>
+                      <span class="result-meta">
+                        {{ confidenceLabel(item.confidenceLevel) }}
+                        <template v-if="item.mahalanobisDistance != null">
+                          · 
+                          <span 
+                            class="mahalanobis-score-wrapper" 
+                            :title="t('马氏距离：衡量图像特征与地标标准特征的分布偏离度。数值越小，代表与地标的样本分布越吻合，识别置信度越高。', 'Mahalanobis Distance: Measures deviation of image features from the landmark\'s reference distribution. A smaller distance indicates higher alignment and confidence.')"
+                          >
+                            D={{ Number(item.mahalanobisDistance).toFixed(2) }}
+                            <svg class="info-icon" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                          </span>
+                        </template>
+                      </span>
                       <button @click.stop="openModal(item)">{{ t('详情', 'Detail') }}</button>
                       <button :disabled="!feedbackEligible" @click.stop="openFeedback(item)">{{ t('反馈', 'Feedback') }}</button>
                       <button :disabled="!checkInEligible" @click.stop="beginCheckIn(searchMeta, item)">{{ t('打卡', 'Check in') }}</button>
@@ -241,6 +279,39 @@
                 </div>
                 <div v-if="((index - activeResultIndex + results.length) % results.length) !== 0" class="carousel-click-shield"></div>
               </div>
+            </div>
+
+            <!-- 轮播图控制栏 -->
+            <div v-if="results.length" class="carousel-control-bar">
+              <button 
+                type="button" 
+                class="carousel-nav-btn prev" 
+                @click.stop="cycleResults(-1)" 
+                :title="t('上一个地标', 'Previous Landmark')"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+              </button>
+              <div class="carousel-dots">
+                <button 
+                  v-for="(item, index) in results" 
+                  :key="item.landmarkId"
+                  class="carousel-dot"
+                  :class="{ active: index === activeResultIndex }"
+                  type="button"
+                  @click="selectLandmarkFromCarousel(item.landmarkId, index)"
+                  :title="t(`候选 ${index + 1}`, `Candidate ${index + 1}`)"
+                >
+                  <span class="dot-inner"></span>
+                </button>
+              </div>
+              <button 
+                type="button" 
+                class="carousel-nav-btn next" 
+                @click.stop="cycleResults(1)" 
+                :title="t('下一个地标', 'Next Landmark')"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
             </div>
             <article v-else class="empty-state">
               <h3>{{ t('等待识别校园地标', 'Ready to Identify a Landmark') }}</h3>
@@ -272,6 +343,7 @@
               @mousemove="onDrag"
               @mouseup="endDrag"
               @mouseleave="endDrag"
+              @wheel.prevent="handleMapWheel"
             >
               <div 
                 class="map-container"
@@ -282,7 +354,10 @@
                   v-for="item in localizedLandmarks"
                   :key="item.id"
                   class="map-marker"
-                  :class="{ active: item.id === selectedId }"
+                  :class="[
+                    item.id === selectedId ? 'active' : '',
+                    'marker-' + getMarkerTypeClass(item.type)
+                  ]"
                   :style="{ left: item.mapX + '%', top: item.mapY + '%' }"
                   :title="item.name"
                   type="button"
@@ -519,14 +594,29 @@
     <button 
       type="button" 
       class="sidebar-toggle-btn"
-      :class="isSidebarCollapsed ? 'collapsed' : 'expanded'"
+      :class="[
+        isSidebarCollapsed ? 'collapsed' : 'expanded',
+        isSidebarCollapsed && isSidebarHovered ? 'pin-mode' : ''
+      ]"
       @click="isSidebarCollapsed = !isSidebarCollapsed"
-      :title="isSidebarCollapsed ? t('展开侧边栏', 'Expand Sidebar') : t('收起侧边栏', 'Collapse Sidebar')"
-      :aria-label="isSidebarCollapsed ? t('打开导航菜单', 'Open navigation menu') : t('关闭导航菜单', 'Close navigation menu')"
+      :title="toggleBtnTitle"
+      :aria-label="toggleBtnAria"
       :aria-expanded="!isSidebarCollapsed"
       aria-controls="primary-navigation"
+      @mouseenter="handleMouseEnter"
+      @mouseleave="handleMouseLeave"
     >
-      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="toggle-arrow"><polyline points="15 18 9 12 15 6"></polyline></svg>
+      <template v-if="isSidebarCollapsed && isSidebarHovered">
+        <!-- 图钉固定图标 -->
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="pin-icon">
+          <line x1="12" y1="17" x2="12" y2="22"></line>
+          <path d="M5 17h14v-1.76a2 2 0 0 0-.44-1.24l-2.78-3.5A2 2 0 0 1 15 9.24V5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v4.24c0 .43-.15.84-.44 1.24l-2.78 3.5a2 2 0 0 0-.44 1.24Z"></path>
+        </svg>
+      </template>
+      <template v-else>
+        <!-- 折叠/展开箭头 -->
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="toggle-arrow"><polyline points="15 18 9 12 15 6"></polyline></svg>
+      </template>
     </button>
 
     <!-- 欢迎界面弹出层 -->
@@ -550,7 +640,7 @@
             
             <div class="welcome-poem-box">
               <p class="poem-text">
-                <span style="color: var(--color-accent-light); opacity: 0.5; font-family: Georgia, serif; font-size: 1.2em; vertical-align: -0.1em; margin-right: 4px;">“</span>{{ welcomePoem }}<span style="color: var(--color-accent-light); opacity: 0.5; font-family: Georgia, serif; font-size: 1.2em; vertical-align: -0.2em; margin-left: 4px;">”</span>
+                <span style="color: var(--color-accent-light); opacity: 0.5; font-family: Georgia, serif; font-size: 1.2em; vertical-align: -0.1em; margin-right: 4px;">“</span>{{ displayedPoem }}<span style="color: var(--color-accent-light); opacity: 0.5; font-family: Georgia, serif; font-size: 1.2em; vertical-align: -0.2em; margin-left: 4px;">”</span>
               </p>
             </div>
             
@@ -566,7 +656,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import AdminPanel from './components/AdminPanel.vue'
 import AccountPanel from './components/AccountPanel.vue'
 import AuthPanel from './components/AuthPanel.vue'
@@ -580,6 +670,23 @@ import { buildAmapWalkingNavigationUrl, buildAmapMarkerUrl } from './utils/amapN
 import { getLunarDateString } from './utils/lunar.js'
 
 const isSidebarCollapsed = ref(false)
+const isSidebarHovered = ref(false)
+const isDragActive = ref(false)
+const displayedPoem = ref('')
+let poemInterval = null
+let hoverTimeout = null
+
+function handleMouseEnter() {
+  if (hoverTimeout) clearTimeout(hoverTimeout)
+  isSidebarHovered.value = true
+}
+
+function handleMouseLeave() {
+  if (hoverTimeout) clearTimeout(hoverTimeout)
+  hoverTimeout = setTimeout(() => {
+    isSidebarHovered.value = false
+  }, 100)
+}
 
 const showWelcomeModal = ref(false)
 const welcomePoem = ref('')
@@ -908,8 +1015,38 @@ function zoomReset() {
   }
 }
 
+function handleMapWheel(e) {
+  const zoomFactor = 0.1
+  const oldScale = zoomScale.value
+  let newScale = oldScale
+
+  if (e.deltaY < 0) {
+    newScale = Math.min(maxZoom, parseFloat((oldScale + zoomFactor).toFixed(2)))
+  } else {
+    newScale = Math.max(minZoom, parseFloat((oldScale - zoomFactor).toFixed(2)))
+  }
+
+  if (newScale === oldScale) return
+
+  const rect = mapViewport.value.getBoundingClientRect()
+  const mouseX = e.clientX - rect.left
+  const mouseY = e.clientY - rect.top
+
+  const oldScrollLeft = mapViewport.value.scrollLeft
+  const oldScrollTop = mapViewport.value.scrollTop
+
+  zoomScale.value = newScale
+
+  if (newScale > 1.0) {
+    nextTick(() => {
+      if (!mapViewport.value) return
+      mapViewport.value.scrollLeft = (mouseX + oldScrollLeft) * (newScale / oldScale) - mouseX
+      mapViewport.value.scrollTop = (mouseY + oldScrollTop) * (newScale / oldScale) - mouseY
+    })
+  }
+}
+
 function startDrag(e) {
-  if (zoomScale.value <= 1.0) return
   if (e.target.closest('.map-marker') || e.target.closest('.map-controls')) return
   isDragging.value = true
   startX.value = e.pageX - mapViewport.value.offsetLeft
@@ -943,10 +1080,21 @@ const selectedLandmark = computed(() => landmarks.value.find((item) => item.id =
 const isAdmin = computed(() => currentUser.value?.role === 'admin')
 const shellClasses = computed(() => ({
   'sidebar-collapsed': isSidebarCollapsed.value,
+  'sidebar-hovered': isSidebarCollapsed.value && isSidebarHovered.value,
   'view-checkins': activeView.value === 'checkins',
   [`theme-${preferences.theme}`]: true,
   [`backdrop-${preferences.backdrop}`]: true
 }))
+
+const toggleBtnTitle = computed(() => {
+  if (!isSidebarCollapsed.value) return t('收起侧边栏', 'Collapse Sidebar')
+  return isSidebarHovered.value ? t('固定侧边栏', 'Pin Sidebar') : t('展开侧边栏', 'Expand Sidebar')
+})
+
+const toggleBtnAria = computed(() => {
+  if (!isSidebarCollapsed.value) return t('关闭导航菜单', 'Close navigation menu')
+  return isSidebarHovered.value ? t('固定导航菜单', 'Pin navigation menu') : t('打开导航菜单', 'Open navigation menu')
+})
 
 const viewTitle = computed(() => ({
   results: t('校园地标识别', 'Landmark Search'),
@@ -1236,6 +1384,7 @@ onMounted(async () => {
       welcomeDate.value.solar = `${dateStr}, ${weekdayStr}`
       welcomeDate.value.lunar = 'A new day to explore the campus'
     }
+    startPoemTyping()
     showWelcomeModal.value = true
   }
 
@@ -1264,6 +1413,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   mobileNavigationQuery.removeEventListener('change', handleNavigationBreakpoint)
+  if (poemInterval) clearInterval(poemInterval)
+  if (hoverTimeout) clearTimeout(hoverTimeout)
 })
 
 function handleNavigationBreakpoint(event) {
@@ -1273,6 +1424,56 @@ function handleNavigationBreakpoint(event) {
 function dismissWelcome() {
   localStorage.setItem('campuslens.welcomeDismissed', 'true')
   showWelcomeModal.value = false
+  if (poemInterval) clearInterval(poemInterval)
+}
+
+function startPoemTyping() {
+  displayedPoem.value = ''
+  if (poemInterval) clearInterval(poemInterval)
+  let index = 0
+  const text = welcomePoem.value
+  if (!text) return
+  poemInterval = setInterval(() => {
+    if (index < text.length) {
+      displayedPoem.value += text[index]
+      index++
+    } else {
+      clearInterval(poemInterval)
+    }
+  }, 80)
+}
+
+function getMarkerTypeClass(type) {
+  const tStr = String(type || '').toLowerCase()
+  if (tStr.includes('teaching') || tStr.includes('教学') || tStr.includes('图书')) {
+    return 'teaching'
+  }
+  if (tStr.includes('life') || tStr.includes('canteen') || tStr.includes('生活') || tStr.includes('食堂') || tStr.includes('服务')) {
+    return 'life'
+  }
+  if (tStr.includes('sport') || tStr.includes('运动') || tStr.includes('体育') || tStr.includes('操场') || tStr.includes('馆')) {
+    return 'sports'
+  }
+  return 'scenery'
+}
+
+function handleFileDrop(event) {
+  isDragActive.value = false
+  const file = event.dataTransfer?.files?.[0]
+  if (file) {
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!validTypes.includes(file.type)) {
+      error.value = t('仅支持 JPG、PNG 或 WebP 格式的图片', 'Only JPG, PNG, or WebP images are supported.')
+      return
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      error.value = t('图片大小不能超过 8 MB', 'Image size must be less than 8 MB.')
+      return
+    }
+    selectedFile.value = file
+    uploadIdempotencyKey.value = createRequestId()
+    error.value = ''
+  }
 }
 
 function createRequestId() {

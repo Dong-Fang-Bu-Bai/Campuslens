@@ -100,20 +100,34 @@ button {
   position: relative;
   z-index: 0;
   overflow: hidden;
-  transition: opacity 0.4s cubic-bezier(0.25, 0.8, 0.25, 1),
-              padding 0.4s cubic-bezier(0.25, 0.8, 0.25, 1),
+  transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1),
               border-color 0.4s cubic-bezier(0.25, 0.8, 0.25, 1),
-              visibility 0.4s;
-  visibility: visible;
-  opacity: 1;
+              background 0.4s cubic-bezier(0.25, 0.8, 0.25, 1),
+              box-shadow 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transform: translateX(0);
 }
 
 .side-panel.collapsed {
-  padding: 44px 0px;
-  opacity: 0;
+  transform: translateX(-100%);
   border-right-color: transparent;
-  visibility: hidden;
   pointer-events: none;
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  height: 100vh;
+  z-index: 100;
+  width: 360px;
+}
+
+.side-panel.collapsed.floating-active {
+  transform: translateX(0);
+  pointer-events: auto;
+  background: rgba(4, 6, 13, 0.9); /* 加深底色保障悬浮遮挡 */
+  backdrop-filter: blur(24px); /* 强化高精毛玻璃 */
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 25px 0 60px -15px rgba(0, 0, 0, 0.85), 0 0 40px rgba(59, 130, 246, 0.03); /* 高端曜石悬浮深空投影 */
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .side-panel::before {
@@ -498,6 +512,7 @@ h3 {
    4. 主内容与切换 Transition 动效
    ========================================= */
 .content-area {
+  grid-column: 2; /* 显式锁死在网格第二列，避免因侧栏 position 漂移导致内容区滑向 0px 的第一列 */
   min-width: 0;
   padding: 32px 54px 24px;
   background: transparent;
@@ -1059,19 +1074,19 @@ h3 {
   max-height: none;
 }
 
-/* 高精度白底蓝心 Marker 打点 */
+/* 高精度主题分类色彩联动 Marker 打点 */
 .map-marker {
   position: absolute;
   width: 24px;
   height: 24px;
   transform: translate(-50%, -50%);
-  border: 2px solid #ffffff;
+  border: 2px solid var(--marker-color, var(--color-accent));
   border-radius: 50%;
-  background: var(--color-accent);
-  color: #ffffff;
+  background: var(--bg-card); /* 填充颜色与当前主题底色联动，彻底解决遮挡与清晰度问题 */
+  color: #ffffff; /* 高对比度白字 */
   font-size: 10px;
   font-weight: 800;
-  box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -4342,3 +4357,228 @@ h3 {
     transform: none;
   }
 }
+
+/* ==========================================
+   CampusLens 前端细节交互与视觉优化
+   ========================================= */
+
+/* File Drop 拖拽激活高亮 */
+.file-drop.drag-active {
+  border-color: var(--color-accent) !important;
+  background: rgba(59, 130, 246, 0.06) !important;
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.15), inset 0 0 12px rgba(59, 130, 246, 0.08) !important;
+  transform: scale(1.02);
+}
+
+/* 轮播图底部控制栏 */
+.carousel-control-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 16px auto 8px;
+  padding: 6px 14px;
+  width: fit-content;
+  background: rgba(13, 18, 31, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 30px;
+  z-index: 12;
+  position: relative;
+  box-shadow: var(--shadow-sm);
+}
+
+.carousel-nav-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  transition: var(--transition-smooth);
+}
+
+.carousel-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-accent-light);
+}
+
+.carousel-dots {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.carousel-dot {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.carousel-dot .dot-inner {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  transition: var(--transition-smooth);
+}
+
+.carousel-dot:hover .dot-inner {
+  background: rgba(255, 255, 255, 0.45);
+  transform: scale(1.2);
+}
+
+.carousel-dot.active .dot-inner {
+  background: var(--color-accent);
+  width: 18px;
+  border-radius: 3px;
+  box-shadow: 0 0 10px var(--color-accent);
+}
+
+/* 地图 Marker 分类配色与雷达扩散 */
+.map-marker.marker-teaching {
+  --marker-color: #3b82f6;
+  border-color: #3b82f6;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.4);
+}
+
+.map-marker.marker-life {
+  --marker-color: #eab308;
+  border-color: #eab308;
+  box-shadow: 0 0 12px rgba(234, 179, 8, 0.4);
+}
+
+.map-marker.marker-sports {
+  --marker-color: #10b981;
+  border-color: #10b981;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+}
+
+.map-marker.marker-scenery {
+  --marker-color: #f97316;
+  border-color: #f97316;
+  box-shadow: 0 0 12px rgba(249, 115, 22, 0.4);
+}
+
+.map-marker.active::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  right: -6px;
+  bottom: -6px;
+  border-radius: 50%;
+  border: 2px solid var(--marker-color, var(--color-accent));
+  animation: marker-ripple 1.6s infinite cubic-bezier(0.25, 0, 0, 1);
+  pointer-events: none;
+  z-index: -1;
+}
+
+@keyframes marker-ripple {
+  0% {
+    transform: scale(0.9);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+/* 马氏距离 Tooltip */
+.mahalanobis-score-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: help;
+  text-decoration: underline dotted rgba(255, 255, 255, 0.25);
+  transition: var(--transition-smooth);
+}
+
+.mahalanobis-score-wrapper:hover {
+  color: var(--color-accent-light);
+  text-decoration-color: var(--color-accent-light);
+}
+
+.mahalanobis-score-wrapper .info-icon {
+  opacity: 0.65;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+}
+
+.mahalanobis-score-wrapper:hover .info-icon {
+  opacity: 1;
+}
+
+/* 最左侧磁吸悬停触发感应区 */
+.sidebar-hover-trigger {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  z-index: 99;
+  cursor: pointer;
+  background: transparent;
+}
+
+/* 唤醒感应指示线 */
+.hover-glow-line {
+  position: absolute;
+  left: 0;
+  top: 10%;
+  bottom: 10%;
+  width: 1.5px;
+  background: linear-gradient(to bottom, transparent, var(--marker-color, var(--color-accent)), transparent);
+  opacity: 0.15;
+  transition: opacity 0.3s, box-shadow 0.3s;
+  pointer-events: none;
+}
+
+.sidebar-hover-trigger:hover .hover-glow-line {
+  opacity: 0.85;
+  box-shadow: 0 0 10px var(--marker-color, var(--color-accent));
+}
+
+/* 侧边栏悬浮时，随动折叠/固定按钮 */
+.app-shell.sidebar-collapsed.sidebar-hovered .sidebar-toggle-btn {
+  left: calc(360px - 14px);
+  background: rgba(30, 41, 59, 0.92);
+  color: #ffffff;
+  border-color: rgba(59, 130, 246, 0.35);
+  box-shadow: 5px 0 20px rgba(59, 130, 246, 0.25);
+}
+
+.app-shell.sidebar-collapsed.sidebar-hovered .sidebar-toggle-btn .toggle-arrow {
+  transform: rotate(0deg); /* 随动划出时，箭头反向，表示点击锁死 */
+}
+
+/* 图钉锁定模式按钮细化及微倾斜拟物动效 */
+.sidebar-toggle-btn.pin-mode {
+  background: var(--color-accent) !important;
+  color: #ffffff !important;
+  border-color: var(--color-accent) !important;
+  box-shadow: 0 0 15px var(--color-accent-bg) !important;
+}
+
+.sidebar-toggle-btn.pin-mode:hover {
+  background: var(--color-accent-light) !important;
+  box-shadow: 0 0 15px var(--color-accent) !important;
+}
+
+.sidebar-toggle-btn.pin-mode .pin-icon {
+  transform: rotate(45deg);
+  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.sidebar-toggle-btn.pin-mode:hover .pin-icon {
+  transform: rotate(0deg); /* 悬浮时正立 */
+}
+
