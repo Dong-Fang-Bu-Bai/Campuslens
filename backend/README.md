@@ -41,7 +41,6 @@ GET http://localhost:8080/api/health
 | `POST /api/feedback` | 提交正确、错误或不确定反馈 |
 | `POST /api/auth/register` | 使用唯一用户名、唯一邮箱和至少 8 位密码注册 |
 | `POST /api/auth/login` | 用户或管理员登录 |
-| `POST /api/admin/auth/login` | 旧联调脚本使用的管理员兼容登录入口；正式前端不调用 |
 | `POST /api/auth/password-reset/code` | 输入绑定邮箱并向该邮箱发送密码重置验证码 |
 | `POST /api/auth/password-reset/confirm` | 使用绑定邮箱校验验证码并设置新密码 |
 | `GET /api/admin/algorithm/runtime` | 管理员查看主算法实例运行、SAR 和索引状态 |
@@ -68,7 +67,7 @@ $env:CAMPUSLENS_MAIL_FROM = $env:CAMPUSLENS_MAIL_USERNAME
 - 检索任务提交后返回 `202`，客户端通过任务接口轮询终态。算法调用固定主实例 `8000` 优先，在连接失败、超时或 5xx 时回退备用实例 `8001`。
 - `searchRecordId`、`feedbackId` 和 `guest#number` 均为数据库持久化编号。游客编号只能通过 `POST /api/guests` 分配。
 - 管理员采纳反馈后生成校正样本，索引重建由主算法实例执行并通过版本文件原子切换。
-- `demo` profile 的 H2 内存库仅用于临时调试；日常联调和验收使用 MySQL、Redis 与 Flyway。
+- H2 内存库仅用于自动化测试；日常联调和验收统一使用 MySQL、Redis 与 Flyway。
 
 对外接口使用 Java/JSON 小驼峰命名，例如 `jobId`、`searchRecordId`。算法服务内部 FastAPI 路径中的 `{job_id}` 只是在算法端生成文档时使用的路径参数名。
 
@@ -76,7 +75,7 @@ $env:CAMPUSLENS_MAIL_FROM = $env:CAMPUSLENS_MAIL_USERNAME
 
 ## 验证
 
-截至 2026-07-03，后端回归为 `28/28`，并从空库完整应用 Flyway `V1-V21`。
+截至 2026-07-04，后端从空库完整应用 Flyway `V1-V22`；最终测试数量以根目录 README 的验证记录为准。
 
 ```powershell
 mvn test

@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: CampusLens API
   version: 1.0.0
-  description: CampusLens（校园慧眼）校园地标智能检索与导览系统接口草案。
+  description: CampusLens（校园慧眼）Spring Boot 对外接口规范。
 servers:
   - url: http://localhost:8080
     description: Spring Boot backend
@@ -526,25 +526,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReplyLikeResponse"
-  /api/admin/auth/login:
-    post:
-      summary: 管理员轻量登录（最终版兼容入口，前端默认不使用）
-      tags: [Admin]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AdminLoginRequest"
-      responses:
-        "200":
-          description: 登录成功；最终版前端默认使用 /api/auth/login 隐式进入后台，本接口仅保留给旧联调脚本或兼容调用
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AdminLoginResponse"
-        "400":
-          description: 账号或密码错误
   /api/admin/search-records:
     get:
       summary: 查看最近检索记录
@@ -1323,29 +1304,6 @@ components:
       properties:
         account:
           $ref: "#/components/schemas/AccountProfile"
-        message:
-          type: string
-    AdminLoginRequest:
-      type: object
-      required: [username, password]
-      properties:
-        username:
-          type: string
-          example: admin
-        password:
-          type: string
-          example: admin
-    AdminLoginResponse:
-      type: object
-      properties:
-        loggedIn:
-          type: boolean
-        username:
-          type: string
-        role:
-          type: string
-        token:
-          type: string
         message:
           type: string
     AdminSearchRecord:

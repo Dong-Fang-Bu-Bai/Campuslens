@@ -1,5 +1,5 @@
 -- CampusLens V4 final-schema reference.
--- Runtime schema evolution is managed by database/migration/V1-V21.
+-- Runtime schema evolution is managed by database/migration/V1-V22.
 -- This file is for review and fresh-schema comparison; do not run it together
 -- with Flyway migrations against the same database.
 
@@ -60,15 +60,6 @@ CREATE TABLE IF NOT EXISTS app_user (
   enabled BOOLEAN NOT NULL DEFAULT TRUE,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS admin_user (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  username VARCHAR(100) NOT NULL UNIQUE,
-  password_hash VARCHAR(255) NOT NULL,
-  role VARCHAR(50) NOT NULL DEFAULT 'admin',
-  enabled BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS password_reset_code (

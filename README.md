@@ -83,7 +83,7 @@ scripts\verify.cmd
 - 浏览器轮询结果：`GET /api/search/jobs/{jobId}`，任务终态为 `success`、`low_confidence` 或 `failed`。
 - 后端任务消费者：正式检索调用算法服务 `POST /api/v1/search/batch`；`POST /api/v1/search` 保留给单图诊断。
 - 管理员运维：通过后端 `/api/admin/algorithm/runtime`、`/api/admin/index/rebuild` 和 `/api/admin/index/rebuild/{jobId}` 操作，不由前端直连算法服务。
-- 认证入口：前端统一调用 `POST /api/auth/login`；`POST /api/admin/auth/login` 仅为旧联调脚本保留兼容性。
+- 认证入口：普通用户和管理员统一调用 `POST /api/auth/login`，后端根据 `app_user.role` 返回对应身份。
 
 前端地标列表来自 `GET /api/landmarks`，代表图优先使用后端返回的 `coverImageUrl` 或 `imageUrl`。页面不再使用外网演示地标数据，也不会在未上传图片时伪造默认 Top-5；未检索状态只显示等待上传的空态。
 
@@ -124,7 +124,7 @@ scripts\stop.cmd
 
 ## 当前自动化基线
 
-截至 2026-07-04，代码清理后的本地回归结果为：后端 `28/28`、算法 `29/29`、前端 `2/2`，前端生产构建成功；后端测试从空库完整应用 Flyway `V1-V21`。算法新增5项受控扰动抽样、生成、统计与绘图回归测试。
+截至 2026-07-04，最终清理后的本地回归结果为：后端 `28/28`、算法 `29/29`、前端 `2/2`，前端生产构建成功；后端测试从空库完整应用 Flyway `V1-V22`。OpenAPI 的 32 个 Spring Boot 操作与 Controller 完全一致，算法服务保留 8 个内部操作。
 
 ## 分支模型
 

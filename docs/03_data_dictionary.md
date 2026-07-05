@@ -260,17 +260,13 @@
 | `usedAt` | DateTime | 作废或成功使用时间 |
 | `createdAt` | DateTime | 创建时间，用于发送冷却判断 |
 
-## AdminUser 管理员兼容表
-
-`admin_user` 保留为最终版兼容表，服务于 `POST /api/admin/auth/login` 旧联调入口。前端默认不直接调用该接口，统一调用 `POST /api/auth/login`，由 `app_user.role=admin` 进入后台主流程。
-
 ## Flyway 迁移
 
-最终版 V4 使用 `database/migration/` 管理表结构和基础种子数据，当前迁移范围为 V1-V21。
+最终版使用 `database/migration/` 管理表结构和基础种子数据，当前迁移范围为 V1-V22。管理员与普通用户统一存储在 `app_user`，并通过 `role` 区分身份。
 
 | 脚本 | 说明 |
 | --- | --- |
-| `V1__baseline_schema.sql` | 创建地标、样本图、特征、检索记录、反馈和管理员表 |
+| `V1__baseline_schema.sql` | 创建地标、样本图、特征、检索记录、反馈和早期管理员表 |
 | `V2__v2_record_feedback_admin_fields.sql` | 兼容占位迁移，保留版本序列 |
 | `V3__seed_landmarks_and_admin.sql` | 写入 L01-L10 地标元数据和 `admin/admin` 演示账号 |
 | `V4__app_user_auth_and_record_owner.sql` | 创建 `app_user`，为检索记录和反馈记录补充登录用户归属字段 |
@@ -287,3 +283,4 @@
 | `V19__password_reset.sql` | 约束邮箱唯一，创建密码重置验证码表和查询索引 |
 | `V20__separate_feedback_evaluation_status.sql` | 为 `correction_sample` 增加 `evaluation_status`，区分算法评估状态与管理员审核、样本暂存状态 |
 | `V21__landmark_navigation_coordinates.sql` | 为地标增加高德 GCJ-02 经纬度并回填 L01-L10 导航点 |
+| `V22__remove_legacy_admin_user.sql` | 删除旧管理员兼容表，管理员统一使用 `app_user` 登录 |

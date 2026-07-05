@@ -6,8 +6,6 @@ import com.campuslens.model.AccountProfile;
 import com.campuslens.model.AccountUpdateResponse;
 import com.campuslens.model.AdminFeedbackDetail;
 import com.campuslens.model.AdminFeedbackRecord;
-import com.campuslens.model.AdminLoginRequest;
-import com.campuslens.model.AdminLoginResponse;
 import com.campuslens.model.AdminSearchRecord;
 import com.campuslens.model.AuthLoginRequest;
 import com.campuslens.model.AuthRegisterRequest;
@@ -35,7 +33,6 @@ import com.campuslens.model.SearchJobStatus;
 import com.campuslens.model.SearchJobSubmission;
 import com.campuslens.model.SessionUser;
 import com.campuslens.model.UserSearchRecord;
-import com.campuslens.service.AdminService;
 import com.campuslens.service.AccountAvatarService;
 import com.campuslens.service.AuthService;
 import com.campuslens.service.CheckInService;
@@ -70,7 +67,6 @@ public class ApiController {
   private final SearchJobService searchJobService;
   private final FeedbackService feedbackService;
   private final SearchRecordService searchRecordService;
-  private final AdminService adminService;
   private final AuthService authService;
   private final PasswordResetService passwordResetService;
   private final AccountAvatarService accountAvatarService;
@@ -84,7 +80,6 @@ public class ApiController {
       SearchJobService searchJobService,
       FeedbackService feedbackService,
       SearchRecordService searchRecordService,
-      AdminService adminService,
       AuthService authService,
       PasswordResetService passwordResetService,
       AccountAvatarService accountAvatarService,
@@ -96,7 +91,6 @@ public class ApiController {
     this.searchJobService = searchJobService;
     this.feedbackService = feedbackService;
     this.searchRecordService = searchRecordService;
-    this.adminService = adminService;
     this.authService = authService;
     this.passwordResetService = passwordResetService;
     this.accountAvatarService = accountAvatarService;
@@ -271,11 +265,6 @@ public class ApiController {
       @RequestHeader(value = "Authorization", required = false) String authorization) {
     SessionUser user = sessionService.find(authorization).orElse(null);
     return checkInService.toggleReplyLike(id, user, guestId);
-  }
-
-  @PostMapping("/admin/auth/login")
-  public AdminLoginResponse adminLogin(@Valid @RequestBody AdminLoginRequest request) {
-    return adminService.login(request);
   }
 
   @GetMapping("/admin/search-records")

@@ -414,7 +414,7 @@ class ApiControllerTest {
   }
 
   @Test
-  void legacyAdminLoginRemainsCompatible() throws Exception {
+  void legacyAdminLoginAndTableAreRemoved() throws Exception {
     mockMvc.perform(post("/api/admin/auth/login")
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
@@ -423,11 +423,14 @@ class ApiControllerTest {
                   "password": "admin"
                 }
                 """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.loggedIn").value(true))
-        .andExpect(jsonPath("$.username").value("admin"))
-        .andExpect(jsonPath("$.role").value("admin"))
-        .andExpect(jsonPath("$.token").isString());
+        .andExpect(status().isNotFound());
+
+    Integer legacyTableCount = jdbcTemplate.queryForObject("""
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.TABLES
+        WHERE LOWER(TABLE_NAME) = 'admin_user'
+        """, Integer.class);
+    assertThat(legacyTableCount).isZero();
   }
 
   @Test

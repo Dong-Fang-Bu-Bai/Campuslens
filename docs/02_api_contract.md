@@ -1,6 +1,6 @@
 # 接口契约说明
 
-正式接口结构以 `api/openapi-campuslens.yaml` 为准。本文件用于解释接口边界和调用顺序。
+Spring Boot 对外接口结构以 `api/openapi-campuslens.yaml` 为准。本文件同时说明后端内部调用的 FastAPI 接口边界和调用顺序。
 
 ## 调用关系
 
@@ -46,7 +46,6 @@ Vue 前端 -> Spring Boot 提交接口 -> MySQL + Redis ready/processing/delayed
 
 | 接口 | 说明 | 负责人 |
 | --- | --- | --- |
-| `POST /api/admin/auth/login` | 管理员轻量登录最终版兼容入口，前端默认不使用 | M1 / M4 |
 | `GET /api/admin/search-records` | 查看最近检索记录，需管理员 token | M1 / M4 |
 | `POST /api/admin/landmarks` | 新增地标，需管理员 token | M2 |
 | `PUT /api/admin/landmarks/{id}` | 修改地标，需管理员 token | M2 |

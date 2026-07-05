@@ -4,6 +4,8 @@
 日期：2026-05-16
 依据文档：`1. 软件开发综合实训-任务书.pdf`、`2. 软件开发综合实训课程_文档模板/`
 
+> 历史定位：本文记录项目初始阶段的规划依据。接口表已按最终异步检索契约校正；其余“建议”“后续”等表述保留当时的规划语境。
+
 ## 1. 实训开发总体规范和要求
 
 ### 1.1 实训目标
@@ -323,7 +325,8 @@ CampusLens 是面向校园新生、访客和校内用户的校园地标智能检
 
 | 接口 | 用途 |
 | --- | --- |
-| `POST /api/search/upload` | 上传图片并返回 Top-5 检索结果 |
+| `POST /api/search/upload` | 提交异步检索任务，返回 `202` 和任务标识 |
+| `GET /api/search/jobs/{jobId}` | 查询任务状态和 Top-5 终态结果 |
 | `GET /api/landmarks/{id}` | 获取地标详情 |
 | `GET /api/landmarks` | 获取地标列表 |
 | `POST /api/feedback` | 提交识别纠错反馈 |
@@ -331,7 +334,7 @@ CampusLens 是面向校园新生、访客和校内用户的校园地标智能检
 | `POST /api/admin/landmarks/{id}/images` | 上传地标样本图片 |
 | `POST /api/admin/index/rebuild` | 重建地标统计参数 |
 
-算法服务由后端内部调用，统一接口为 `POST /api/v1/search`、`POST /api/v1/index/rebuild`、`GET /api/v1/index/stats` 和 `GET /api/v1/health`。
+算法服务由后端内部调用，正式检索使用 `POST /api/v1/search/batch`；单图诊断、运行状态、索引重建和反馈评估接口以 `docs/02_api_contract.md` 为准。
 
 第一周只需形成接口草案和样例 JSON，不一定全部实现。
 
