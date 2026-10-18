@@ -1,80 +1,67 @@
-# CampusLens Backend
+# CampusLens 后端
 
-Spring Boot 后端工程，负责认证、游客身份、异步检索任务、反馈闭环、社区数据、索引重建协调以及主备算法实例故障转移。
-
-## 技术栈
-
-- Java 17+
-- Spring Boot 3.3.6
-- Maven 3.9+
+基于 Java 17 / Spring Boot 3.3.6，提供检索任务、地标、账号、反馈、社区和管理接口。
 
 ## 启动
 
-正常启动流程默认使用 MySQL。推荐在项目根目录运行：
+完整服务使用根目录 `scripts/start.cmd`。单独启动后端前，准备 MySQL 与 Redis：
 
 ```powershell
-scripts\start.cmd
+cd backend
+mvn spring-boot:run
 ```
 
-默认地址：
+默认监听 `8080`，健康检查为 `GET /api/health`。Flyway 从 `../database/migration` 应用数据库迁移。
 
-```text
-http://localhost:8080
-```
+## 服务职责
 
-健康检查：
-
-```text
-GET http://localhost:8080/api/health
-```
-
-## 已提供接口
-
-| 接口 | 说明 |
+| 服务 | 内容 |
 | --- | --- |
-| `GET /api/health` | 后端健康检查 |
-| `GET /api/landmarks` | 获取首批 L01-L10 地标列表 |
-| `GET /api/landmarks/{id}` | 获取地标详情与地图坐标 |
-| `POST /api/guests` | 按浏览器客户端令牌幂等分配递增游客编号 |
-| `POST /api/search/upload` | 提交异步检索，返回 `202` 和任务标识 |
-| `GET /api/search/jobs/{jobId}` | 查询任务状态、错误信息和 Top-5 终态结果 |
-| `POST /api/feedback` | 提交正确、错误或不确定反馈 |
-| `POST /api/auth/register` | 使用唯一用户名、唯一邮箱和至少 8 位密码注册 |
-| `POST /api/auth/login` | 用户或管理员登录 |
-| `POST /api/auth/password-reset/code` | 输入绑定邮箱并向该邮箱发送密码重置验证码 |
-| `POST /api/auth/password-reset/confirm` | 使用绑定邮箱校验验证码并设置新密码 |
-| `GET /api/admin/algorithm/runtime` | 管理员查看主算法实例运行、SAR 和索引状态 |
-| `POST /api/admin/index/rebuild` | 管理员提交索引重建任务，返回 `202` |
-| `GET /api/admin/index/rebuild/{jobId}` | 管理员查询索引重建任务状态 |
+| 地标与检索 | 地标资料、上传校验、任务提交、轮询与历史 |
+| 身份与账号 | 用户认证、游客编号、头像与密码找回 |
+| 任务处理 | Redis 准入与调度、持久化重试、租约恢复及主备算法调用 |
+| 反馈与索引 | 反馈处理、校正样本与索引重建 |
+| 社区 | 关联检索记录的打卡、照片公开选项、回复与点赞 |
 
-## 密码找回邮件配置
+检索提交返回 HTTP `202`。MySQL 保存权威任务状态，Redis 管理运行队列。算法主实例优先，失败后回退备用实例。
 
-默认使用标准 SMTP + STARTTLS，可向 QQ 邮箱、163、Outlook、学校邮箱等任意合法收件地址投递。当前 Windows 开发环境已使用 QQ 邮箱 SMTP 完成真实投递验证，配置示例：
+## 配置
+
+配置定义见 [application.yml](src/main/resources/application.yml)。
+
+| 环境变量 | 用途 |
+| --- | --- |
+| CAMPUSLENS_DATASOURCE_URL | MySQL JDBC 地址 |
+| CAMPUSLENS_DATASOURCE_USERNAME / PASSWORD | 数据库账号 |
+| CAMPUSLENS_REDIS_HOST / PORT | Redis 地址 |
+| CAMPUSLENS_ALGORITHM_URLS | 算法实例地址列表 |
+| CAMPUSLENS_UPLOAD_DIR | 上传目录 |
+| CAMPUSLENS_DATASET_DIR | 地标样本目录 |
+| CAMPUSLENS_SEARCH_QUEUE_CAPACITY | 队列容量 |
+| CAMPUSLENS_SEARCH_LEASE_SECONDS | 消费者租约 |
+| CAMPUSLENS_SEARCH_MAX_ATTEMPTS | 最大尝试次数 |
+| CAMPUSLENS_JOB_TOKEN_SECRET | 游客任务令牌密钥 |
+
+本地默认数据库凭据见[数据库说明](../database/README.md)。Docker Compose 的 `.env` 不会自动导出为后端进程环境变量；修改连接参数时需同步设置上述变量。
+
+## 密码找回邮件
+
+邮件使用 SMTP + STARTTLS。设置以下环境变量：
 
 ```powershell
-$env:CAMPUSLENS_MAIL_HOST = "smtp.qq.com"
+$env:CAMPUSLENS_MAIL_HOST = "smtp.example.com"
 $env:CAMPUSLENS_MAIL_PORT = "587"
-$env:CAMPUSLENS_MAIL_USERNAME = "your-account@qq.com"
-$env:CAMPUSLENS_MAIL_PASSWORD = "your-qq-mail-authorization-code"
+$env:CAMPUSLENS_MAIL_USERNAME = "sender@example.com"
+$env:CAMPUSLENS_MAIL_PASSWORD = "your-smtp-authorization-code"
 $env:CAMPUSLENS_MAIL_FROM = $env:CAMPUSLENS_MAIL_USERNAME
 ```
 
-密码必须使用邮件服务商提供的 SMTP 授权码，不要使用邮箱登录密码，也不要将真实密码或密钥提交到仓库。可通过 `CAMPUSLENS_PASSWORD_RESET_VALID_MINUTES` 和 `CAMPUSLENS_PASSWORD_RESET_COOLDOWN_SECONDS` 调整验证码有效期和发送冷却时间。
+验证码有效期与发送冷却分别由 `CAMPUSLENS_PASSWORD_RESET_VALID_MINUTES` 和 `CAMPUSLENS_PASSWORD_RESET_COOLDOWN_SECONDS` 控制。
 
-## 当前实现边界
-
-- MySQL 保存地标、用户、游客身份、检索任务、反馈、校正样本和索引重建状态；Redis 负责异步任务准入、分发、领取和延迟重试。
-- 检索任务提交后返回 `202`，客户端通过任务接口轮询终态。算法调用固定主实例 `8000` 优先，在连接失败、超时或 5xx 时回退备用实例 `8001`。
-- `searchRecordId`、`feedbackId` 和 `guest#number` 均为数据库持久化编号。游客编号只能通过 `POST /api/guests` 分配。
-- 管理员采纳反馈后生成校正样本，索引重建由主算法实例执行并通过版本文件原子切换。
-- `demo` profile 的 H2 内存库仅用于临时调试；日常联调和验收使用 MySQL、Redis 与 Flyway。
-
-对外接口使用 Java/JSON 小驼峰命名，例如 `jobId`、`searchRecordId`。算法服务内部 FastAPI 路径中的 `{job_id}` 只是在算法端生成文档时使用的路径参数名。
-
-上传图片会保存到 `uploads/yyyyMMdd/`，该目录已由 `.gitignore` 排除。
-
-## 验证
+## 测试与接口
 
 ```powershell
 mvn test
 ```
+
+[接口契约](../docs/02_api_contract.md) · [OpenAPI](../api/openapi-campuslens.yaml) · [系统架构](../docs/architecture.md)

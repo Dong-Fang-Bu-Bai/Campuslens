@@ -1,121 +1,105 @@
-# 接口联调说明
+# 安装与运行
 
-## 首次依赖安装
+以下命令在项目根目录执行，算法依赖安装命令除外。
 
-算法依赖不会由 `start.cmd` 自动安装。Windows + NVIDIA GPU 推荐执行：
+## 环境要求
+
+| 组件 | 要求 |
+| --- | --- |
+| 操作系统 | 统一启动脚本面向 Windows |
+| Java | JDK 17，`java` 和 `keytool` 可从 PATH 访问 |
+| 构建工具 | Maven、Node.js、npm |
+| 基础服务 | Docker Desktop，能够执行 `docker info` |
+| 算法环境 | Python 3.10；GPU 模式需兼容 PyTorch CUDA 12.1 的 NVIDIA 驱动 |
+| 外部资源 | DINOv2 ViT-B/14 权重和按地标分类的图片样本 |
+
+启动 Docker Desktop 后再运行项目脚本。Java、Maven、Node.js 与 Docker CLI 需在 PATH 中可用。
+
+## 获取与配置
 
 ```powershell
+git clone https://github.com/Dong-Fang-Bu-Bai/Campuslens.git
+cd Campuslens
+Copy-Item .env.example .env
 Copy-Item algorithm\.env.example algorithm\.env
-algorithm\create_gpu_env.bat
 ```
 
-已有 Python 环境时，设置 `CAMPUSLENS_ALGORITHM_PYTHON` 后执行 `algorithm\install_gpu.bat` 或 `algorithm\install_cpu.bat`。`requirements.txt` 仅包含公共依赖，必须与 CPU/GPU requirements 和测试 requirements 组合使用。
+根目录 `.env` 供 Docker Compose 读取；算法目录的 `.env` 供 FastAPI 读取。后端配置使用 `CAMPUSLENS_*` 环境变量，见[后端说明](../backend/README.md)。
 
-同时准备 `algorithm/models/dinov2_model.pth`。前端依赖在首次统一启动时自动安装，Maven 依赖由后端启动命令自动解析。
+## Python 环境
 
-## 启动顺序
+创建独立环境并指定解释器：
 
-### 一键启动
+```powershell
+python -m venv algorithm\.venv
+$env:CAMPUSLENS_ALGORITHM_PYTHON = (Resolve-Path algorithm\.venv\Scripts\python.exe).Path
+Push-Location algorithm
+& $env:CAMPUSLENS_ALGORITHM_PYTHON -m pip install -r requirements-gpu.txt -r requirements-test.txt
+Pop-Location
+```
 
-Windows 下优先使用项目脚本：
+无 NVIDIA GPU 时，将 `requirements-gpu.txt` 替换为 `requirements-cpu.txt`。设备选择与驱动检查见[CPU / GPU 配置](../algorithm/GPU_SUPPORT.md)。启动脚本不会自动安装算法 Python 依赖。
+
+`CAMPUSLENS_ALGORITHM_PYTHON` 的设置作用于当前 PowerShell 会话；重新打开终端后需再次设置，或使用项目 `algorithm/.venv` 的默认解释器。
+
+## 模型与样本
+
+从 [DINOv2 官方仓库](https://github.com/facebookresearch/dinov2)准备 **ViT-B/14 的 PyTorch 权重**，保存为：
+
+```text
+algorithm/models/dinov2_model.pth
+```
+
+使用其他位置时，设置 `algorithm/.env` 中的 `DINO_MODEL_PATH`。模型结构与权重需兼容本项目的 ViT-B/14 加载器。
+
+将地标图片放入 `datasets/landmarks/` 的分类目录，详见[数据集规范](04_dataset_rules.md)。权重、样本原图和索引由本地资源提供，不随 Git 仓库分发。
+
+## 启动
 
 ```powershell
 scripts\start.cmd
 ```
 
-`start.cmd` 会完成环境检查，启动 Docker Desktop、MySQL、Redis、后端、双算法实例以及单个 HTTPS 前端。前端首次运行时，如果 `frontend/node_modules` 不存在，脚本会自动执行 `npm install --registry=https://registry.npmmirror.com`。
+脚本启动 MySQL、Redis、后端、主备算法实例和 HTTPS 前端。前端依赖缺失时自动执行 npm 安装，后端通过 Maven 解析依赖；数据库由 Flyway 应用迁移与基础种子数据。
 
-停止服务：
+| 服务 | 地址 |
+| --- | --- |
+| 前端 | https://localhost:5173 |
+| 后端健康检查 | http://localhost:8080/api/health |
+| 主算法实例 | http://localhost:8000/api/v1/health |
+| 备用算法实例 | http://localhost:8001/api/v1/health |
+
+前端使用本地开发证书，并同源代理 `/api` 与 `/uploads`。浏览器首次访问需信任该证书。局域网访问时，将 localhost 替换为服务器地址；IP 变化后重启脚本以更新证书。
+
+## 索引初始化
+
+1. 使用本地演示管理员账号 `admin/admin` 登录。
+2. 在管理页面触发索引重建，或调用 `POST /api/admin/index/rebuild`。
+3. 轮询 `GET /api/admin/index/rebuild/{jobId}`，等待 `completed`。
+4. 返回检索页面，上传 JPG、PNG 或 WebP 图片。
+
+检索按异步任务执行：提交返回 `202` 后轮询任务接口。算法不可用时按策略重试，最终返回失败原因。
+
+## 检查与停止
 
 ```powershell
+scripts\verify.cmd
 scripts\stop.cmd
 ```
 
-停止脚本按本项目固定端口与 PID 文件清理服务，并停止 MySQL/Redis 容器；Docker 镜像和命名数据卷会保留。
-
-### 手动启动
-
-1. 启动数据库：
-
-```powershell
-docker compose up -d mysql redis
-```
-
-2. 启动后端：
-
-```powershell
-cd backend
-mvn spring-boot:run
-```
-
-3. 启动前端：
-
-```powershell
-cd frontend
-npm install
-npm run dev
-```
-
-4. 浏览器访问：
-
-```text
-https://localhost:5173
-```
-
-5. 如需手动验证真实算法链路，分别启动主备算法实例：
-
-```powershell
-cd algorithm
-$env:PORT = "8000"
-$env:INSTANCE_ID = "algorithm-primary"
-$env:INSTANCE_ROLE = "primary"
-& $env:CAMPUSLENS_ALGORITHM_PYTHON app\main.py
-
-# 另一个 PowerShell 窗口
-$env:PORT = "8001"
-$env:INSTANCE_ID = "algorithm-secondary"
-$env:INSTANCE_ROLE = "secondary"
-& $env:CAMPUSLENS_ALGORITHM_PYTHON app\main.py
-```
-
-算法服务全部不可用时，上传提交仍返回 `202` 和检索任务编号；任务按退避策略重试，最终进入 `failed` 并返回 `errorCode=algorithm_unavailable` 和明确错误信息，不会伪造 Top-5。
-
-## 后端接口
-
-| 接口 | 验证方式 | 预期结果 |
-| --- | --- | --- |
-| `GET /api/health` | 浏览器或 REST Client | 返回 `status=ok` |
-| `GET /api/landmarks` | REST Client | 返回 L01-L10 地标列表 |
-| `GET /api/landmarks/1` | REST Client | 返回图书馆详情 |
-| `POST /api/guests` | 提交浏览器持久化 `clientToken` | 同一令牌重复返回同一 `guestId`，不同令牌按 `guest#1` 起递增 |
-| `POST /api/search/upload` | 上传 JPG、PNG 或 WebP | 返回 `202`、`searchRecordId` 和任务状态，客户端继续轮询结果接口 |
-| `GET /api/search/jobs/{jobId}` | 携带 Bearer token 或 `X-Search-Job-Token` | 返回 queued/processing 或包含 Top-5 的终态结果 |
-| `POST /api/auth/register` | 提交用户名、密码和选填邮箱 | 返回普通用户身份和 token，用户名唯一，密码至少 8 位，密码哈希入库 |
-| `POST /api/auth/login` | 提交用户名和密码 | 普通用户返回主页面身份和 token；`admin/admin` 返回管理员身份并进入后台 |
-| `POST /api/feedback` | 提交 JSON | 返回 `feedbackId` 和 `pending` 状态 |
-| `GET /api/admin/algorithm/runtime` | 管理员 Bearer token | 返回主实例、SAR、活动索引和最近重建任务 |
-| `POST /api/admin/index/rebuild` | 管理员 Bearer token | 返回 `202` 和 `rebuildJobId` |
-| `GET /api/admin/index/rebuild/{jobId}` | 管理员 Bearer token | 返回 building/switching/completed/failed 状态 |
-
-## 当前边界
-
-- 后端已连接 MySQL 基础库，当前真实使用 `landmark` 表读取 L01-L10 地标元数据。
-- 图片上传保存到运行目录的 `uploads/`，该目录不进入 Git。
-- 正式异步消费者调用算法服务 `/api/v1/search/batch`，单图 `/api/v1/search` 仅用于诊断；后端按 `landmarkCode` 补齐 L01-L10 地标展示字段。
-- `search_record` 和 `feedback` 表已接入持久化；登录用户通过 Bearer token 解析 `userId`，未登录浏览器通过 `/api/guests` 获取并持久化数据库分配的 `guestId`。
-- 地标样本图片由成员按采集规范手动采集并整理到本地 `datasets/landmarks/`，原图仍按 `.gitignore` 排除，不直接提交 Git。
-- 前端 dev server 通过 Vite proxy 访问后端接口，默认端口为 5173。
+`verify.cmd` 启动服务并检查各端点。`stop.cmd` 停止项目固定端口和 PID 文件对应的服务及容器，保留镜像与命名数据卷。自动化与并发测试见[测试说明](testing.md)。
 
 ## 常见问题
 
-| 问题 | 处理方式 |
+| 问题 | 处理 |
 | --- | --- |
-| `mvn` 不可用 | 运行 `scripts\start.cmd` 查看统一环境检查结果 |
-| `npm` 不可用 | 安装 Node.js LTS，并重新打开命令行窗口 |
-| `docker` 不可用 | 安装 Docker Desktop，并确认 `docker --version` 能正常输出 |
-| 后端启动时数据库连接失败 | 运行 `scripts\verify.cmd`，确认 MySQL 与 Redis 容器健康 |
-| 8080、5173、8000 或 8001 端口占用 | 先运行 `scripts\stop.cmd`，再重新启动 |
-| 前端页面打开但接口失败 | 确认后端窗口仍在运行，并访问 `http://localhost:8080/api/health` |
-| 上传图片后没有候选结果 | 检查算法服务是否已启动，或访问 `http://localhost:8000/api/v1/health`；样本不足也会影响真实候选结果 |
-| Windows 终端打印状态时出现编码错误 | 使用统一启动脚本，或手工设置 `$env:PYTHONUTF8 = "1"`；当前运行代码已用 `[OK]` 等 ASCII 前缀替代 emoji |
-| 找不到样本图片 | 查看 `datasets/landmarks/sample_inventory.md`，缺样本的 L02、L06、L07 等地标需要继续补采 |
+| 缺少命令 | 检查 Java、Maven、Node.js、Docker 和 keytool 的 PATH |
+| 数据库无法连接 | 确认 Docker Desktop 运行，MySQL 容器健康，连接参数一致 |
+| 算法无法启动 | 检查 Python 环境、模型路径、依赖和终端日志 |
+| 无候选结果 | 检查样本目录和索引重建状态 |
+| CUDA 不可用 | 检查驱动与 PyTorch；也可设置 DEVICE=cpu |
+| 前端接口失败 | 检查后端健康端点和 Vite 代理 |
+| HTTPS 证书不匹配 | 重新运行启动脚本，使用证书包含的主机地址 |
+| 密码找回邮件失败 | 配置 SMTP、发件账号及授权码，见后端说明 |
+
+部署到共享环境前应设置自己的数据库凭据、任务令牌密钥及管理员密码。

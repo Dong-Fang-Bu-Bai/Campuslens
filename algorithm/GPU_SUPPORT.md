@@ -1,132 +1,66 @@
-# CampusLens CPU/GPU 环境说明
+# CPU / GPU 环境配置
 
-## 当前计算边界
+DINOv2 使用 PyTorch 在 NVIDIA GPU 或 CPU 上运行，FAISS 使用 CPU 索引。双算法实例是两个独立进程，各自加载模型。
 
-- DINOv2 特征提取使用 PyTorch，可在 NVIDIA GPU 或 CPU 上运行。
-- FAISS 固定使用 `faiss-cpu==1.7.4`。当前索引规模不需要 FAISS GPU，且 Windows 环境不再安装 `faiss-gpu`。
-- 日常模式启动两个独立算法进程，主实例监听 `8000`，备用实例监听 `8001`。两个进程都会加载模型，因此显存占用不是单实例的数值。
-- `.env` 默认 `DEVICE=auto`：CUDA 可用时选择 GPU，否则回退 CPU。设置 `DEVICE=cuda` 时若 CUDA 不可用，服务会明确报错。
+## 安装依赖
 
-## Windows GPU 安装
-
-推荐方式：
+在 Python 3.10 独立环境中，从算法目录执行：
 
 ```powershell
-cd algorithm
-Copy-Item .env.example .env
-.\create_gpu_env.bat
-```
-
-脚本使用固定路径：
-
-```text
-Conda:  D:\AnaConda\Scripts\conda.exe
-环境:   D:\AnaConda\envs\campuslens-gpu
-缓存:   D:\Tools\conda-pkgs、D:\Tools\pip-cache、D:\tmp
-```
-
-如果本机环境路径不同，先创建自己的 Python 3.10 环境，再指定解释器：
-
-```powershell
-$env:CAMPUSLENS_ALGORITHM_PYTHON = "D:\path\to\python.exe"
-.\install_gpu.bat
-```
-
-`install_gpu.bat` 安装 `requirements-gpu.txt` 和 `requirements-test.txt`。其中 GPU requirements 已引用公共 `requirements.txt`，无需再单独安装。
-
-## CPU 安装
-
-```powershell
-$env:CAMPUSLENS_ALGORITHM_PYTHON = "D:\path\to\python.exe"
-.\install_cpu.bat
-```
-
-该脚本会移除现有 `torch`、`torchvision`，再安装 CPU 版本及测试依赖。不要在仍需 CUDA 的共享环境中执行该脚本。
-
-Linux NVIDIA 环境可在 Python 3.10 虚拟环境中执行：
-
-```bash
 python -m pip install -r requirements-gpu.txt -r requirements-test.txt
 ```
 
-macOS 和无 NVIDIA GPU 的 Linux 环境使用 `requirements-cpu.txt`。
-
-## 验证
-
-Windows 推荐环境：
+GPU 依赖使用 PyTorch 2.1.2 / torchvision 0.16.2 的 CUDA 12.1 版本。无 NVIDIA GPU 时：
 
 ```powershell
-D:\AnaConda\envs\campuslens-gpu\python.exe -c "import torch, faiss; print('CUDA:', torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'); print('FAISS CPU ready')"
+python -m pip install -r requirements-cpu.txt -r requirements-test.txt
 ```
 
-同时检查驱动：
+上述 python 应指向目标环境。完整 Windows 环境创建示例见[运行指南](../docs/09_interface_runbook.md)。
+
+## 设备检查
 
 ```powershell
+python -c "import torch, faiss; print('CUDA:', torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'); print('FAISS ready')"
 nvidia-smi
 ```
 
-验收标准是 `torch.cuda.is_available()` 返回 `True` 且能输出显卡名称。FAISS GPU 数量不是当前项目的验收指标。
+CUDA 模式需同时满足驱动可用、CUDA 版 PyTorch 已安装及 `torch.cuda.is_available()` 返回 true。FAISS 的 GPU 数量不用于判断 DINOv2 的运行设备。
 
-服务启动后可检查两个实例：
+## 设备选择
 
-```powershell
-curl.exe http://localhost:8000/api/v1/health
-curl.exe http://localhost:8001/api/v1/health
-```
-
-响应中的 `instanceId`、`instanceRole` 和设备信息应与主备配置一致。
-
-## 配置
-
-在 `algorithm/.env` 中选择设备：
+在 `.env` 中配置：
 
 ```dotenv
 DEVICE=auto
-MIXED_PRECISION=true
+MIXED_PRECISION=false
 BATCH_SIZE=32
-SAR_ENABLED=true
+SEARCH_BATCH_SIZE=2
 ```
 
-- `DEVICE=auto`：自动选择 CUDA 或 CPU。
-- `DEVICE=cuda`：要求 CUDA 必须可用。
-- `DEVICE=cpu`：强制 CPU，适合兼容性验证。
-- `MIXED_PRECISION=true`：GPU 推理使用混合精度以降低显存和延迟。
-- `SAR_ENABLED=true`：允许请求使用 SAR；具体请求仍需传入 `sarMode=true`。
+| 配置 | 行为 |
+| --- | --- |
+| DEVICE=auto | CUDA 可用时使用 GPU，否则使用 CPU |
+| DEVICE=cuda | 强制 CUDA，不可用时启动失败 |
+| DEVICE=cpu | 强制 CPU |
+| MIXED_PRECISION=true | CUDA 上使用混合精度 |
+| BATCH_SIZE | 控制离线特征提取批次 |
+| SEARCH_BATCH_SIZE | 控制在线检索批次上限 |
 
-## 双实例资源说明
+## 主备实例与资源
 
-日常启动脚本会启动两个独立 Python 进程。这样可以在主实例连接失败、超时或返回 5xx 时由后端转向备用实例，但代价是两份模型显存。
+主实例监听 8000，备用实例监听 8001。两个进程各自维护基准与适配模型，显存占用需按进程及模型副本评估。
 
-显存不足时按以下顺序处理：
+显存不足时，可降低批次、关闭其他 GPU 工作负载或使用 CPU 模式定位问题。CPU 模式适合功能检查，吞吐与延迟需要按实际数据集测量。
 
-1. 关闭其他占用 GPU 的进程。
-2. 减小 `.env` 中的 `BATCH_SIZE`。
-3. 临时设置 `DEVICE=cpu` 验证功能。
-4. 仅在开发诊断时手工启动单实例；日常完整验收仍使用双实例。
+## 常见问题
 
-## 常见故障
+| 问题 | 处理 |
+| --- | --- |
+| CUDA 返回 false | 检查解释器、PyTorch 版本、驱动和 NVIDIA 设备 |
+| 缺少 torch | 安装 GPU 或 CPU requirements，公共 requirements 不包含 PyTorch |
+| 模型无法加载 | 检查权重路径和 ViT-B/14 结构兼容性 |
+| 备用实例未启动 | 检查 8001 端口、进程日志和可用显存 |
+| CUDA OOM | 降低批次，检查两个实例的模型占用 |
 
-### `torch.cuda.is_available()` 为 `False`
-
-确认 NVIDIA 驱动正常，再确认实际启动解释器与安装依赖时使用的是同一个解释器：
-
-```powershell
-where.exe python
-$env:CAMPUSLENS_ALGORITHM_PYTHON
-```
-
-项目启动脚本的解释器优先级为：`CAMPUSLENS_ALGORITHM_PYTHON`、固定 D 盘 Conda 环境、项目 `.venv`。
-
-### 安装后仍缺少 PyTorch
-
-`requirements.txt` 只包含公共依赖。应运行 `install_gpu.bat`、`install_cpu.bat`，或安装对应的 CPU/GPU requirements。
-
-### 模型加载失败
-
-确认 `algorithm/models/dinov2_model.pth` 存在，且 `.env` 中 `DINO_MODEL_PATH` 指向正确文件。统一启动脚本不会下载模型。
-
-### 双实例中一个未启动
-
-先查看 `scripts/runtime/logs`，再检查 8000、8001 端口。可用根目录 `scripts\stop.cmd` 清理旧进程后重新启动。
-
-**最后更新：2026-06-13**
+运行设备与实例状态可通过 `/api/v1/health` 和 `/api/v1/runtime/status` 查看。

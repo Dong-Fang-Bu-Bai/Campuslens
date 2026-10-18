@@ -1,45 +1,37 @@
-# database
+# CampusLens 数据库
 
-数据库脚本目录。MySQL 通过 Flyway 管理地标、检索、反馈、社区和游客身份数据；`guest_identity` 使用自增主键生成全局递增的 `guest#number`。
+MySQL 保存业务数据与任务状态，Redis 提供异步任务准入、分发和重试调度。表结构和基础种子数据由 Flyway 管理。
 
-- `schema.sql`：V3 当前完整结构核对稿；实际启动仍以 Flyway V1-V15 为准，不与迁移脚本重复执行。
-- `seed_landmarks.sql`：首批地标初始化数据。
-- `migration/`：后续字段变更脚本。
+## 文件
 
-字段口径以 `../docs/03_data_dictionary.md` 为准。
+| 路径 | 用途 |
+| --- | --- |
+| [migration](migration/) | Flyway 版本化迁移 |
+| [schema.sql](schema.sql) | 基础表结构参考 |
+| [seed_landmarks.sql](seed_landmarks.sql) | 地标种子数据参考 |
 
-## Docker 启动
+运行数据库以迁移脚本为准，不重复执行独立 schema 或 seed 文件。
 
-项目根目录提供 `docker-compose.yml`，数据库结构与种子数据由后端启动时的 Flyway migration 管理。
+## 启动
 
-```powershell
-cd ..
-scripts\start.cmd
-```
-
-`scripts\start.cmd` 使用当前已验证的 Windows Docker Desktop，自动补充 D 盘 Docker CLI 路径、等待 daemon 就绪，并启动 MySQL 与 Redis。
-
-当前本机推荐布局：
-
-```text
-Docker Desktop: D:\Tools\Docker\Docker
-Docker data:    D:\DockerData\wsl
-```
-
-默认连接信息：
-
-```text
-host: localhost
-port: 3306
-database: campuslens
-username: campuslens
-password: campuslens123
-```
-
-验证数据库是否真正可用：
+在项目根目录执行：
 
 ```powershell
-scripts\verify.cmd
+docker compose up -d mysql redis
 ```
 
-这些账号只用于本地开发。同学从 GitHub 拉取代码后，启动自己的 Docker MySQL 容器即可得到同样的基础库；不要把个人 `.env` 或真实服务器密码提交到仓库。
+随后启动后端，由 Flyway 应用迁移。也可使用 `scripts/start.cmd` 启动完整服务。
+
+| 参数 | 本地默认值 |
+| --- | --- |
+| MySQL 地址 | localhost:3306 |
+| 数据库 | campuslens |
+| 用户名 | campuslens |
+| 密码 | campuslens123 |
+| Redis 地址 | localhost:6379 |
+
+Compose 参数见根目录 [环境示例](../.env.example)。修改数据库连接时同步设置后端的 `CAMPUSLENS_DATASOURCE_*` 环境变量。
+
+MySQL 与 Redis 使用命名数据卷。`scripts/stop.cmd` 保留数据卷；`docker compose down -v` 会删除其中的数据。
+
+字段与关系见[数据字典](../docs/03_data_dictionary.md)。

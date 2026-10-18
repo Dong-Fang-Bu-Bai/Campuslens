@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: CampusLens API
   version: 1.0.0
-  description: CampusLens（校园慧眼）校园地标智能检索与导览系统接口草案。
+  description: CampusLens（校园慧眼）校园地标图像检索与导览系统 API。
 servers:
   - url: http://localhost:8080
     description: Spring Boot backend

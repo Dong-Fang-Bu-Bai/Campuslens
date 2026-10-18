@@ -2,7 +2,7 @@
 
 ## Landmark 地标
 
-第二周 V1 已真实使用该表，通过 Spring JDBC 为 `GET /api/landmarks`、`GET /api/landmarks/{id}` 和上传检索结果补齐提供基础地标数据。
+地标表通过 Spring JDBC 为 `GET /api/landmarks`、`GET /api/landmarks/{id}` 和上传检索结果补齐提供基础地标数据。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -14,15 +14,15 @@
 | `summary` | String | 简介摘要 |
 | `description` | Text | 详细介绍 |
 | `locationText` | String | 位置描述 |
-| `mapX` | Number | 平面图标注 X 坐标，可后续确定 |
-| `mapY` | Number | 平面图标注 Y 坐标，可后续确定 |
+| `mapX` | Number | 平面图标注 X 坐标，取值 0–100 |
+| `mapY` | Number | 平面图标注 Y 坐标，取值 0–100 |
 | `coverImageUrl` | String | 代表图片路径 |
 | `createdAt` | DateTime | 创建时间 |
 | `updatedAt` | DateTime | 更新时间 |
 
 ## LandmarkImage 地标样本图
 
-第二周 V1 已建表预留，但当前样本图片仍主要通过本地 `datasets/landmarks/` 目录和 `sample_inventory.md` 管理，尚未批量写入该表。
+该表定义样本图片元数据。算法数据集由本地 `datasets/landmarks/` 分类目录提供，文件组织见[数据集规范](04_dataset_rules.md)。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -32,12 +32,12 @@
 | `angle` | String | 正面、侧面、远景、近景等 |
 | `lightCondition` | String | 白天、阴天、傍晚等 |
 | `isCover` | Boolean | 是否代表图 |
-| `collector` | String | 采集人 |
+| `collector` | String | 可选样本来源标识 |
 | `createdAt` | DateTime | 上传时间 |
 
 ## ImageFeature 图片特征
 
-第二周 V1 已建表预留，实际特征缓存和统计参数仍由算法服务本地文件管理。
+该表定义图片特征元数据；检索使用的特征缓存和统计参数由算法服务本地文件管理。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -53,7 +53,7 @@
 
 ## SearchRecord 检索记录
 
-第四周 V3 异步改造后，`search_record` 同时作为检索记录和任务权威状态表。提交接口先写入待准入记录，Redis 原子准入成功后进入 `queued`，并立即返回任务编号；Redis 只保存运行期调度结构。
+`search_record` 同时作为检索记录和任务权威状态表。提交接口先写入待准入记录，Redis 原子准入成功后进入 `queued`，并立即返回任务编号；Redis 只保存运行期调度结构。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -62,7 +62,7 @@
 | `topResultsJson` | Text | Top-5 结果快照 |
 | `bestLandmarkId` | Long | 最高分候选地标 |
 | `bestScore` | Decimal | 最高经验匹配分 |
-| `status` | String | 成功、失败、低匹配等级 |
+| `status` | String | queued、processing、success、low_confidence 或 failed |
 | `lowConfidence` | Boolean | 是否需要人工核验 |
 | `message` | String | 检索提示或异常说明 |
 | `guestId` | String | 未登录用户由 `guest_identity` 表分配的 `guest#number`；登录用户记录为 `user-{userId}` |
@@ -95,7 +95,7 @@
 
 ## Feedback 用户反馈
 
-第三周 V2 已接入运行时持久化。提交反馈时要求任务状态为 `success` 或 `low_confidence`，校验提交者所有权，并要求 `predictedLandmarkId` 来自本次检索结果。
+提交反馈时要求任务状态为 `success` 或 `low_confidence`，校验提交者所有权，并要求 `predictedLandmarkId` 来自本次检索结果。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -110,11 +110,11 @@
 | `createdAt` | DateTime | 提交时间 |
 | `updatedAt` | DateTime | 状态更新时间 |
 
-`feedbackType` 对外接口取值为 `correct`、`wrong`、`uncertain`。数据库可先保存同名字符串，后续如需要中文展示由前端或后台管理页面转换。
+`feedbackType` 对外接口取值为 `correct`、`wrong`、`uncertain`。数据库保存同名字符串，展示文本由前端转换。
 
 ## CheckIn 打卡留言
 
-第四周 V3 新增，V16 起绑定真实识图记录。新打卡必须引用发布者本人状态为 `success` 或 `low_confidence` 的检索记录，地标必须来自该记录 Top-5；一条检索记录只能发布一次。V16 以前的历史记录允许不绑定检索记录。
+打卡与检索记录绑定。新打卡必须引用发布者本人状态为 `success` 或 `low_confidence` 的检索记录，地标必须来自该记录 Top-5；一条检索记录只能发布一次。V16 以前的历史记录允许不绑定检索记录。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -129,7 +129,7 @@
 | `sourceImageUrl` | String | 接口派生字段；仅 `publishImage=true` 时返回来源图片地址 |
 | `likeCount` | Integer | 点赞数量缓存 |
 | `replyCount` | Integer | 当前帖子全部可见回复数量缓存 |
-| `status` | String | 当前为 `visible`，为后续后台删除/隐藏预留 |
+| `status` | String | 可见性状态，`visible` 表示可见 |
 | `createdAt` | DateTime | 发布时间 |
 | `updatedAt` | DateTime | 更新时间 |
 
@@ -139,7 +139,6 @@
 | --- | --- | --- |
 | `id` | Long | 主键 |
 | `checkInId` | Long | 关联打卡留言 |
-| `parentReplyId` | Long | 父回复 ID；为空表示直接回复帖子 |
 | `userId` | Long | 登录用户 ID，游客为空 |
 | `guestId` | String | 游客编号 |
 | `createdAt` | DateTime | 点赞时间 |
@@ -150,6 +149,7 @@
 | --- | --- | --- |
 | `id` | Long | 主键 |
 | `checkInId` | Long | 关联打卡留言 |
+| `parentReplyId` | Long | 父回复 ID；为空表示直接回复帖子 |
 | `userId` | Long | 登录用户 ID，游客为空 |
 | `guestId` | String | 游客编号 |
 | `displayName` | String | 展示名 |
@@ -171,7 +171,7 @@
 
 ## CorrectionSample 校正样本
 
-第四周 V3 新增。管理员采纳反馈后先写入该表，不直接污染正式地标样本库。算法服务接收元数据后写入 JSONL manifest，用于后续自适应或人工复核。
+管理员采纳反馈后生成待发布校正样本。记录确认地标、图片路径与发布状态，索引重建成功后标记为 `published`。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -198,7 +198,7 @@
 
 ## IndexRebuildJob 索引重建任务
 
-第四周 V3 新增。管理员提交索引重建后，后端以该表保存重建任务的权威状态，并从主算法实例同步最终发布结果。
+管理员提交索引重建后，后端以该表保存重建任务的权威状态，并从主算法实例同步最终发布结果。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -212,7 +212,7 @@
 
 ## GuestIdentity 持久化游客身份
 
-第四周 V3 新增。浏览器首次访问时提交本地生成的 `clientToken`，后端只保存 SHA-256 哈希，并通过自增主键生成全局唯一的 `guest#number`。
+浏览器首次访问时提交本地生成的 `clientToken`，后端只保存 SHA-256 哈希，并通过自增主键生成全局唯一的 `guest#number`。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -223,11 +223,11 @@
 
 ## 地图坐标口径
 
-`mapX` 和 `mapY` 当前采用校园平面图百分比坐标，取值范围为 0-100。前端展示时以图片左上角为原点，`mapX` 表示横向百分比，`mapY` 表示纵向百分比。该口径适合初始阶段静态标注，后续若更换底图或接入 GIS 数据，需要同步修订地标元数据。
+`mapX` 和 `mapY` 当前采用校园平面图百分比坐标，取值范围为 0-100。前端展示时以图片左上角为原点，`mapX` 表示横向百分比，`mapY` 表示纵向百分比。更换底图时同步调整地标坐标。
 
 ## AppUser 用户
 
-第三周 V2 使用 `app_user` 保存普通用户和管理员演示账号。普通用户通过右上角“登录/注册”入口注册，用户名和邮箱唯一，密码至少 8 位，邮箱必填并用于密码找回。历史上未绑定邮箱的账号仍可登录并在个人中心补充邮箱，但补充前无法使用找回功能。`admin/admin` 作为演示管理员账号写入同一张表，密码以 PBKDF2 哈希存储；登录后后端返回服务端会话 token，前端携带 token 访问需要登录或管理员权限的接口。
+使用 `app_user` 保存普通用户和管理员演示账号。普通用户通过右上角“登录/注册”入口注册，用户名和邮箱唯一，密码至少 8 位，邮箱必填并用于密码找回。未绑定邮箱的兼容账号可登录，在补充邮箱后使用找回功能。`admin/admin` 作为演示管理员账号写入同一张表，密码以 PBKDF2 哈希存储；登录后后端返回服务端会话 token，前端携带 token 访问需要登录或管理员权限的接口。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -257,26 +257,30 @@
 
 ## AdminUser 管理员兼容表
 
-`admin_user` 保留为最终版兼容表，服务于 `POST /api/admin/auth/login` 旧联调入口。前端默认不直接调用该接口，统一调用 `POST /api/auth/login`，由 `app_user.role=admin` 进入后台主流程。
+`admin_user` 保留为兼容表，服务于 `POST /api/admin/auth/login` 兼容入口。前端统一使用认证接口，统一调用 `POST /api/auth/login`，由 `app_user.role=admin` 进入后台主流程。
 
 ## Flyway 迁移
 
-第三周 V2 使用 `database/migration/` 管理表结构和基础种子数据。
+表结构和基础数据由 [database/migration](../database/migration/) 中的版本化脚本管理。
 
-| 脚本 | 说明 |
+| 脚本 | 内容 |
 | --- | --- |
-| `V1__baseline_schema.sql` | 创建地标、样本图、特征、检索记录、反馈和管理员表 |
-| `V2__v2_record_feedback_admin_fields.sql` | 兼容占位迁移，保留版本序列 |
-| `V3__seed_landmarks_and_admin.sql` | 写入 L01-L10 地标元数据和 `admin/admin` 演示账号 |
-| `V4__app_user_auth_and_record_owner.sql` | 创建 `app_user`，为检索记录和反馈记录补充登录用户归属字段 |
-| `V5__hash_admin_passwords.sql` | 将管理员演示账号密码升级为 PBKDF2 哈希 |
-| `V10__v3_check_in_and_correction_sample.sql` | 创建打卡留言、点赞、回复和校正样本表 |
-| `V11__async_search_jobs.sql` | 为检索记录增加异步任务、幂等、lease 和错误字段 |
-| `V12__harden_async_search_queue.sql` | 增加持久化重试时间和队列到期索引 |
-| `V13__persistent_sar_and_index_rebuild.sql` | 增加 SAR、模型/索引版本、待发布样本路径，并创建索引重建任务表 |
-| `V16__link_check_in_to_search_record.sql` | 为打卡增加检索记录唯一关联和照片公开开关，保留旧记录兼容性 |
-| `V17__nested_check_in_replies.sql` | 为回复增加父子关系、点赞和直接回复计数，创建回复点赞表 |
-| `V18__user_avatar.sql` | 为用户增加可持久化的自定义头像地址 |
-| `V19__password_reset.sql` | 约束邮箱唯一，创建密码重置验证码表和查询索引 |
-| `V14__algorithm_instance_tracking.sql` | 保存实际处理任务的算法实例编号与主备角色 |
-| `V15__persistent_guest_identity.sql` | 创建持久化游客身份表，使用令牌哈希幂等分配游客编号 |
+| [`V1__baseline_schema.sql`](../database/migration/V1__baseline_schema.sql) | 基础地标、样本、特征、检索、反馈与管理员表 |
+| [`V2__v2_record_feedback_admin_fields.sql`](../database/migration/V2__v2_record_feedback_admin_fields.sql) | 兼容占位迁移 |
+| [`V3__seed_landmarks_and_admin.sql`](../database/migration/V3__seed_landmarks_and_admin.sql) | 地标元数据与本地演示账号 |
+| [`V4__app_user_auth_and_record_owner.sql`](../database/migration/V4__app_user_auth_and_record_owner.sql) | 用户认证与记录所有权 |
+| [`V5__hash_admin_passwords.sql`](../database/migration/V5__hash_admin_passwords.sql) | 管理员密码哈希 |
+| [`V6__clean_landmark_descriptions.sql`](../database/migration/V6__clean_landmark_descriptions.sql) | 地标说明 |
+| [`V7__store_landmarks_base64_images.sql`](../database/migration/V7__store_landmarks_base64_images.sql) | 地标代表图数据 |
+| [`V8__store_landmarks_base64_real_images.sql`](../database/migration/V8__store_landmarks_base64_real_images.sql) | 地标代表图资源 |
+| [`V9__store_landmarks_base64_user_selected_images.sql`](../database/migration/V9__store_landmarks_base64_user_selected_images.sql) | 地标展示资源 |
+| [`V10__v3_check_in_and_correction_sample.sql`](../database/migration/V10__v3_check_in_and_correction_sample.sql) | 社区与校正样本 |
+| [`V11__async_search_jobs.sql`](../database/migration/V11__async_search_jobs.sql) | 异步检索任务 |
+| [`V12__harden_async_search_queue.sql`](../database/migration/V12__harden_async_search_queue.sql) | 队列重试时间与索引 |
+| [`V13__persistent_sar_and_index_rebuild.sql`](../database/migration/V13__persistent_sar_and_index_rebuild.sql) | SAR 状态与索引重建 |
+| [`V14__algorithm_instance_tracking.sql`](../database/migration/V14__algorithm_instance_tracking.sql) | 算法实例标识 |
+| [`V15__persistent_guest_identity.sql`](../database/migration/V15__persistent_guest_identity.sql) | 持久化游客身份 |
+| [`V16__link_check_in_to_search_record.sql`](../database/migration/V16__link_check_in_to_search_record.sql) | 打卡与检索记录关联及照片公开选项 |
+| [`V17__nested_check_in_replies.sql`](../database/migration/V17__nested_check_in_replies.sql) | 多级回复与回复点赞 |
+| [`V18__user_avatar.sql`](../database/migration/V18__user_avatar.sql) | 用户头像 |
+| [`V19__password_reset.sql`](../database/migration/V19__password_reset.sql) | 密码找回与邮箱约束 |

@@ -1,5 +1,9 @@
-# datasets
+# 数据集
 
-地标样本图片目录。图片采集和命名规则见 `../docs/04_dataset_rules.md`。
+[landmarks](landmarks/) 保存按地标分类的本地样本目录。图片原图、模型、特征缓存和索引不纳入 Git。
 
-不建议直接把大量原图提交到仓库。可以先提交目录说明和少量演示样本，完整数据集通过压缩包、网盘或课程要求方式交付。
+- [地标目录](landmarks/sample_inventory.md)
+- [采集与命名规范](../docs/04_dataset_rules.md)
+- [索引构建](../algorithm/README.md#索引与存储)
+
+准备样本后，通过管理员索引重建接口生成检索索引。

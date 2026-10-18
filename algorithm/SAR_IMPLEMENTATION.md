@@ -1,13 +1,8 @@
 # CampusLens SAR 在线适配实现说明
 
-**版本**：v2.1
-**最后更新**：2026-06-13
+## 1. 适配方式
 
-## 1. 文档定位
-
-本文说明 CampusLens 当前代码中的 SAR（Sharpness-Aware and Reliable Entropy Minimization）集成方式。内容以 `algorithm/app`、`.env.example` 和现有测试记录为准，不把原论文实验结果直接视为本项目效果。
-
-当前实现用于验证校园地标检索场景下的持续测试时自适应，已具备以下能力：
+SAR（Sharpness-Aware and Reliable Entropy Minimization）用于校园地标检索的测试时适配：
 
 - 基准模型与 SAR 模型双轨运行；
 - 基于检索分数熵的可靠样本门控；
@@ -15,8 +10,6 @@
 - SAR 状态持久化、跨实例读取和版本一致性检查；
 - 低熵 EMA、锚点 Top-1 保持率和特征漂移三类回退保护；
 - 校正样本审核与索引重建链路隔离。
-
-上述能力表示链路已实现并通过现有测试，不等同于已经证明 SAR 必然提高识别准确率。
 
 ## 2. 双轨运行方式
 
@@ -27,7 +20,7 @@
 | `sarMode=false` | 不可变基准模型 | 只提取特征和检索，不更新参数 |
 | `sarMode=true` | 可变 SAR 模型 | 先执行可靠性门控和可选更新，再使用更新后的模型特征检索 |
 
-单图接口为 `POST /api/v1/search`。批量接口为 `POST /api/v1/search/batch`，当前由 `SEARCH_BATCH_SIZE` 限制为最多 2 张图片。批量接口会在同一个受控推理批次中处理图片，不是“提交任务后轮询”的接口；轮询只用于异步索引重建任务。
+单图接口为 `POST /api/v1/search`。批量接口为 `POST /api/v1/search/batch`，默认由 `SEARCH_BATCH_SIZE=2` 限制批次。算法批量接口同步处理图片；后端业务任务与索引重建分别提供异步轮询接口。
 
 ## 3. SAR 请求执行流程
 
@@ -47,7 +40,7 @@
 
 ## 4. 两类熵的用途
 
-当前代码中存在两处归一化熵计算，二者采用相同的温度 softmax 和 Shannon entropy 形式，但候选集合与用途不同。
+服务计算两类归一化熵计算，二者采用相同的温度 softmax 和 Shannon entropy 形式，但候选集合与用途不同。
 
 ### 4.1 模型更新门控
 
@@ -77,41 +70,23 @@ $$
 
 ## 5. SAM 双步更新
 
-当前实现只开放模型中 `LayerNorm`、`BatchNorm2d` 和 `GroupNorm` 的 `weight`、`bias` 参数，其余参数保持冻结。
+适配仅开放模型中 `LayerNorm`、`BatchNorm2d` 和 `GroupNorm` 的 `weight`、`bias` 参数，其余参数保持冻结。
 
 ### 双前向传播与回退流程
 
 ```mermaid
 flowchart TD
-    A["输入同模式图片批次"] --> B["SAR 模型第一次前向"]
-    B --> C["CLS 特征归一化"]
-    C --> D["计算各地标马氏距离与经验匹配分"]
-    D --> E["计算归一化熵 H1"]
-    E --> F{"存在 H1 < 0.70 的可靠样本?"}
-    F -- "否" --> G["跳过参数更新"]
-    G --> R["使用当前 SAR 模型提取最终特征"]
-    F -- "是" --> H["按首次可靠样本掩码计算 loss1"]
-    H --> I["反向传播并执行 SAM first_step"]
-    I --> J["在扰动参数 theta + epsilon 上第二次前向"]
-    J --> K["沿用首次可靠样本掩码计算 loss2"]
-    K --> L["反向传播并执行 SAM second_step"]
-    L --> M["更新 EMA 与 updateCount"]
-    M --> N{"EMA <= 0.05?"}
-    N -- "是" --> O["回退到 SAR 初始参数"]
-    N -- "否" --> P["原子保存 SAR 检查点"]
-    P --> Q{"达到锚点检查间隔?"}
-    Q -- "否" --> R
-    Q -- "是" --> S["检查 Top-1 保持率和特征漂移"]
-    S --> T{"保持率 < 0.90 或漂移 > 0.08?"}
-    T -- "是" --> O
-    T -- "否" --> R
-    O --> U["generation 增加并清除旧检查点"]
-    U --> R
-    R --> V["FAISS 召回与马氏距离重排序"]
-    V --> W["返回 sarApplied、trustLevel 与版本信息"]
+    A["图片与检索分数"] --> B{"可靠样本集合非空？"}
+    B -- "否" --> G["提取最终特征并检索"]
+    B -- "是" --> C["SAM 双步更新"]
+    C --> D{"EMA 或锚点异常？"}
+    D -- "是" --> E["回退参数并清除旧状态"]
+    D -- "否" --> F["保存版本绑定的检查点"]
+    E --> G
+    F --> G
 ```
 
-图中的 `0.70`、`0.05`、`0.90` 和 `0.08` 均为当前默认配置，可通过环境变量调整。自动回退后，本次响应会将 `sarApplied` 置为 `false`。
+门控与回退阈值通过环境变量配置。自动回退后，本次响应会将 `sarApplied` 置为 `false`。
 
 更新步骤为：
 
@@ -136,7 +111,7 @@ flowchart TD
 
 服务重启或另一实例刷新共享状态时，只有基准模型版本和索引版本匹配，检查点才可恢复。
 
-当前回退条件如下：
+回退条件如下：
 
 | 条件 | 默认值 | 行为 |
 | --- | ---: | --- |
@@ -194,36 +169,10 @@ POST /api/v1/adaptation/correction-samples
 | `app/utils/sam_optimizer.py` | SAM 两步优化器 |
 | `app/api/routes.py` | 单图、批量、运行状态、索引重建和校正样本接口 |
 
-## 10. 验证结果与实现边界
+## 10. 效果评估
 
-现有自动化和运行记录已覆盖：
+使用与索引样本分离的标注查询集，对比基准与 SAR 的 Top-1、Top-5、检索延迟、显存及回退次数。按白天、夜间、模糊、遮挡和视角变化等条件分组评价。命令与测试场景见[测试说明](../docs/testing.md)。
 
-- 普通/SAR 双轨检索；
-- 同模式微批次联合更新；
-- SAR 检查点保存与重启恢复；
-- 版本不一致时拒绝恢复；
-- EMA 和锚点异常回退；
-- 异步索引重建及活动索引原子切换；
-- 校正样本待发布流程。
+## 11. 方法来源
 
-当前小样本验证中，基准轨道与持续 SAR 的 Top-1、Top-5 均未退化，但该结果不能替代夜景、模糊、遮挡、角度变化等独立测试集上的准确率对照实验。性能数据和测试条件见：
-
-- [持续 SAR 双轨运行验证记录](../docs/14_sar_online_adaptation_test.md)
-- [完整系统验收记录](../docs/15_full_system_acceptance_test.md)
-
-当前实现不属于完整的生产级在线学习系统。阈值仍是经验参数，真实部署前需要扩大数据集并完成离线回放、准确率对照、漂移场景和长期稳定性测试。
-
-## 11. 与原论文的关系
-
-本项目借鉴原 SAR 论文中的可靠样本筛选、SAM 更新和模型恢复思想，但将分类 logits 熵改为基于校园地标统计分数构造的检索熵，并增加了双轨模型、版本绑定、持久化和锚点回退机制。因此，原论文在 ImageNet-C 上的结果不能直接作为 CampusLens 的实验结果。
-
-论文：Shuaicheng Niu et al., *Towards Stable Test-Time Adaptation in Dynamic Wild World*, ICLR 2023。
-
-```bibtex
-@inproceedings{niu2023towards,
-  title={Towards Stable Test-Time Adaptation in Dynamic Wild World},
-  author={Niu, Shuaicheng and Wu, Jiaxiang and Zhang, Yifan and Wen, Zhiquan and Chen, Yaofo and Zhao, Peilin and Tan, Mingkui},
-  booktitle={International Conference on Learning Representations},
-  year={2023}
-}
-```
+参考 *Towards Stable Test-Time Adaptation in Dynamic Wild World*（ICLR 2023）的可靠样本筛选、SAM 更新和模型恢复机制。CampusLens 使用地标检索分数构造熵，并配合双轨模型、状态持久化及锚点回退。

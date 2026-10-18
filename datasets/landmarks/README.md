@@ -1,20 +1,12 @@
-# landmarks
+# 地标样本
 
-首批地标目录建议：
+每个地标使用固定分类目录，例如 `L01_library/`。文件名建议使用：
 
 ```text
-L01_library/
-L02_academic_auditorium/
-L03_wenyong_square/
-L04_boxue_bridge/
-L05_qin_lake_huxin_island/
-L06_stadium/
-L07_natatorium/
-L08_first_dining_hall/
-L09_second_dining_hall/
-L10_hotel/
+L01_front_day_001.jpg
+L01_side_cloudy_002.jpg
 ```
 
-每个地标不少于 20 张样本图片，正式提交前按 `docs/04_dataset_rules.md` 统一命名。
+每类建议至少 20 张有效图片，覆盖不同视角、距离和光照。图片原图由本地资源提供，目录映射见[地标目录](sample_inventory.md)，详细要求见[数据集规范](../../docs/04_dataset_rules.md)。
 
-第二周已将群收集小程序中的现有图片复制到各地标目录，文件名保留采集人、批次和原始编号，便于后续人工检查。当前样本数量与缺口见 `sample_inventory.md`。
+新增或清洗样本后重新构建索引。
